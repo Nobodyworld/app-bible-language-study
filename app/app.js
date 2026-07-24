@@ -383,7 +383,7 @@ function syncToolButtons() {
     [
       els.showInterlinear,
       "interlinear",
-      "Interlinear words",
+      "Language Study",
       Object.values(state.interlinear?.chapters?.[state.chapter] || {}).some(
         (tokens) => Array.isArray(tokens) && tokens.length > 0,
       ),
@@ -402,7 +402,7 @@ function syncToolButtons() {
       button.title =
         key === "outlines"
           ? "Outline data is not available for this book."
-          : "Interlinear data is not available for this chapter.";
+          : "Language Study data is not available for this chapter.";
     } else {
       button.title = fallbackTitle;
     }

@@ -144,7 +144,7 @@ async function runProfile(browser, url, profile) {
       .filter({ hasText: /^Int$/ })
       .first()
       .click();
-    await waitFor(page, () => Boolean(document.querySelector("#detailTitle")?.textContent === "Interlinear"));
+    await waitFor(page, () => Boolean(document.querySelector("#detailTitle")?.textContent === "Language Study"));
     await waitFor(page, () =>
       Boolean(document.querySelector('.interlinear-verse-section[data-verse="1"] .word-meaning-control')),
     );

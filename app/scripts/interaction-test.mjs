@@ -1209,7 +1209,7 @@ async function runQa(page) {
 
   await click(page, ".verse-study-button");
   await clickButtonByText(page, "Int", { index: 0 });
-  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Interlinear'");
+  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Language Study'");
   await waitFor(page, "document.querySelectorAll('#detailContent .interlinear-token').length > 0", 15000);
   state = await getQaState(page);
   assert(
@@ -1540,7 +1540,7 @@ async function runQa(page) {
   await waitFor(page, "document.querySelector('#chapterTitle')?.textContent.includes('John 1')");
   await click(page, ".verse-study-button");
   await clickButtonByText(page, "Int", { index: 0 });
-  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Interlinear'");
+  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Language Study'");
   await waitFor(page, "document.querySelectorAll('#detailContent .interlinear-token').length > 0", 15000);
   state = await getQaState(page);
   assert(state.detailText.includes("G1722") && state.detailText.includes("archē"), "Greek interlinear token data missing");
@@ -1557,7 +1557,7 @@ async function runQa(page) {
     "document.querySelector('.interlinear-token .study-marks-menu .target-tag-picker-popover') && getComputedStyle(document.querySelector('.interlinear-token .study-marks-menu .target-tag-picker-popover')).display === 'grid'",
   );
   assert(
-    await evaluate(page, "document.querySelector('#detailTitle')?.textContent === 'Interlinear'"),
+    await evaluate(page, "document.querySelector('#detailTitle')?.textContent === 'Language Study'"),
     "interlinear token tag button should keep the tag picker local to the token card",
   );
   await click(page, '.interlinear-token .study-marks-menu .tag-picker-option[aria-label="Add Positive tag"]');

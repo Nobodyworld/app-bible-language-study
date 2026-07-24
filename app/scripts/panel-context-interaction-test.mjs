@@ -177,7 +177,7 @@ async function openStrongFromReader(page) {
     "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language']",
   );
   await waitFor(page, () =>
-    document.querySelector("#detailTitle")?.textContent === "Interlinear" &&
+    document.querySelector("#detailTitle")?.textContent === "Language Study" &&
     document.querySelectorAll("#detailContent .interlinear-token").length > 0,
   );
   await click(page, ".strong-token[data-strong-code]");
@@ -688,7 +688,7 @@ async function runScenario(browser, baseUrl, mode, theme) {
       "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language']",
     );
     await waitFor(page, () =>
-      document.querySelector("#detailTitle")?.textContent === "Interlinear" &&
+      document.querySelector("#detailTitle")?.textContent === "Language Study" &&
       document.querySelectorAll("#detailContent .interlinear-token").length > 0,
     );
     const languageStudyState = await contextState(page);
@@ -764,12 +764,12 @@ async function runScenario(browser, baseUrl, mode, theme) {
     assert(!wordReactivation.disabled && wordReactivation.sameDetail && wordReactivation.sameToken && wordReactivation.sameLock && wordReactivation.sameHistoryState && wordReactivation.scrolled, `${mode}: active Word must scroll without replacing detail, changing context, lock, or history`);
 
     await click(page, "#detailBack");
-    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Interlinear");
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study");
     const backState = await page.evaluate(() => ({
       title: document.querySelector("#detailTitle")?.textContent,
       hasStrong: Boolean(document.querySelector("#detailContent .strong-detail")),
     }));
-    assert.equal(backState.title, "Interlinear", `${mode}: Back after current Word must return directly to the preceding view`);
+    assert.equal(backState.title, "Language Study", `${mode}: Back after current Word must return directly to the preceding view`);
     assert.equal(backState.hasStrong, false, `${mode}: current Word must not add a duplicate Strong's history entry`);
     await click(page, "#detailForward");
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Strong's");

@@ -516,7 +516,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     stopInterlinearLazyLoad();
     if (!ctx.canUseCapability?.("interlinear")) {
       setDetail(
-        "Interlinear",
+        "Language Study",
         createStudyEmptyState(ctx, "interlinear", {
           reference,
           capabilityIds: ["interlinear"],
@@ -531,9 +531,9 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
       const heading = document.createElement("h3");
       heading.textContent = reference;
       const message = document.createElement("p");
-      message.textContent = `No interlinear data found for ${reference}.`;
+      message.textContent = `No Language Study data found for ${reference}.`;
       empty.append(heading, createVerseContextTabs(ctx, reference, verse, "interlinear", ctx.studyContext?.strong), message);
-      setDetail("Interlinear", empty, options);
+      setDetail("Language Study", empty, options);
       return;
     }
 
@@ -548,7 +548,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     status.className = "interlinear-lazy-status";
     status.setAttribute("role", "status");
     wrap.append(status);
-    setDetail("Interlinear", wrap, options);
+    setDetail("Language Study", wrap, options);
 
     wrap.addEventListener("language-study:open-strong", async (event) => {
       const detail = event.detail || {};
@@ -632,7 +632,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     stopInterlinearLazyLoad();
     if (!ctx.canUseCapability?.("interlinear")) {
       setDetail(
-        "Interlinear",
+        "Language Study",
         createStudyEmptyState(ctx, "interlinear", {
           capabilityIds: ["interlinear"],
         }),
@@ -641,14 +641,14 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     }
     const verses = interlinearVerses();
     if (!verses.length) {
-      setDetailMessage("Interlinear", "No interlinear data found for this chapter.");
+      setDetailMessage("Language Study", "No Language Study data found for this chapter.");
       return;
     }
 
     const wrap = document.createElement("div");
     wrap.className = "interlinear-picker";
     const heading = document.createElement("h3");
-    heading.textContent = `${ctx.state.verseBook?.book?.name || ctx.state.bookId} ${ctx.state.chapter} Interlinear`;
+    heading.textContent = `${ctx.state.verseBook?.book?.name || ctx.state.bookId} ${ctx.state.chapter} Language Study`;
     const intro = document.createElement("p");
     intro.textContent =
       "Choose a verse to inspect source text, Strong's numbers, morphology, glosses, and token renderings.";
@@ -665,7 +665,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
         li.append(inspect);
       }),
     );
-    setDetail("Interlinear", wrap);
+    setDetail("Language Study", wrap);
   }
 
   return {

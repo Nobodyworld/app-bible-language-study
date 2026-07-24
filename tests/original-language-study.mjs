@@ -3,11 +3,15 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [index, styles, flow, strongReferenceControl] = await Promise.all([
+const [index, styles, flow, strongReferenceControl, app, interlinearView, emptyState, dom] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
   readFile(new URL("../app/styles-polish.css", import.meta.url), "utf8"),
   readFile(new URL("../app/src/original-language-study-flow.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/strong-reference-control.js", import.meta.url), "utf8"),
+  readFile(new URL("../app/app.js", import.meta.url), "utf8"),
+  readFile(new URL("../app/src/views/interlinear-translation-view.js", import.meta.url), "utf8"),
+  readFile(new URL("../app/src/study-empty-state.js", import.meta.url), "utf8"),
+  readFile(new URL("../app/src/dom.js", import.meta.url), "utf8"),
 ]);
 
 assert(
@@ -17,6 +21,19 @@ assert(
 assert(
   /original-language-study-flow\.js\?v=pr13-live-qa-20260711e/.test(index),
   "The original-language study enhancement module must load after the app modules.",
+);
+assert(
+  /INTERLINEAR_DETAIL_TITLE = "Language Study"/.test(flow) &&
+    !/setDetail(?:Message)?\(\s*"Interlinear"/.test(interlinearView) &&
+    /setDetail(?:Message)?\(\s*"Language Study"/.test(interlinearView) &&
+    !/No interlinear data found/.test(interlinearView) &&
+    /No Language Study data found/.test(interlinearView) &&
+    !/Interlinear (?:words|data is not available)/.test(app) &&
+    /"Language Study"/.test(app) &&
+    /"Language Study data is not available for this chapter\."/u.test(app) &&
+    /interlinear:\s*{[\s\S]*?title:\s*"Language Study"[\s\S]*?heading:\s*"Language Study data is not included/.test(emptyState) &&
+    /detailTitle\?\.textContent === "Language Study"/.test(dom),
+  "Visible detail, picker, empty, unavailable, and pressed-state text must use Language Study.",
 );
 assert(
   /createRelatedEntryControl/.test(flow) &&
@@ -89,4 +106,4 @@ assert(
   "Original-language word cards must collapse to one column on narrow screens.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 12 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 13 }, null, 2));

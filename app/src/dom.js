@@ -78,7 +78,7 @@ function updateDetailHistoryButtons() {
   els.showOutline?.setAttribute("aria-pressed", els.detailTitle?.textContent === "Outline" ? "true" : "false");
   els.showInterlinear?.setAttribute(
     "aria-pressed",
-    els.detailTitle?.textContent === "Interlinear" ? "true" : "false",
+    els.detailTitle?.textContent === "Language Study" ? "true" : "false",
   );
   document.body.classList.toggle("detail-locked", locked);
 }

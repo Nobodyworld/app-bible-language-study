@@ -173,7 +173,7 @@ async function main() {
     );
     await waitFor(page, () => [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Int"));
     await clickButtonByText(page, "Int");
-    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Interlinear");
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study");
     await waitFor(page, () => Boolean(document.querySelector(".interlinear-verse-section[data-original-language-study='true']")));
     await waitFor(page, () => Boolean(document.querySelector(".original-language-word-origin")));
 
@@ -311,7 +311,7 @@ async function main() {
     await related.click();
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Strong's");
     await page.locator("#detailBack").click();
-    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Interlinear" && Boolean(document.querySelector(".original-language-study-intro")));
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study" && Boolean(document.querySelector(".original-language-study-intro")));
 
     await page.evaluate(() => {
       const pane = document.querySelector("#detailContent");

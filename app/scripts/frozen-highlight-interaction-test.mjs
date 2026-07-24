@@ -124,7 +124,7 @@ async function main() {
     await waitFor(page, () => Boolean(document.querySelector(".reader-context-word") && document.querySelector(".reader-context-verse")));
 
     await clickWithPointer(page, "#showInterlinear");
-    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Interlinear");
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study");
     await delay(1600);
 
     const interlinearFrozenState = await page.evaluate(() => ({
@@ -136,7 +136,7 @@ async function main() {
     assert(
       interlinearFrozenState.wordCount === 1 &&
         interlinearFrozenState.verseCount === 1 &&
-        interlinearFrozenState.detailTitle === "Interlinear",
+        interlinearFrozenState.detailTitle === "Language Study",
       `clicked reader word highlight did not persist through Interlinear tool browsing: ${JSON.stringify(interlinearFrozenState)}`,
     );
 

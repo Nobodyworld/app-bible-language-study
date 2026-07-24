@@ -5,7 +5,7 @@ import {
 } from "./language-tooltips.js?v=pr13-live-qa-20260711e";
 import { createStrongReferenceControl } from "./strong-reference-control.js?v=pr13-live-qa-20260711e";
 
-const INTERLINEAR_DETAIL_TITLE = "Interlinear";
+const INTERLINEAR_DETAIL_TITLE = "Language Study";
 const ENHANCED_ATTRIBUTE = "data-original-language-study";
 
 function createSectionHeading(text, className) {
@@ -242,9 +242,7 @@ function enhanceInterlinearPicker(picker) {
   if (!(picker instanceof HTMLElement) || picker.hasAttribute(ENHANCED_ATTRIBUTE)) return;
   picker.setAttribute(ENHANCED_ATTRIBUTE, "true");
   picker.classList.add("original-language-study-picker");
-  const heading = picker.querySelector(":scope > h3");
   const intro = picker.querySelector(":scope > p");
-  if (heading) heading.textContent = heading.textContent.replace(/\s+Interlinear$/, " Original Language Study");
   if (intro) {
     intro.textContent =
       "Choose a verse to read the full source text and inspect each Hebrew or Greek word with Strong's, morphology, glosses, transliteration, and personal study controls.";

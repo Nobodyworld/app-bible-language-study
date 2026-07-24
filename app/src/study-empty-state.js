@@ -10,8 +10,8 @@ const STUDY_EMPTY_STATES = {
     body: "Install an outlines study pack to browse section structure.",
   },
   interlinear: {
-    title: "Interlinear",
-    heading: "Interlinear data is not included in this private build.",
+    title: "Language Study",
+    heading: "Language Study data is not included in this private build.",
     body: "Install an interlinear study pack to unlock source words, morphology, and alignment tools.",
   },
   commentary: {
