@@ -1,19 +1,21 @@
 # Public Screenshots
 
 - reader.png
+- reader-dark.png
 - book-picker.png
 - detail-panel.png
-- verse-context-tabs.png
+- detail-panel-dark.png
+- verse-context-controls.png
 - interlinear.png
+- interlinear-dark.png
 - hebrew-side-panel.png
+- hebrew-side-panel-dark.png
 - search.png
 - study-marks.png
-- study-data.png
-- local-processing.png
-- mobile.png
-- reader-dark.png
-- detail-panel-dark.png
-- interlinear-dark.png
-- hebrew-side-panel-dark.png
 - study-marks-dark.png
+- meaning.png
+- my-data.png
+- my-data-backup-restore.png
+- my-data-maintenance.png
+- mobile.png
 - mobile-dark.png
