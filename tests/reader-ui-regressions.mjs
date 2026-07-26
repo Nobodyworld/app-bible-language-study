@@ -2,6 +2,7 @@
 
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
+import { resolveReferencePreviewPlacement } from "../app/src/reference-preview-placement.js";
 
 const [index, css, contextCss, stylesPolish, app, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, jobsView] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
@@ -165,6 +166,60 @@ assert(/reference-hover-tooltip-title/.test(renderer), "Reference previews must 
 assert(
   /\.reference-hover-tooltip-layer\s*{[\s\S]*?max-height:\s*calc\(100dvh - 20px\);[\s\S]*?overflow-y:\s*auto;[\s\S]*?pointer-events:\s*auto;/.test(css),
   "Reference hover previews must stay inside the viewport and support scrolling.",
+);
+assert.deepEqual(
+  resolveReferencePreviewPlacement({
+    targetTop: 500,
+    targetBottom: 528,
+    desiredHeight: 300,
+    viewportHeight: 720,
+  }),
+  {
+    availableAbove: 482,
+    availableBelow: 174,
+    maxHeight: 482,
+    side: "above",
+  },
+  "Reference previews must choose above when the full content fits there.",
+);
+assert.deepEqual(
+  resolveReferencePreviewPlacement({
+    targetTop: 120,
+    targetBottom: 148,
+    desiredHeight: 300,
+    viewportHeight: 720,
+  }),
+  {
+    availableAbove: 102,
+    availableBelow: 554,
+    maxHeight: 554,
+    side: "below",
+  },
+  "Reference previews must choose below when the content does not fit above but fits below.",
+);
+assert.deepEqual(
+  resolveReferencePreviewPlacement({
+    targetTop: 330,
+    targetBottom: 358,
+    desiredHeight: 700,
+    viewportHeight: 720,
+  }),
+  {
+    availableAbove: 312,
+    availableBelow: 344,
+    maxHeight: 344,
+    side: "below",
+  },
+  "Long reference previews must use the larger collision-free region and cap their height to it.",
+);
+assert(
+  /layer\.style\.removeProperty\("max-height"\)[\s\S]*?Math\.max\(layer\.scrollHeight,\s*naturalLayerRect\.height\)[\s\S]*?resolveReferencePreviewPlacement[\s\S]*?layer\.style\.maxHeight\s*=\s*`\$\{placement\.maxHeight\}px`[\s\S]*?const layerRect = layer\.getBoundingClientRect\(\)/.test(renderer),
+  "Reference preview placement must clear stale sizing, measure natural content, apply a regional maximum height, and remeasure.",
+);
+assert(
+  /placement\.side === "above"[\s\S]*?targetRect\.top - layerRect\.height - offset[\s\S]*?targetRect\.bottom \+ offset/.test(renderer) &&
+    !/viewportHeight - layerRect\.height - margin/.test(renderer),
+  "Reference previews must remain wholly above or below their trigger instead of clamping full-height content across it.",
 );
 assert(
   /referenceHoverTooltipLayer\.addEventListener\("mouseenter",\s*cancelReferenceHoverTooltipHide\)/.test(renderer) &&
