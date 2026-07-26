@@ -308,12 +308,15 @@ async function checkCurrentDocumentContracts() {
         /Chapter Language Study and Book Outline remain reader-header actions/i,
         /Favorite remains the canonical `favorite` assertion/i,
         /exact canonical source-token identity/i,
-        /historical visual evidence/i,
+        /current, manually reviewed, accepted public-preview evidence/i,
+        /product surface they show is Language Study/i,
       ],
       forbidden: [
         /undergoing a compact corrective redesign under issue #17/i,
         /issue #19.+active My Data/i,
         /Additional current captures/i,
+        /historical visual evidence/i,
+        /deferred to issue #33/i,
       ],
     },
     {
@@ -344,7 +347,21 @@ async function checkCurrentDocumentContracts() {
     },
     {
       path: "docs/SHOWCASE_SCREENSHOTS.md",
-      required: [/retained historical public-preview captures/i, /issue #33/i, /generated filename inventory/i, /Do not run `npm run screenshots:public`/i],
+      required: [
+        /19 tracked PNG files/i,
+        /current, manually reviewed, accepted public-preview evidence/i,
+        /generated filename inventory/i,
+        /Public descriptions use Language Study/i,
+        /My study data counts reflect the seeded Meaning and Study Mark/i,
+        /Light 390×844 Psalm 118:4 state with the compact Verse study panel and Cross References controls open/i,
+        /Dark 390×844 John 1:1 state with the populated My Data summary readable/i,
+      ],
+      forbidden: [
+        /retained historical public-preview captures/i,
+        /deferred/i,
+        /issue #33/i,
+        /Do not run `npm run screenshots:public`/i,
+      ],
     },
     {
       path: "tests/TEST_INVENTORY.md",

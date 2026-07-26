@@ -12,7 +12,7 @@ remove, or reclassify a maintained test.
 
 | Command | Current composition |
 |---|---|
-| `npm run test:static` | Repository integrity and data contracts, UI/source regressions, public-preview policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
+| `npm run test:static` | Repository integrity and data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
 | `npm run test:domain` | Job, package, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
 | `npm run test:browser` | Desktop rendered interaction, highlight, Language Study, Strong's preview, compact context, Study Marks, and Meaning flows. |
 | `npm run test:browser:mobile` | The maintained interaction journey in mobile mode. |
@@ -66,6 +66,7 @@ order:
 | `tests/word-meaning.mjs` | Exact canonical source-token Meaning storage and compatibility. |
 | `tests/word-meaning-hidden.mjs` | Hidden Meaning-dialog regression behavior. |
 | `tests/public-preview-readiness.mjs` | Public-preview status, rights/provenance, security, and release-authorization boundaries. |
+| `tests/public-screenshot-contract.mjs` | Public capture manifest, retired-dependency guard, generated inventory, documentation references, and tracked screenshot consistency. |
 | `app/scripts/accessibility-test.mjs` | Static accessibility and retired-control source assertions. |
 | `app/scripts/doc-consistency-test.mjs` | Classified maintained-document, command, manifest, job, schema, and current-product consistency. |
 
