@@ -14,6 +14,7 @@ import {
 import { mapStrongChapterRanges, resolveSourceBearingPresentationSegment } from "./strongs.js";
 import { createStudyEmptyState, studyUnavailableLabel } from "./study-empty-state.js";
 import { interlinearTokenIdentity } from "./ui-contracts.js";
+import { resolveReferencePreviewPlacement } from "./reference-preview-placement.js";
 
 export function createChapterRenderer(ctx) {
   let selectionMenu = null;
@@ -211,25 +212,44 @@ export function createChapterRenderer(ctx) {
     }, 140);
   }
 
+  function clearReferenceHoverTooltipPlacement(layer) {
+    layer.style.removeProperty("left");
+    layer.style.removeProperty("top");
+    layer.style.removeProperty("max-height");
+    delete layer.dataset.placement;
+  }
+
   function positionReferenceHoverTooltip(target) {
     const layer = ensureReferenceHoverTooltipLayer();
     if (!target || layer.hidden) return;
     const targetRect = target.getBoundingClientRect();
-    const layerRect = layer.getBoundingClientRect();
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
     const margin = 10;
     const offset = 8;
+    layer.style.removeProperty("max-height");
+    delete layer.dataset.placement;
+    const naturalLayerRect = layer.getBoundingClientRect();
+    const desiredHeight = Math.max(layer.scrollHeight, naturalLayerRect.height);
+    const placement = resolveReferencePreviewPlacement({
+      targetTop: targetRect.top,
+      targetBottom: targetRect.bottom,
+      desiredHeight,
+      viewportHeight,
+      margin,
+      offset,
+    });
+    layer.style.maxHeight = `${placement.maxHeight}px`;
+    layer.dataset.placement = placement.side;
+    const layerRect = layer.getBoundingClientRect();
     const centerX = targetRect.left + targetRect.width / 2;
-    const preferredTop = targetRect.top - layerRect.height - offset;
-    const fallbackTop = targetRect.bottom + offset;
     const top =
-      preferredTop >= margin
-        ? preferredTop
-        : Math.min(fallbackTop, viewportHeight - layerRect.height - margin);
+      placement.side === "above"
+        ? targetRect.top - layerRect.height - offset
+        : targetRect.bottom + offset;
     const left = clamp(centerX - layerRect.width / 2, margin, viewportWidth - layerRect.width - margin);
     layer.style.left = `${left}px`;
-    layer.style.top = `${clamp(top, margin, viewportHeight - layerRect.height - margin)}px`;
+    layer.style.top = `${top}px`;
   }
 
   function hideReferenceHoverTooltip(target = null) {
@@ -238,6 +258,7 @@ export function createChapterRenderer(ctx) {
     const layer = ensureReferenceHoverTooltipLayer();
     activeReferenceHoverTarget = null;
     layer.hidden = true;
+    clearReferenceHoverTooltipPlacement(layer);
     layer.textContent = "";
   }
 
@@ -300,6 +321,8 @@ export function createChapterRenderer(ctx) {
   }
 
   function renderReferenceHoverTooltip(layer, target) {
+    clearReferenceHoverTooltipPlacement(layer);
+    layer.scrollTop = 0;
     const verses = target?.__bibleAppReferencePreviewVerses;
     const fragment = document.createDocumentFragment();
     const title = document.createElement("strong");
