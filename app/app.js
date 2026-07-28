@@ -581,7 +581,7 @@ function bindEvents() {
   function maybeDisengageLockedDetail(event) {
     if (
       !event.target.closest?.(
-        "button, a, input, select, textarea, summary, label, [role='button'], .verse-context-tabs, .detail-floating-nav, .strong-token, .language-word-hover, .language-letter-hover, .letter-unit",
+        "button, a, input, select, textarea, summary, label, [role='button'], .verse-context-tabs, .detail-floating-nav, .strong-token, .language-word-hover, .language-letter-hover, .letter-unit, .morphology-help",
       )
     ) {
       disengageDetailFollow();

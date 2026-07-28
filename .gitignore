@@ -17,6 +17,7 @@
 !/app/scripts/doc-consistency-test.mjs
 !/app/scripts/interaction-test.mjs
 !/app/scripts/job-processor-test.mjs
+!/app/scripts/language-study-tooltip-interaction-test.mjs
 !/app/scripts/package-planner-test.mjs
 !/app/scripts/package-state-test.mjs
 !/app/scripts/poll-response-test.mjs
