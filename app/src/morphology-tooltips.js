@@ -96,6 +96,49 @@ const MOODS = {
 let tooltipLayer = null;
 let activeTarget = null;
 
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+export function resolveMorphologyTooltipBounds({
+  panelRect = null,
+  viewportWidth,
+  viewportHeight,
+  margin = 10,
+} = {}) {
+  const viewportBounds = {
+    left: margin,
+    right: Math.max(margin, Number(viewportWidth) - margin),
+    top: margin,
+    bottom: Math.max(margin, Number(viewportHeight) - margin),
+  };
+  if (!panelRect) return viewportBounds;
+
+  const left = Math.max(viewportBounds.left, Number(panelRect.left) + margin);
+  const right = Math.min(viewportBounds.right, Number(panelRect.right) - margin);
+  const top = Math.max(viewportBounds.top, Number(panelRect.top) + margin);
+  const bottom = Math.min(viewportBounds.bottom, Number(panelRect.bottom) - margin);
+  return {
+    left,
+    right: Math.max(left, right),
+    top,
+    bottom: Math.max(top, bottom),
+  };
+}
+
+export function resolveMorphologyTooltipPlacement({ targetRect, tooltipRect, bounds, margin = 10 } = {}) {
+  const maximumLeft = Math.max(bounds.left, bounds.right - tooltipRect.width);
+  const maximumTop = Math.max(bounds.top, bounds.bottom - tooltipRect.height);
+  const centerX = targetRect.left + targetRect.width / 2;
+  const above = targetRect.top - tooltipRect.height - margin;
+  const below = targetRect.bottom + margin;
+  const preferredTop = above >= bounds.top ? above : below;
+  return {
+    left: clamp(centerX - tooltipRect.width / 2, bounds.left, maximumLeft),
+    top: clamp(preferredTop, bounds.top, maximumTop),
+  };
+}
+
 function humanList(values) {
   const items = values.filter(Boolean);
   if (items.length <= 1) return items[0] || "Morphology";
@@ -198,18 +241,21 @@ function targetFromNode(node) {
 function positionTooltip(target) {
   if (!target || !tooltipLayer || tooltipLayer.hidden) return;
   const rect = target.getBoundingClientRect();
-  const tooltipRect = tooltipLayer.getBoundingClientRect();
   const margin = 10;
   const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-  const left = Math.min(
-    Math.max(margin, rect.left + rect.width / 2 - tooltipRect.width / 2),
-    viewportWidth - tooltipRect.width - margin,
-  );
-  const above = rect.top - tooltipRect.height - margin;
-  const top = above >= margin ? above : Math.min(rect.bottom + margin, viewportHeight - tooltipRect.height - margin);
-  tooltipLayer.style.left = `${left}px`;
-  tooltipLayer.style.top = `${Math.max(margin, top)}px`;
+  const panelRect = target.closest?.(".detail-pane")?.getBoundingClientRect() || null;
+  const bounds = resolveMorphologyTooltipBounds({ panelRect, viewportWidth, viewportHeight, margin });
+
+  tooltipLayer.style.removeProperty("left");
+  tooltipLayer.style.removeProperty("top");
+  tooltipLayer.style.removeProperty("max-width");
+  tooltipLayer.style.maxWidth = `${Math.max(1, bounds.right - bounds.left)}px`;
+
+  const tooltipRect = tooltipLayer.getBoundingClientRect();
+  const placement = resolveMorphologyTooltipPlacement({ targetRect: rect, tooltipRect, bounds, margin });
+  tooltipLayer.style.left = `${placement.left}px`;
+  tooltipLayer.style.top = `${placement.top}px`;
 }
 
 function renderTooltip(target) {
@@ -251,14 +297,15 @@ function ensureTooltipLayer() {
     activeTarget = target;
     renderTooltip(target);
     tooltipLayer.hidden = false;
-    tooltipLayer.style.left = "0px";
-    tooltipLayer.style.top = "0px";
     positionTooltip(target);
   };
   const hide = () => {
     activeTarget = null;
     tooltipLayer.hidden = true;
     tooltipLayer.textContent = "";
+    tooltipLayer.style.removeProperty("left");
+    tooltipLayer.style.removeProperty("top");
+    tooltipLayer.style.removeProperty("max-width");
   };
 
   document.addEventListener("pointerover", (event) => {

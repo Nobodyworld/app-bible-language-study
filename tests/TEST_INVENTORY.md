@@ -14,7 +14,7 @@ remove, or reclassify a maintained test.
 |---|---|
 | `npm run test:static` | Repository integrity and data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
 | `npm run test:domain` | Job, package, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
-| `npm run test:browser` | Desktop rendered interaction, highlight, Language Study, Strong's preview, compact context, Study Marks, and Meaning flows. |
+| `npm run test:browser` | Desktop rendered interaction, highlight, Language Study, Language Study tooltip containment, Strong's preview, compact context, Study Marks, and Meaning flows. |
 | `npm run test:browser:mobile` | The maintained interaction journey in mobile mode. |
 | `npm test` | Static, desktop-browser, and mobile-browser suites. |
 | `npm run audit` | Public package/file audit through `app/tools/publish-audit.mjs`. |
@@ -97,6 +97,7 @@ entry.
 | `app/scripts/interaction-test.mjs` | Desktop and `--mobile` | Main rendered reader journey, selection, Study Marks, My Data, persistence, and cleanup. |
 | `app/scripts/frozen-highlight-interaction-test.mjs` | Desktop | Locked/frozen reader-to-panel highlighting. |
 | `app/scripts/original-language-study-interaction-test.mjs` | Desktop | Rendered Language Study data, lazy enhancement, references, history, and tooltip containment. |
+| `app/scripts/language-study-tooltip-interaction-test.mjs` | Desktop, narrow, mobile-width, and optional touch mode | Exact H3068 Language Study readiness plus morphology and original-language mark tooltip interaction, containment, dismissal, repositioning, and state non-mutation. |
 | `app/scripts/strong-preview-hydration-test.mjs` | Desktop | Strong's preview hydration and interaction lifecycle. |
 | `app/scripts/panel-context-interaction-test.mjs` | Desktop | Compact context, scope inheritance, Study Marks containment, responsive layout, and browser-error checks. |
 | `app/scripts/word-meaning-focus-test.mjs` | Desktop | Meaning and Study Marks overlay coordination, dismissal, focus, and non-mutation behavior. |

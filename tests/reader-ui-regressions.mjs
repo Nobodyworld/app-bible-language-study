@@ -149,6 +149,12 @@ assert(
 
 assert(/function disengageDetailFollow\(\)/.test(app), "Background reset must share the detail-follow disengage path.");
 assert(
+  /function maybeDisengageLockedDetail\(event\)[\s\S]*?\.morphology-help[\s\S]*?disengageDetailFollow\(\)/.test(app) &&
+    /document\.addEventListener\("pointerdown", maybeDisengageLockedDetail, true\)/.test(app) &&
+    /document\.addEventListener\("click", maybeDisengageLockedDetail, true\)/.test(app),
+  "Morphology help must preserve locked detail while background pointerdown and click retain capture-phase disengagement.",
+);
+assert(
   /els\.content\?\.addEventListener\("pointerdown"/.test(app) &&
     /event\.pointerType !== "touch"/.test(app) &&
     /chapterSwipeDirection/.test(app),
@@ -298,4 +304,4 @@ assert(
   "Browser-visible app and stylesheet entry points must use the current cache-buster key.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 56 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 57 }, null, 2));
