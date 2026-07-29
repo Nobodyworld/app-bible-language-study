@@ -60,8 +60,9 @@ touch, and explicit activation.
   history.
 - Pointer interactions have keyboard and practical touch equivalents.
 
-The interaction model is functional today. Additional unification remains
-tracked in issue #16.
+The interaction model and its broader hover, focus, and touch evidence are
+complete through issues #7 and #16. Focused reference and Language Study preview
+defects were resolved under issues #39, #40, and #42.
 
 ### Hebrew and Greek Language Study
 
@@ -194,9 +195,11 @@ git diff --check
 ```
 
 `npm run verify` runs the static, domain, accessibility-source, desktop-browser,
-mobile-browser, inventory, and publish-audit suites. Browser automation currently
-uses Microsoft Edge on Windows; broader manual browser QA remains tracked in
-issue #7.
+mobile-browser, inventory, and publish-audit suites. The complete automated
+browser suite uses Microsoft Edge on Windows, and maintained focused suites also
+support Chrome where specified. Broader Edge and Chrome QA is complete under
+issue #7; unavailable Firefox, Safari, Android Chrome, screen-reader, and real
+browser-UI zoom evidence is explicitly recorded there.
 
 See [the test inventory](tests/TEST_INVENTORY.md) for the executable coverage
 map.
@@ -234,8 +237,15 @@ The current full-study package contains:
 - 180,460,807 aggregate gzip bytes.
 
 The repository is much larger than a typical static web project. Keeping the data
-together allows the preview to run without a hosted data service. Post-public
-measurement and data-pack planning remain tracked in issue #6.
+together allows the preview to run without a hosted data service. On the exact
+performance candidate measured under issue #6, the source archive was
+189,852,720 bytes, the extracted tree was approximately 979.4 MB, and a full
+clone occupied approximately 1.16 GB including Git metadata. These are
+single-environment measurements rather than guaranteed download sizes.
+
+Issue #6 found no measured performance release blocker and recommends retaining
+the complete bundled-data model for the intended public preview. Non-blocking
+post-release optimization work is tracked in issues #44, #45, and #46.
 
 ## Data Rights
 
@@ -272,7 +282,8 @@ repository-security posture.
 - Browser-local study data does not automatically synchronize across devices or
   browser profiles.
 - There is no collaborative account system or cloud backup.
-- Automated browser QA is currently Edge-focused.
+- The complete automated browser suite is Edge-focused; focused Chrome and
+  broader manual Edge/Chrome evidence are maintained separately.
 - The bundled package increases clone and checkout size.
 - The side-panel, Meaning, Study Marks, and My Data interfaces are
   active-development surfaces rather than stable APIs.
@@ -286,15 +297,14 @@ separate from a stable release, release tag, API promise, or blanket relicensing
 of bundled data.
 
 Compact `Word → Verse` context, unified target-aware Study Marks, exact
-source-token Meaning, consolidated My Data, and repository documentation
-reconciliation are complete. The maintained public screenshot workflow and its
-current capture review are also complete. Remaining work is dependency-ordered
-under issue #22:
+source-token Meaning, consolidated My Data, documentation reconciliation,
+maintained screenshots, broader browser QA, hover-first evidence, and the
+package/runtime performance classification are complete.
 
-- issue #16 — remaining hover-first, touch, and containment evidence;
-- issues #6 and #7 — later package/performance classification and broader
-  manual browser QA;
-- issue #5 — live security evidence and final release/tag gates.
+The remaining release decision work is tracked under issue #5: final rights,
+security, metadata, clean-checkout, required-check, unavailable-evidence, and
+owner authorization gates. Issues #44, #45, and #46 are non-blocking
+post-release optimization work.
 
 No release or tag is authorized by this status or by automated checks alone.
 
