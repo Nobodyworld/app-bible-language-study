@@ -68,6 +68,17 @@ assert(
   "Interlinear exact-token Study Marks must stay contained within the detail pane.",
 );
 assert(/verseActions\.append\(studyButton\)/.test(renderer), "Reader row actions must retain only the ellipsis study-tools launcher.");
+assert(
+  /detailViews\.showDefaultVerseStudy\(reference, verse/.test(renderer) &&
+    /crossrefResult\.status === "loaded" && crossRecord[\s\S]*?interlinearResult\.status === "loaded"[\s\S]*?canUseCapability\("commentary"\)/.test(app) &&
+    /showLoadedCrossrefs\(reference, resolvedRecord \|\| emptyCrossrefRecord\(\), options\)/.test(app),
+  "The default verse-study launcher must resolve real verse data in cross-reference, Language Study, commentary order without passing null to the explicit cross-reference view.",
+);
+assert.equal(
+  (app.match(/runReaderDatasetActivation\(/g) || []).length,
+  5,
+  "Outline, chapter/verse Language Study, and Cross References must share one navigation-generation activation guard.",
+);
 assert(/@media\s*\(min-width:\s*641px\)\s*and\s*\(max-width:\s*1380px\)[\s\S]*?\.chapter-actions \.toolbar-button\s*{[\s\S]*?width:\s*34px;/.test(css), "Workspace controls must compact at intermediate widths.");
 assert(/:root\[data-theme="dark"\] \.parallel-verse\.active\s*{[\s\S]*?background:\s*rgba\(148,\s*163,\s*184,\s*0\.12\)/.test(css), "Dark parallel selection must not use a white background.");
 assert(/:root\[data-theme="dark"\] \.reader-context-verse\s*{[\s\S]*?background:\s*rgba\(148,\s*163,\s*184,\s*0\.08\)/.test(css), "Dark reader selection must use the calm slate highlight.");
@@ -304,4 +315,4 @@ assert(
   "Browser-visible app and stylesheet entry points must use the current cache-buster key.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 57 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 59 }, null, 2));

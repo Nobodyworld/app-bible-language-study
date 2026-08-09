@@ -877,19 +877,7 @@ export function createChapterRenderer(ctx) {
     studyButton.addEventListener("click", (event) => {
       event.stopPropagation();
       ctx.highlightReaderContext?.({ verse, commit: true });
-      if (crossRecord || canLoadCrossrefs) {
-        void ctx.detailViews.showCrossrefs(reference, crossRecord, { verse, forceHistory: true });
-      } else if (hasInterlinear || canLoadInterlinear) {
-        void ctx.detailViews.showInterlinearVerse(reference, verse, { forceHistory: true });
-      } else if (hasCommentary) {
-        void ctx.detailViews.showCommentary(reference, verse, { forceHistory: true });
-      } else {
-        const empty = createStudyEmptyState(ctx, "verseStudy", {
-          reference,
-          capabilityIds: ["crossrefs", "commentary", "interlinear"],
-        });
-        ctx.detailViews.showStudyUnavailable?.("Study Tools", empty, { forceHistory: true });
-      }
+      void ctx.detailViews.showDefaultVerseStudy(reference, verse, { verse, forceHistory: true });
     });
 
     const verseActions = document.createElement("div");
