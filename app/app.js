@@ -2,8 +2,11 @@ import { DEFAULT_ROUTE } from "./src/config.js?v=pr13-live-qa-20260711e";
 import { capabilityAvailable, resolveCapability } from "./src/capabilities.js";
 import { createChapterRenderer } from "./src/chapter-renderer.js?v=pr13-live-qa-20260711e";
 import {
+  loadBookCrossrefs,
+  loadBookInterlinear,
+  loadBookOutline,
   loadManifest,
-  loadReaderBookData,
+  loadReaderCoreBookData,
   translationCanLoadBook,
 } from "./src/data-service.js?v=pr13-live-qa-20260711e";
 import { createDetailViews } from "./src/detail-views.js?v=pr13-live-qa-20260711e";
@@ -15,6 +18,7 @@ import {
   resetDetail,
   resetDetailForNavigation,
   setDetailHoverLocked,
+  setDetailMessage,
   setStatus,
   sortedNumericKeys,
   trackReaderLocation,
@@ -24,7 +28,7 @@ import { buildReferenceContext, referenceContextKey } from "./src/reference-cont
 import { createBookTarget, createChapterTarget } from "./src/semantic-targets.js?v=pr13-live-qa-20260711e";
 import { normalizeRoute, parseReaderRoute, writeReaderRoute } from "./src/routing.js";
 import { getTagTargets, initStores, listenForUserDataChanges } from "./src/stores.js?v=pr13-live-qa-20260711e";
-import { studyUnavailableLabel } from "./src/study-empty-state.js";
+import { createStudyEmptyState, studyUnavailableLabel } from "./src/study-empty-state.js";
 import { chapterSwipeDirection, CONTROL_STATES, resolveControlState } from "./src/ui-contracts.js?v=pr13-live-qa-20260711e";
 
 const state = {
@@ -47,7 +51,55 @@ const state = {
   userStoreMigration: null,
   activeReferenceContext: null,
   hoverReferenceContext: null,
+  navigationGeneration: 0,
+  readerDatasetGeneration: 0,
+  readerDatasets: {
+    crossrefs: { status: "idle", error: null, promise: null },
+    outline: { status: "idle", error: null, promise: null },
+    interlinear: { status: "idle", error: null, promise: null },
+  },
 };
+
+const READER_DATASETS = {
+  crossrefs: {
+    capabilityId: "crossrefs",
+    emptyStateKey: "crossrefs",
+    label: "Cross-reference",
+    panelTitle: "Cross References",
+    stateKey: "crossrefs",
+    load: loadBookCrossrefs,
+  },
+  outline: {
+    capabilityId: "outlines",
+    emptyStateKey: "outlines",
+    label: "Outline",
+    panelTitle: "Outline",
+    stateKey: "outline",
+    load: loadBookOutline,
+  },
+  interlinear: {
+    capabilityId: "interlinear",
+    emptyStateKey: "interlinear",
+    label: "Language Study",
+    panelTitle: "Language Study",
+    stateKey: "interlinear",
+    load: loadBookInterlinear,
+  },
+};
+
+function freshReaderDatasetState() {
+  return Object.fromEntries(
+    Object.keys(READER_DATASETS).map((key) => [key, { status: "idle", error: null, promise: null }]),
+  );
+}
+
+function resetReaderDatasets() {
+  state.readerDatasetGeneration += 1;
+  state.readerDatasets = freshReaderDatasetState();
+  Object.values(READER_DATASETS).forEach(({ stateKey }) => {
+    state[stateKey] = null;
+  });
+}
 
 function findBook(bookId) {
   return state.manifest?.books?.find((book) => book.id === bookId) || null;
@@ -82,6 +134,99 @@ function getCapabilityState(capabilityId) {
   return resolveCapability(state.packageManifest || state.manifest?.package_manifest, state.packageStore, capabilityId, {
     assumeBundledFullAccess: true,
   });
+}
+
+function readerDatasetState(key) {
+  return state.readerDatasets?.[key] || { status: "unavailable", error: null, promise: null };
+}
+
+function readerDatasetCanLoad(key) {
+  const config = READER_DATASETS[key];
+  if (!config || !canUseCapability(config.capabilityId)) return false;
+  return readerDatasetState(key).status !== "unavailable";
+}
+
+async function ensureReaderDataset(key) {
+  const config = READER_DATASETS[key];
+  if (!config || !canUseCapability(config.capabilityId)) {
+    return { status: "unavailable", data: null };
+  }
+
+  const record = readerDatasetState(key);
+  if (record.status === "loaded") return { status: "loaded", data: state[config.stateKey] };
+  if (record.status === "unavailable") return { status: "unavailable", data: null };
+  if (record.promise) return record.promise;
+
+  const generation = state.readerDatasetGeneration;
+  const bookId = state.bookId;
+  const translationId = state.translationId;
+  record.status = "loading";
+  record.error = null;
+  syncToolButtons();
+  setStatus(`Loading ${config.label} data...`);
+
+  const pending = config
+    .load(bookId)
+    .then((result) => {
+      if (
+        generation !== state.readerDatasetGeneration ||
+        bookId !== state.bookId ||
+        translationId !== state.translationId
+      ) {
+        return { status: "stale", data: null };
+      }
+
+      if (result.availability === "unavailable") {
+        record.status = "unavailable";
+        state[config.stateKey] = null;
+        syncToolButtons();
+        return { status: "unavailable", data: null };
+      }
+
+      record.status = "loaded";
+      state[config.stateKey] = result.data;
+      const scrollPosition = { x: window.scrollX, y: window.scrollY };
+      renderer.renderChapter();
+      window.scrollTo(scrollPosition.x, scrollPosition.y);
+      restoreReaderHighlightFromContext(state.activeReferenceContext);
+      return { status: "loaded", data: result.data };
+    })
+    .catch((error) => {
+      if (
+        generation !== state.readerDatasetGeneration ||
+        bookId !== state.bookId ||
+        translationId !== state.translationId
+      ) {
+        return { status: "stale", data: null };
+      }
+      record.status = "error";
+      record.error = error;
+      state[config.stateKey] = null;
+      syncToolButtons();
+      setStatus(`${config.label} data could not be loaded`);
+      return { status: "error", data: null, error };
+    })
+    .finally(() => {
+      if (record.promise === pending) record.promise = null;
+    });
+
+  record.promise = pending;
+  return pending;
+}
+
+function showReaderDatasetFailure(key, options = {}) {
+  const config = READER_DATASETS[key];
+  if (!config) return;
+  if (readerDatasetState(key).status === "unavailable") {
+    detailViews.showStudyUnavailable(
+      config.panelTitle,
+      createStudyEmptyState(ctx, config.emptyStateKey, { capabilityIds: [config.capabilityId] }),
+      options,
+    );
+    return;
+  }
+  const message = `${config.label} data could not be loaded. Select this study tool again to retry.`;
+  setDetailMessage(config.panelTitle, message, options);
 }
 
 function getReferenceContext(overrides = {}) {
@@ -173,8 +318,11 @@ const ctx = {
   goToRoute: navigateToRoute,
   highlightReaderContext,
   canUseCapability,
+  ensureReaderDataset,
   getCapabilityState,
   getReferenceContext,
+  readerDatasetCanLoad,
+  readerDatasetState,
   referenceContextKey,
   renderChapter: () => renderer.renderChapter(),
   syncChapterButtons,
@@ -185,6 +333,42 @@ const ctx = {
 
 const detailViews = createDetailViews(ctx);
 ctx.detailViews = detailViews;
+
+const showLoadedOutline = detailViews.showOutline;
+detailViews.showOutline = async (...args) => {
+  const result = await ensureReaderDataset("outline");
+  if (result.status === "loaded") return showLoadedOutline(...args);
+  if (result.status !== "stale") showReaderDatasetFailure("outline");
+};
+
+const showLoadedInterlinearChapter = detailViews.showInterlinearChapter;
+detailViews.showInterlinearChapter = async (...args) => {
+  const result = await ensureReaderDataset("interlinear");
+  if (result.status === "loaded") return showLoadedInterlinearChapter(...args);
+  if (result.status !== "stale") showReaderDatasetFailure("interlinear");
+};
+
+const showLoadedInterlinearVerse = detailViews.showInterlinearVerse;
+detailViews.showInterlinearVerse = async (reference, verse, options = {}) => {
+  const result = await ensureReaderDataset("interlinear");
+  if (result.status === "loaded") return showLoadedInterlinearVerse(reference, verse, options);
+  if (result.status !== "stale") showReaderDatasetFailure("interlinear", options);
+};
+
+const showLoadedCrossrefs = detailViews.showCrossrefs;
+detailViews.showCrossrefs = async (reference, record, options = {}) => {
+  const result = await ensureReaderDataset("crossrefs");
+  if (result.status === "stale") return;
+  if (result.status !== "loaded") {
+    showReaderDatasetFailure("crossrefs", options);
+    return;
+  }
+  const resolvedRecord = options.verse
+    ? state.crossrefs?.verses?.[`${state.chapter}:${options.verse}`] || null
+    : record;
+  return showLoadedCrossrefs(reference, resolvedRecord, options);
+};
+
 const renderer = createChapterRenderer(ctx);
 const OLD_TESTAMENT_BOOK_COUNT = 39;
 
@@ -378,10 +562,11 @@ function syncScopeControls() {
 
 function syncToolButtons() {
   const tools = [
-    [els.showSearch, "search", "Search this book", true],
-    [els.showOutline, "outlines", "Book outline", Boolean(state.outline)],
+    [els.showSearch, "search", null, "Search this book", true],
+    [els.showOutline, "outlines", "outline", "Book outline", Boolean(state.outline)],
     [
       els.showInterlinear,
+      "interlinear",
       "interlinear",
       "Language Study",
       Object.values(state.interlinear?.chapters?.[state.chapter] || {}).some(
@@ -389,13 +574,21 @@ function syncToolButtons() {
       ),
     ],
   ];
-  tools.forEach(([button, key, fallbackTitle, dataAvailable]) => {
+  tools.forEach(([button, key, datasetKey, fallbackTitle, loadedDataAvailable]) => {
     if (!button) return;
+    const dataset = datasetKey ? readerDatasetState(datasetKey) : null;
+    const dataAvailable =
+      !dataset || dataset.status === "idle" || dataset.status === "loading" || dataset.status === "error"
+        ? true
+        : dataset.status === "loaded"
+          ? loadedDataAvailable
+          : false;
     const control = resolveControlState({
       capabilityAvailable: canUseCapability(key),
       dataAvailable,
     });
     button.disabled = control.disabled;
+    button.setAttribute("aria-busy", dataset?.status === "loading" ? "true" : "false");
     if (control.state === CONTROL_STATES.capabilityUnavailable) {
       button.title = studyUnavailableLabel(key);
     } else if (control.state === CONTROL_STATES.dataUnavailable) {
@@ -403,6 +596,10 @@ function syncToolButtons() {
         key === "outlines"
           ? "Outline data is not available for this book."
           : "Language Study data is not available for this chapter.";
+    } else if (dataset?.status === "error") {
+      button.title = `${fallbackTitle} data could not be loaded. Select to retry.`;
+    } else if (dataset?.status === "loading") {
+      button.title = `Loading ${fallbackTitle} data...`;
     } else {
       button.title = fallbackTitle;
     }
@@ -468,10 +665,12 @@ function showHomePage(options = {}) {
   if (els.nextFloat) els.nextFloat.disabled = true;
 }
 
-async function loadBookData() {
+async function loadBookData(navigationGeneration, route) {
   setStatus("Loading book data...");
-  const requestedChapter = state.chapter;
-  const bookData = await loadReaderBookData(state.translationId, state.bookId);
+  const requestedChapter = route.chapter;
+  const bookData = await loadReaderCoreBookData(route.translationId, route.bookId);
+
+  if (navigationGeneration !== state.navigationGeneration) return false;
 
   Object.assign(state, bookData, { commentary: null });
 
@@ -488,10 +687,13 @@ async function loadBookData() {
   if (state.chapter !== requestedChapter) {
     writeReaderRoute(currentRoute(), { replace: true });
   }
+  return true;
 }
 
 async function navigateToRoute(route, options = {}) {
+  const navigationGeneration = ++state.navigationGeneration;
   if (route.home) {
+    resetReaderDatasets();
     if (state.manifest) {
       fillTranslationOptions();
       fillBookOptions();
@@ -503,12 +705,15 @@ async function navigateToRoute(route, options = {}) {
   clearReaderHighlight();
   const normalized = normalizeRoute(route, state.manifest);
   const canLoad = await translationCanLoadBook(normalized.translationId, normalized.bookId);
+  if (navigationGeneration !== state.navigationGeneration) return;
   const next = {
     ...normalized,
     translationId: canLoad ? normalized.translationId : DEFAULT_ROUTE.translationId,
   };
 
   // Clear study context when navigating to a different location
+  const readerDatasetIdentityChanged =
+    next.translationId !== state.translationId || next.bookId !== state.bookId;
   if (
     next.translationId !== state.translationId ||
     next.bookId !== state.bookId ||
@@ -519,6 +724,7 @@ async function navigateToRoute(route, options = {}) {
     detailViews.clearStrongPin();
     resetDetailForNavigation();
   }
+  if (readerDatasetIdentityChanged) resetReaderDatasets();
 
   state.translationId = next.translationId;
   state.bookId = next.bookId;
@@ -538,7 +744,8 @@ async function navigateToRoute(route, options = {}) {
     writeReaderRoute(next, { replace: Boolean(options.replace) });
   }
 
-  await loadBookData();
+  const loaded = await loadBookData(navigationGeneration, next);
+  if (!loaded || navigationGeneration !== state.navigationGeneration) return;
 
   // Track this location in reader history
   trackReaderLocation({

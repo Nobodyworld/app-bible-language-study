@@ -47,6 +47,12 @@ function hasInterlinear(ctx, verse) {
   );
 }
 
+function datasetMayLoad(ctx, key) {
+  if (ctx.readerDatasetCanLoad?.(key) !== true) return false;
+  const status = ctx.readerDatasetState?.(key)?.status;
+  return status === "idle" || status === "loading" || status === "error";
+}
+
 function resolveWordContext(ctx, explicitContext, verse) {
   return explicitContext?.token ? explicitContext : ctx.getActiveWordContext?.(verse) || null;
 }
@@ -148,7 +154,7 @@ function actionForTool(ctx, tool, reference, verse, active, wordContext) {
       ...tool,
       current: false,
       capabilityAvailable: ctx.canUseCapability?.("crossrefs") === true,
-      dataAvailable: Boolean(getCrossRecord(ctx, verse)),
+      dataAvailable: Boolean(getCrossRecord(ctx, verse)) || datasetMayLoad(ctx, "crossrefs"),
       unavailableKey: "crossrefs",
       dataUnavailableMessage: `Cross-reference data is not available for ${reference}.`,
       run: () =>
@@ -176,7 +182,7 @@ function actionForTool(ctx, tool, reference, verse, active, wordContext) {
       ...tool,
       current: false,
       capabilityAvailable: ctx.canUseCapability?.("interlinear") === true,
-      dataAvailable: hasInterlinear(ctx, verse),
+      dataAvailable: hasInterlinear(ctx, verse) || datasetMayLoad(ctx, "interlinear"),
       unavailableKey: "interlinear",
       dataUnavailableMessage: `Language Study data is not available for ${reference}.`,
       run: () => void ctx.detailViews.showInterlinearVerse(reference, verse, { history: "replace", lock: true }),

@@ -172,6 +172,12 @@ npm ci
 npm run serve
 ```
 
+`npm run serve` is the deterministic development/test server and sends
+`Cache-Control: no-store`. For local distribution or publish-like validation,
+use `npm run serve:publish`; it revalidates mutable files with ETag and
+Last-Modified validators so unchanged responses can return `304 Not Modified`
+while changed files become visible without clearing browser storage.
+
 Open:
 
 ```text

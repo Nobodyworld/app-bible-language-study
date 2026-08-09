@@ -36,6 +36,7 @@ composition above:
 | `npm run test:public-preview` | `tests/public-preview-readiness.mjs`. |
 | `npm run test:word-meaning` | `tests/word-meaning.mjs`. |
 | `npm run test:word-meaning-focus` | `app/scripts/word-meaning-focus-test.mjs`. |
+| `npm run test:reader-data-loading` | `app/scripts/reader-data-loading-interaction-test.mjs`. |
 | `npm run test:ui` | UI contracts and compact panel-context model tests. |
 
 ## Static and Source-Level Tests
@@ -95,6 +96,7 @@ entry.
 | Script | Invocation | Maintained coverage |
 |---|---|---|
 | `app/scripts/interaction-test.mjs` | Desktop and `--mobile` | Main rendered reader journey, selection, Study Marks, My Data, persistence, and cleanup. |
+| `app/scripts/reader-data-loading-interaction-test.mjs` | Desktop | Deferred reader-dataset request boundaries, first/repeat activation, stale-route suppression, retry behavior, reader-core preservation, and browser-error checks. |
 | `app/scripts/frozen-highlight-interaction-test.mjs` | Desktop | Locked/frozen reader-to-panel highlighting. |
 | `app/scripts/original-language-study-interaction-test.mjs` | Desktop | Rendered Language Study data, lazy enhancement, references, history, and tooltip containment. |
 | `app/scripts/language-study-tooltip-interaction-test.mjs` | Desktop, narrow, mobile-width, and optional touch mode | Exact H3068 Language Study readiness plus morphology and original-language mark tooltip interaction, containment, dismissal, repositioning, and state non-mutation. |

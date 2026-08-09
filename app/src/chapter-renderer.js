@@ -861,10 +861,12 @@ export function createChapterRenderer(ctx) {
     const crossRecord = ctx.canUseCapability?.("crossrefs") ? chapterData.crossrefs?.[`${ctx.state.chapter}:${verse}`] : null;
     const hasInterlinear = ctx.canUseCapability?.("interlinear") && Boolean(chapterData.interlinear?.[verse]?.length);
     const hasCommentary = ctx.canUseCapability?.("commentary");
+    const canLoadCrossrefs = ctx.readerDatasetCanLoad?.("crossrefs") === true;
+    const canLoadInterlinear = ctx.readerDatasetCanLoad?.("interlinear") === true;
     const studyButton = document.createElement("button");
     studyButton.type = "button";
     studyButton.className = "verse-study-button";
-    const hasStudyData = Boolean(crossRecord || hasInterlinear || hasCommentary);
+    const hasStudyData = Boolean(crossRecord || hasInterlinear || canLoadCrossrefs || canLoadInterlinear || hasCommentary);
     studyButton.title = hasStudyData ? "Open verse study tabs" : studyUnavailableLabel("verseStudy");
     studyButton.setAttribute(
       "aria-label",
@@ -875,9 +877,9 @@ export function createChapterRenderer(ctx) {
     studyButton.addEventListener("click", (event) => {
       event.stopPropagation();
       ctx.highlightReaderContext?.({ verse, commit: true });
-      if (crossRecord) {
-        ctx.detailViews.showCrossrefs(reference, crossRecord, { verse, forceHistory: true });
-      } else if (hasInterlinear) {
+      if (crossRecord || canLoadCrossrefs) {
+        void ctx.detailViews.showCrossrefs(reference, crossRecord, { verse, forceHistory: true });
+      } else if (hasInterlinear || canLoadInterlinear) {
         void ctx.detailViews.showInterlinearVerse(reference, verse, { forceHistory: true });
       } else if (hasCommentary) {
         void ctx.detailViews.showCommentary(reference, verse, { forceHistory: true });
