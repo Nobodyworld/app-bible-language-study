@@ -62,6 +62,7 @@ async function captureReaderSurface(page) {
   return page.evaluate(() => ({
     route: window.location.hash,
     title: document.querySelector("#chapterTitle")?.textContent,
+    status: document.querySelector("#statusText")?.textContent,
     chapterPicker: document.querySelector("#chapterPickerButton")?.textContent,
     detailTitle: document.querySelector("#detailTitle")?.textContent,
     detailText: document.querySelector("#detailContent")?.textContent,
@@ -81,6 +82,17 @@ async function captureReaderSurface(page) {
     highlightedTokens: [...document.querySelectorAll(".reader-context-word")].map(
       (node) => `${node.dataset.strongCode || ""}:${node.dataset.tokenIndex || ""}`,
     ),
+  }));
+}
+
+async function captureControl(page, selector) {
+  return page.locator(selector).evaluate((control) => ({
+    ariaBusy: control.getAttribute("aria-busy"),
+    ariaLabel: control.getAttribute("aria-label"),
+    title: control.title,
+    disabled: control.disabled,
+    controlState: control.dataset.controlState,
+    unavailable: control.dataset.unavailable,
   }));
 }
 
@@ -349,8 +361,21 @@ try {
     await route.continue();
   });
   await navigateHash(page, "#/read/bsb/exodus/1/1", "Exodus", 1);
+  const competingInterlinearBefore = requests.filter((requestUrl) =>
+    requestUrl.includes("/interlinear/books/exodus.json"),
+  ).length;
   await page.locator("#showInterlinear").click();
   await competingInterlinearRequest;
+  const competingLoadingControl = await captureControl(page, "#showInterlinear");
+  assert(
+    competingLoadingControl.ariaBusy === "true" &&
+      competingLoadingControl.title === "Loading Language Study data..." &&
+      competingLoadingControl.ariaLabel === "Loading Language Study data..." &&
+      !competingLoadingControl.disabled &&
+      competingLoadingControl.controlState === "enabled" &&
+      competingLoadingControl.unavailable === "false",
+    `held Language Study control did not expose enabled/loading state: ${JSON.stringify(competingLoadingControl)}`,
+  );
   await page.locator("#showOutline").click();
   await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Outline");
   await page.waitForSelector("#detailContent h3", { state: "visible", timeout: 20_000 });
@@ -367,8 +392,104 @@ try {
     competingStateAfterRelease.detailTitle === "Outline",
     `newer deferred Outline intent was not authoritative: ${JSON.stringify(competingStateAfterRelease)}`,
   );
+  const competingLoadedControl = await captureControl(page, "#showInterlinear");
+  assert(
+    competingLoadedControl.ariaBusy === "false" &&
+      competingLoadedControl.title === "Language Study" &&
+      competingLoadedControl.ariaLabel === "Language Study" &&
+      !competingLoadedControl.disabled &&
+      competingLoadedControl.controlState === "enabled" &&
+      competingLoadedControl.unavailable === "false",
+    `stale-success Language Study control did not return to normal loaded state: ${JSON.stringify(competingLoadedControl)}`,
+  );
+  const competingInterlinearAfter = requests.filter((requestUrl) =>
+    requestUrl.includes("/interlinear/books/exodus.json"),
+  ).length;
+  assert(
+    competingInterlinearAfter === competingInterlinearBefore + 1,
+    `held competing Language Study request count was not exactly one: ${competingInterlinearAfter - competingInterlinearBefore}`,
+  );
+  await page.locator("#showInterlinear").click();
+  await page.waitForSelector(".interlinear-picker", { state: "visible", timeout: 20_000 });
+  assert(
+    requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/exodus.json")).length === competingInterlinearAfter,
+    "stale-success Language Study cache refetched on the next activation",
+  );
   await page.unroute(competingInterlinearPattern);
-  pass("older held Language Study cannot replace a newer deferred Outline or add panel history");
+  pass("stale-success Language Study synchronizes shared controls and cache without replacing newer Outline state");
+
+  const failingInterlinearPattern = "**/data/interlinear/books/deuteronomy.json*";
+  let releaseFailingInterlinear;
+  let markFailingInterlinear;
+  let failingInterlinearAttempts = 0;
+  const failingInterlinearRelease = new Promise((resolve) => {
+    releaseFailingInterlinear = resolve;
+  });
+  const failingInterlinearRequest = new Promise((resolve) => {
+    markFailingInterlinear = resolve;
+  });
+  await page.route(failingInterlinearPattern, async (route) => {
+    failingInterlinearAttempts += 1;
+    if (failingInterlinearAttempts === 1) {
+      markFailingInterlinear();
+      await failingInterlinearRelease;
+      await route.fulfill({ status: 200, contentType: "application/json", body: "{" });
+      return;
+    }
+    await route.continue();
+  });
+  await navigateHash(page, "#/read/bsb/deuteronomy/1/1", "Deuteronomy", 1);
+  await page.locator("#showInterlinear").click();
+  await failingInterlinearRequest;
+  const failingLoadingControl = await captureControl(page, "#showInterlinear");
+  assert(
+    failingLoadingControl.ariaBusy === "true" &&
+      failingLoadingControl.title === "Loading Language Study data..." &&
+      failingLoadingControl.ariaLabel === "Loading Language Study data..." &&
+      !failingLoadingControl.disabled,
+    `held failing Language Study control did not expose loading state: ${JSON.stringify(failingLoadingControl)}`,
+  );
+  await page.locator("#showOutline").click();
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Outline");
+  await page.waitForSelector("#detailContent h3", { state: "visible", timeout: 20_000 });
+  const failingStateBeforeRelease = await captureReaderSurface(page);
+  releaseFailingInterlinear();
+  await page.waitForFunction(() => document.querySelector("#showInterlinear")?.getAttribute("aria-busy") === "false");
+  const failingStateAfterRelease = await captureReaderSurface(page);
+  assert(
+    JSON.stringify(failingStateAfterRelease) === JSON.stringify(failingStateBeforeRelease),
+    `stale Language Study failure changed newer Outline route/detail/status/history/lock/focus/token/highlight state: ${JSON.stringify({ before: failingStateBeforeRelease, after: failingStateAfterRelease })}`,
+  );
+  const failingErrorControl = await captureControl(page, "#showInterlinear");
+  assert(
+    failingErrorControl.ariaBusy === "false" &&
+      failingErrorControl.title === "Language Study data could not be loaded. Select to retry." &&
+      failingErrorControl.ariaLabel === failingErrorControl.title &&
+      !failingErrorControl.disabled &&
+      failingErrorControl.controlState === "enabled" &&
+      failingErrorControl.unavailable === "false",
+    `stale-failure Language Study control did not expose bounded retry state: ${JSON.stringify(failingErrorControl)}`,
+  );
+  assert(
+    failingStateAfterRelease.detailTitle === "Outline" &&
+      !failingStateAfterRelease.detailText.includes("could not be loaded"),
+    `stale Language Study failure opened an error detail over Outline: ${JSON.stringify(failingStateAfterRelease)}`,
+  );
+  await page.locator("#showInterlinear").click();
+  await page.waitForSelector(".interlinear-picker", { state: "visible", timeout: 20_000 });
+  assert(failingInterlinearAttempts === 2, `Language Study retry count was not exactly two attempts: ${failingInterlinearAttempts}`);
+  const failingLoadedControl = await captureControl(page, "#showInterlinear");
+  assert(
+    failingLoadedControl.ariaBusy === "false" &&
+      failingLoadedControl.title === "Language Study" &&
+      failingLoadedControl.ariaLabel === "Language Study" &&
+      !failingLoadedControl.disabled &&
+      failingLoadedControl.controlState === "enabled" &&
+      failingLoadedControl.unavailable === "false",
+    `retried Language Study control did not return to normal loaded state: ${JSON.stringify(failingLoadedControl)}`,
+  );
+  await page.unroute(failingInterlinearPattern);
+  pass("stale-failure Language Study synchronizes retry controls without replacing newer Outline state");
 
   const crossBookOutlinePattern = "**/data/outlines/books/numbers.json*";
   let releaseCrossBookOutline;

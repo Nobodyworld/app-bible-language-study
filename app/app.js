@@ -148,6 +148,18 @@ function readerDatasetCanLoad(key) {
   return readerDatasetState(key).status !== "unavailable";
 }
 
+function synchronizeReaderDatasetControls({ generation, bookId, translationId }) {
+  if (
+    generation !== state.readerDatasetGeneration ||
+    bookId !== state.bookId ||
+    translationId !== state.translationId
+  ) {
+    return false;
+  }
+  syncToolButtons();
+  return true;
+}
+
 async function ensureReaderDataset(key) {
   const config = READER_DATASETS[key];
   if (!config || !canUseCapability(config.capabilityId)) {
@@ -164,6 +176,7 @@ async function ensureReaderDataset(key) {
   const translationId = state.translationId;
   record.status = "loading";
   record.error = null;
+  synchronizeReaderDatasetControls({ generation, bookId, translationId });
 
   const pending = config
     .load(bookId)
@@ -179,11 +192,13 @@ async function ensureReaderDataset(key) {
       if (result.availability === "unavailable") {
         record.status = "unavailable";
         state[config.stateKey] = null;
+        synchronizeReaderDatasetControls({ generation, bookId, translationId });
         return { status: "unavailable", data: null };
       }
 
       record.status = "loaded";
       state[config.stateKey] = result.data;
+      synchronizeReaderDatasetControls({ generation, bookId, translationId });
       return { status: "loaded", data: result.data };
     })
     .catch((error) => {
@@ -197,6 +212,7 @@ async function ensureReaderDataset(key) {
       record.status = "error";
       record.error = error;
       state[config.stateKey] = null;
+      synchronizeReaderDatasetControls({ generation, bookId, translationId });
       return { status: "error", data: null, error };
     })
     .finally(() => {
@@ -348,12 +364,8 @@ async function loadReaderDatasetForActivation(key, activation) {
 async function runReaderDatasetActivation(key, activate, options = {}) {
   const activation = captureReaderActivation();
   const result = await loadReaderDatasetForActivation(key, activation);
-  if (result.status === "loaded") {
-    syncToolButtons();
-    return activate(result.data, activation);
-  }
+  if (result.status === "loaded") return activate(result.data, activation);
   if (result.status !== "stale") {
-    syncToolButtons();
     showReaderDatasetFailure(key, { ...options, detailIntent: activation.detailIntent });
   }
 }
@@ -405,7 +417,6 @@ detailViews.showDefaultVerseStudy = async (reference, verse, options = {}) => {
   const activation = captureReaderActivation();
   const crossrefResult = await loadReaderDatasetForActivation("crossrefs", activation);
   if (crossrefResult.status === "stale") return;
-  syncToolButtons();
   const crossRecord = state.crossrefs?.verses?.[`${state.chapter}:${verse}`] || null;
   if (crossrefResult.status === "loaded" && crossRecord) {
     return showLoadedCrossrefs(reference, crossRecord, {
@@ -416,7 +427,6 @@ detailViews.showDefaultVerseStudy = async (reference, verse, options = {}) => {
 
   const interlinearResult = await loadReaderDatasetForActivation("interlinear", activation);
   if (interlinearResult.status === "stale") return;
-  syncToolButtons();
   const interlinearTokens = state.interlinear?.chapters?.[state.chapter]?.[verse];
   if (interlinearResult.status === "loaded" && Array.isArray(interlinearTokens) && interlinearTokens.length) {
     return showLoadedInterlinearVerse(reference, verse, {

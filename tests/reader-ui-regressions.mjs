@@ -81,6 +81,7 @@ assert.equal(
   "Outline, chapter/verse Language Study, and Cross References must share one route-and-detail activation guard.",
 );
 const ensureReaderDatasetSource = app.match(/async function ensureReaderDataset\(key\) \{[\s\S]*?\n\}/)?.[0] || "";
+const runReaderDatasetActivationSource = app.match(/async function runReaderDatasetActivation\(key, activate, options = \{\}\) \{[\s\S]*?\n\}/)?.[0] || "";
 assert(
   /navigationGeneration: state\.navigationGeneration[\s\S]*?detailIntent: beginDetailIntent\(\)/.test(app) &&
     /activation\.navigationGeneration !== state\.navigationGeneration[\s\S]*?!isDetailIntentCurrent\(activation\.detailIntent\)/.test(app),
@@ -98,8 +99,14 @@ assert(
   "Detail Back, Forward, reset, and clear paths must invalidate pending deferred intents.",
 );
 assert(
-  !/renderer\.renderChapter|syncToolButtons|setStatus|setDetail|\.focus\(|scrollTo/.test(ensureReaderDatasetSource),
-  "Supplemental dataset loading must remain cache-only until a current activation chooses a UI mutation.",
+  /function synchronizeReaderDatasetControls\(\{ generation, bookId, translationId \}\)[\s\S]*?generation !== state\.readerDatasetGeneration[\s\S]*?bookId !== state\.bookId[\s\S]*?translationId !== state\.translationId[\s\S]*?syncToolButtons\(\)/.test(app) &&
+    (ensureReaderDatasetSource.match(/synchronizeReaderDatasetControls\(\{ generation, bookId, translationId \}\)/g) || []).length === 4,
+  "Every loading, loaded, unavailable, and error transition for the current dataset owner must synchronize shared controls.",
+);
+assert(
+  !/renderer\.renderChapter|setStatus|setDetail|setDetailMessage|\.focus\(|scrollTo/.test(ensureReaderDatasetSource) &&
+    !/syncToolButtons/.test(runReaderDatasetActivationSource),
+  "Dataset synchronization must not restore reader/status/detail/focus mutations or depend on current detail-intent ownership.",
 );
 let modeledDetailIntent = 0;
 const beginModeledDetailIntent = () => ++modeledDetailIntent;
@@ -345,4 +352,4 @@ assert(
   "Browser-visible app and stylesheet entry points must use the current cache-buster key.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 64 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 65 }, null, 2));
