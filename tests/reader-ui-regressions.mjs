@@ -4,12 +4,13 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolveReferencePreviewPlacement } from "../app/src/reference-preview-placement.js";
 
-const [index, css, contextCss, stylesPolish, app, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, jobsView] = await Promise.all([
+const [index, css, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, jobsView] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
   readFile(new URL("../app/styles.css", import.meta.url), "utf8"),
   readFile(new URL("../app/styles-context.css", import.meta.url), "utf8"),
   readFile(new URL("../app/styles-polish.css", import.meta.url), "utf8"),
   readFile(new URL("../app/app.js", import.meta.url), "utf8"),
+  readFile(new URL("../app/src/dom.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/reader-picker-flow.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/chapter-renderer.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/views/tags-view.js", import.meta.url), "utf8"),
@@ -71,13 +72,42 @@ assert(/verseActions\.append\(studyButton\)/.test(renderer), "Reader row actions
 assert(
   /detailViews\.showDefaultVerseStudy\(reference, verse/.test(renderer) &&
     /crossrefResult\.status === "loaded" && crossRecord[\s\S]*?interlinearResult\.status === "loaded"[\s\S]*?canUseCapability\("commentary"\)/.test(app) &&
-    /showLoadedCrossrefs\(reference, resolvedRecord \|\| emptyCrossrefRecord\(\), options\)/.test(app),
+    /showLoadedCrossrefs\(reference, resolvedRecord \|\| emptyCrossrefRecord\(\), \{[\s\S]*?detailIntent: activation\.detailIntent/.test(app),
   "The default verse-study launcher must resolve real verse data in cross-reference, Language Study, commentary order without passing null to the explicit cross-reference view.",
 );
 assert.equal(
   (app.match(/runReaderDatasetActivation\(/g) || []).length,
   5,
-  "Outline, chapter/verse Language Study, and Cross References must share one navigation-generation activation guard.",
+  "Outline, chapter/verse Language Study, and Cross References must share one route-and-detail activation guard.",
+);
+const ensureReaderDatasetSource = app.match(/async function ensureReaderDataset\(key\) \{[\s\S]*?\n\}/)?.[0] || "";
+assert(
+  /navigationGeneration: state\.navigationGeneration[\s\S]*?detailIntent: beginDetailIntent\(\)/.test(app) &&
+    /activation\.navigationGeneration !== state\.navigationGeneration[\s\S]*?!isDetailIntentCurrent\(activation\.detailIntent\)/.test(app),
+  "Deferred reader activations must capture and validate independent route and detail-intent generations.",
+);
+assert(
+  /function claimDetailMutation\(options\)[\s\S]*?isDetailIntentCurrent\(options\.detailIntent\)[\s\S]*?beginDetailIntent\(\)/.test(dom) &&
+    /export function setDetail\(title, node, options = \{\}\) \{\s*const detailIntent = claimDetailMutation\(options\);\s*if \(detailIntent === null\) return null;/.test(dom),
+  "All immediate detail mutations must invalidate older deferred intents while tokened stale mutations are rejected.",
+);
+assert(
+  /export function goBackDetail\(\) \{\s*beginDetailIntent\(\)/.test(dom) &&
+    /export function goForwardDetail\(\) \{\s*beginDetailIntent\(\)/.test(dom) &&
+    /function resetDetailContent\(title, message\) \{\s*beginDetailIntent\(\)/.test(dom),
+  "Detail Back, Forward, reset, and clear paths must invalidate pending deferred intents.",
+);
+assert(
+  !/renderer\.renderChapter|syncToolButtons|setStatus|setDetail|\.focus\(|scrollTo/.test(ensureReaderDatasetSource),
+  "Supplemental dataset loading must remain cache-only until a current activation chooses a UI mutation.",
+);
+let modeledDetailIntent = 0;
+const beginModeledDetailIntent = () => ++modeledDetailIntent;
+const delayedLanguageStudyIntent = beginModeledDetailIntent();
+const newerOutlineIntent = beginModeledDetailIntent();
+assert(
+  delayedLanguageStudyIntent !== modeledDetailIntent && newerOutlineIntent === modeledDetailIntent,
+  "A newer deferred Outline intent must supersede an older held Language Study intent on the same route.",
 );
 assert(/@media\s*\(min-width:\s*641px\)\s*and\s*\(max-width:\s*1380px\)[\s\S]*?\.chapter-actions \.toolbar-button\s*{[\s\S]*?width:\s*34px;/.test(css), "Workspace controls must compact at intermediate widths.");
 assert(/:root\[data-theme="dark"\] \.parallel-verse\.active\s*{[\s\S]*?background:\s*rgba\(148,\s*163,\s*184,\s*0\.12\)/.test(css), "Dark parallel selection must not use a white background.");
@@ -315,4 +345,4 @@ assert(
   "Browser-visible app and stylesheet entry points must use the current cache-buster key.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 59 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 64 }, null, 2));

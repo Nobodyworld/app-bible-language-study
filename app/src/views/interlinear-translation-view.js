@@ -628,7 +628,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     window.requestAnimationFrame(maybeLoadNext);
   }
 
-  function showInterlinearChapter() {
+  function showInterlinearChapter(options = {}) {
     stopInterlinearLazyLoad();
     if (!ctx.canUseCapability?.("interlinear")) {
       setDetail(
@@ -636,12 +636,13 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
         createStudyEmptyState(ctx, "interlinear", {
           capabilityIds: ["interlinear"],
         }),
+        options,
       );
       return;
     }
     const verses = interlinearVerses();
     if (!verses.length) {
-      setDetailMessage("Language Study", "No Language Study data found for this chapter.");
+      setDetailMessage("Language Study", "No Language Study data found for this chapter.", options);
       return;
     }
 
@@ -665,7 +666,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
         li.append(inspect);
       }),
     );
-    setDetail("Language Study", wrap);
+    setDetail("Language Study", wrap, options);
   }
 
   return {

@@ -57,6 +57,7 @@ let currentDetailTransient = false;
 let transientBase = null;
 let detailPanelMode = PANEL_MODES.follow;
 let currentDetailReaderContext = null;
+let detailIntentGeneration = 0;
 
 // Reader location history for tracking book/chapter/verse navigation
 let readerLocationHistory = [];
@@ -174,7 +175,29 @@ function revealDetailOnMobile(options = {}) {
   });
 }
 
+export function beginDetailIntent() {
+  detailIntentGeneration += 1;
+  return detailIntentGeneration;
+}
+
+export function currentDetailIntent() {
+  return detailIntentGeneration;
+}
+
+export function isDetailIntentCurrent(token) {
+  return token === detailIntentGeneration;
+}
+
+function claimDetailMutation(options) {
+  if (Object.prototype.hasOwnProperty.call(options, "detailIntent")) {
+    return isDetailIntentCurrent(options.detailIntent) ? options.detailIntent : null;
+  }
+  return beginDetailIntent();
+}
+
 export function setDetail(title, node, options = {}) {
+  const detailIntent = claimDetailMutation(options);
+  if (detailIntent === null) return null;
   const historyMode = options.history || "push";
   const sameTitle = els.detailTitle.textContent === title;
   const storedCurrent = currentDetailTransient ? transientBase : canStoreCurrentDetail() ? snapshotDetail() : null;
@@ -202,6 +225,7 @@ export function setDetail(title, node, options = {}) {
   currentDetailTransient = Boolean(options.transient);
   updateDetailHistoryButtons();
   revealDetailOnMobile(options);
+  return detailIntent;
 }
 
 export function isDetailHoverLocked() {
@@ -219,10 +243,11 @@ export function setDetailHoverLocked(locked) {
 export function setDetailMessage(title, message, options = {}) {
   const node = document.createElement("p");
   node.textContent = message;
-  setDetail(title, node, options);
+  return setDetail(title, node, options);
 }
 
 export function goBackDetail() {
+  beginDetailIntent();
   const previousDetail = detailHistory.pop();
 
   if (previousDetail) {
@@ -254,6 +279,7 @@ export function goBackDetail() {
 }
 
 export function goForwardDetail() {
+  beginDetailIntent();
   const nextDetail = detailForwardHistory.pop();
 
   if (nextDetail) {
@@ -285,6 +311,7 @@ export function goForwardDetail() {
 }
 
 function resetDetailContent(title, message) {
+  beginDetailIntent();
   detailHistory.length = 0;
   detailForwardHistory.length = 0;
   transientBase = null;

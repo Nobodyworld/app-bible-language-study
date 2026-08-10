@@ -73,6 +73,8 @@ async function captureReaderSurface(page) {
       id: document.activeElement?.id || "",
       className: document.activeElement?.className || "",
       verse: document.activeElement?.closest?.(".verse-row")?.dataset?.verse || "",
+      strongCode: document.activeElement?.dataset?.strongCode || "",
+      tokenIndex: document.activeElement?.dataset?.tokenIndex || "",
       connected: document.activeElement?.isConnected === true,
     },
     highlightedVerses: [...document.querySelectorAll(".reader-context-verse")].map((node) => node.dataset.verse || node.id),
@@ -127,6 +129,61 @@ try {
   assert(coreState.languageEnabled && coreState.outlineEnabled, `deferred capabilities are hidden: ${JSON.stringify(coreState)}`);
   pass("presentation, footnotes, Strong's, Language Study, and outline capability semantics");
 
+  const heldInterlinearPattern = "**/data/interlinear/books/psalms.json*";
+  let releaseHeldInterlinear;
+  let markHeldInterlinear;
+  const heldInterlinearRelease = new Promise((resolve) => {
+    releaseHeldInterlinear = resolve;
+  });
+  const heldInterlinearRequest = new Promise((resolve) => {
+    markHeldInterlinear = resolve;
+  });
+  await page.route(heldInterlinearPattern, async (route) => {
+    markHeldInterlinear();
+    await heldInterlinearRelease;
+    await route.continue();
+  });
+  const heldInterlinearBefore = requests.filter((requestUrl) =>
+    requestUrl.includes("/interlinear/books/psalms.json"),
+  ).length;
+  await page.locator("#showInterlinear").click();
+  await heldInterlinearRequest;
+  await page.locator(".strong-token").first().click();
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Strong's");
+  await page.waitForSelector(".strong-overview", { state: "visible", timeout: 20_000 });
+  await page.waitForFunction(() => !document.querySelector(".lexicon-extra")?.textContent.includes("Loading"));
+  const immediateStateBeforeRelease = await captureReaderSurface(page);
+  assert(
+    immediateStateBeforeRelease.detailTitle === "Strong's" &&
+      immediateStateBeforeRelease.panelMode === "locked" &&
+      immediateStateBeforeRelease.activeElement.connected &&
+      immediateStateBeforeRelease.activeElement.strongCode,
+    `newer Strong's state was not authoritative before release: ${JSON.stringify(immediateStateBeforeRelease)}`,
+  );
+  releaseHeldInterlinear();
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(100);
+  const immediateStateAfterRelease = await captureReaderSurface(page);
+  assert(
+    JSON.stringify(immediateStateAfterRelease) === JSON.stringify(immediateStateBeforeRelease),
+    `stale Language Study completion changed Strong's route/detail/history/lock/focus/token/highlight state: ${JSON.stringify({ before: immediateStateBeforeRelease, after: immediateStateAfterRelease })}`,
+  );
+  const heldInterlinearAfter = requests.filter((requestUrl) =>
+    requestUrl.includes("/interlinear/books/psalms.json"),
+  ).length;
+  assert(
+    heldInterlinearAfter === heldInterlinearBefore + 1,
+    `held Language Study request count was not exactly one: ${heldInterlinearAfter - heldInterlinearBefore}`,
+  );
+  await page.locator("#showInterlinear").click();
+  await page.waitForSelector(".interlinear-picker", { state: "visible", timeout: 20_000 });
+  assert(
+    requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/psalms.json")).length === heldInterlinearAfter,
+    "stale-but-cached Language Study data refetched on the next activation",
+  );
+  await page.unroute(heldInterlinearPattern);
+  pass("older held Language Study caches without replacing newer immediate Strong's state and is reused without refetch");
+
   await clickExisting(page, ".fn-marker");
   await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Footnote");
   assert(await page.locator(".reader-context-verse").count(), "footnote activation did not preserve reader highlighting");
@@ -145,7 +202,7 @@ try {
   const interlinearBefore = requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/psalms.json")).length;
   await openLanguageStudy(page, { keyboard: true });
   const interlinearAfterFirst = requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/psalms.json")).length;
-  assert(interlinearAfterFirst === interlinearBefore + 1, "first Language Study activation did not fetch exactly one interlinear book");
+  assert(interlinearAfterFirst === interlinearBefore, "cached Language Study activation refetched its interlinear book");
   assert(await page.locator(".original-language-word-card").count(), "first Language Study activation did not render word cards");
   assert(await page.evaluate(() => document.activeElement?.isConnected === true), "keyboard Language Study activation left detached focus");
   await openLanguageStudy(page);
@@ -276,6 +333,78 @@ try {
   );
   await page.unroute(delayedPattern);
   pass("pending same-book chapter activation retains its cache without changing the new route or reader/detail state");
+
+  const competingInterlinearPattern = "**/data/interlinear/books/exodus.json*";
+  let releaseCompetingInterlinear;
+  let markCompetingInterlinear;
+  const competingInterlinearRelease = new Promise((resolve) => {
+    releaseCompetingInterlinear = resolve;
+  });
+  const competingInterlinearRequest = new Promise((resolve) => {
+    markCompetingInterlinear = resolve;
+  });
+  await page.route(competingInterlinearPattern, async (route) => {
+    markCompetingInterlinear();
+    await competingInterlinearRelease;
+    await route.continue();
+  });
+  await navigateHash(page, "#/read/bsb/exodus/1/1", "Exodus", 1);
+  await page.locator("#showInterlinear").click();
+  await competingInterlinearRequest;
+  await page.locator("#showOutline").click();
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Outline");
+  await page.waitForSelector("#detailContent h3", { state: "visible", timeout: 20_000 });
+  const competingStateBeforeRelease = await captureReaderSurface(page);
+  releaseCompetingInterlinear();
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(100);
+  const competingStateAfterRelease = await captureReaderSurface(page);
+  assert(
+    JSON.stringify(competingStateAfterRelease) === JSON.stringify(competingStateBeforeRelease),
+    `older Language Study completion changed newer Outline route/detail/history/lock/focus/token/highlight state: ${JSON.stringify({ before: competingStateBeforeRelease, after: competingStateAfterRelease })}`,
+  );
+  assert(
+    competingStateAfterRelease.detailTitle === "Outline",
+    `newer deferred Outline intent was not authoritative: ${JSON.stringify(competingStateAfterRelease)}`,
+  );
+  await page.unroute(competingInterlinearPattern);
+  pass("older held Language Study cannot replace a newer deferred Outline or add panel history");
+
+  const crossBookOutlinePattern = "**/data/outlines/books/numbers.json*";
+  let releaseCrossBookOutline;
+  let markCrossBookOutline;
+  const crossBookOutlineRelease = new Promise((resolve) => {
+    releaseCrossBookOutline = resolve;
+  });
+  const crossBookOutlineRequest = new Promise((resolve) => {
+    markCrossBookOutline = resolve;
+  });
+  await page.route(crossBookOutlinePattern, async (route) => {
+    markCrossBookOutline();
+    await crossBookOutlineRelease;
+    await route.continue();
+  });
+  await navigateHash(page, "#/read/bsb/numbers/1/1", "Numbers", 1);
+  await page.locator("#showOutline").click();
+  await crossBookOutlineRequest;
+  await navigateHash(page, "#/read/bsb/john/1/1", "John", 1);
+  const crossBookStateBeforeRelease = await captureReaderSurface(page);
+  releaseCrossBookOutline();
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(100);
+  const crossBookStateAfterRelease = await captureReaderSurface(page);
+  assert(
+    JSON.stringify(crossBookStateAfterRelease) === JSON.stringify(crossBookStateBeforeRelease),
+    `cross-book stale Outline changed the new reader/detail state: ${JSON.stringify({ before: crossBookStateBeforeRelease, after: crossBookStateAfterRelease })}`,
+  );
+  assert(
+    crossBookStateAfterRelease.route === "#/read/bsb/john/1/1" &&
+      crossBookStateAfterRelease.title?.includes("John 1") &&
+      crossBookStateAfterRelease.detailTitle !== "Outline",
+    `cross-book stale Outline escaped its route guard: ${JSON.stringify(crossBookStateAfterRelease)}`,
+  );
+  await page.unroute(crossBookOutlinePattern);
+  pass("pending cross-book activation cannot mutate the destination reader or detail state");
 
   const leviticusCrossPattern = "**/data/crossrefs/leviticus.json*";
   const leviticusInterlinearPattern = "**/data/interlinear/books/leviticus.json*";

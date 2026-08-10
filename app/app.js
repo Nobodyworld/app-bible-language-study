@@ -11,9 +11,11 @@ import {
 } from "./src/data-service.js?v=pr13-live-qa-20260711e";
 import { createDetailViews } from "./src/detail-views.js?v=pr13-live-qa-20260711e";
 import {
+  beginDetailIntent,
   els,
   goBackDetail,
   goForwardDetail,
+  isDetailIntentCurrent,
   option,
   resetDetail,
   resetDetailForNavigation,
@@ -162,8 +164,6 @@ async function ensureReaderDataset(key) {
   const translationId = state.translationId;
   record.status = "loading";
   record.error = null;
-  syncToolButtons();
-  setStatus(`Loading ${config.label} data...`);
 
   const pending = config
     .load(bookId)
@@ -179,32 +179,11 @@ async function ensureReaderDataset(key) {
       if (result.availability === "unavailable") {
         record.status = "unavailable";
         state[config.stateKey] = null;
-        syncToolButtons();
         return { status: "unavailable", data: null };
       }
 
       record.status = "loaded";
       state[config.stateKey] = result.data;
-      const focusedStudyVerse = document.activeElement?.matches?.(".verse-study-button")
-        ? document.activeElement.closest(".verse-row")?.dataset?.verse || null
-        : null;
-      const hadReaderHighlight = Boolean(
-        document.querySelector(".reader-context-verse, .reader-context-word"),
-      );
-      const scrollPosition = { x: window.scrollX, y: window.scrollY };
-      renderer.renderChapter();
-      window.scrollTo(scrollPosition.x, scrollPosition.y);
-      if (hadReaderHighlight) restoreReaderHighlightFromContext(state.activeReferenceContext);
-      if (focusedStudyVerse) {
-        const studyButton = document.querySelector(
-          `.verse-row[data-verse="${CSS.escape(focusedStudyVerse)}"] .verse-study-button`,
-        );
-        if (studyButton) {
-          studyButton.style.visibility = "visible";
-          studyButton.focus({ preventScroll: true });
-          studyButton.style.removeProperty("visibility");
-        }
-      }
       return { status: "loaded", data: result.data };
     })
     .catch((error) => {
@@ -218,8 +197,6 @@ async function ensureReaderDataset(key) {
       record.status = "error";
       record.error = error;
       state[config.stateKey] = null;
-      syncToolButtons();
-      setStatus(`${config.label} data could not be loaded`);
       return { status: "error", data: null, error };
     })
     .finally(() => {
@@ -351,20 +328,34 @@ const detailViews = createDetailViews(ctx);
 ctx.detailViews = detailViews;
 
 function captureReaderActivation() {
-  return state.navigationGeneration;
+  return {
+    navigationGeneration: state.navigationGeneration,
+    detailIntent: beginDetailIntent(),
+  };
 }
 
 async function loadReaderDatasetForActivation(key, activation) {
   const result = await ensureReaderDataset(key);
-  if (activation !== state.navigationGeneration) return { status: "stale", data: null };
+  if (
+    activation.navigationGeneration !== state.navigationGeneration ||
+    !isDetailIntentCurrent(activation.detailIntent)
+  ) {
+    return { status: "stale", data: null };
+  }
   return result;
 }
 
 async function runReaderDatasetActivation(key, activate, options = {}) {
   const activation = captureReaderActivation();
   const result = await loadReaderDatasetForActivation(key, activation);
-  if (result.status === "loaded") return activate(result.data);
-  if (result.status !== "stale") showReaderDatasetFailure(key, options);
+  if (result.status === "loaded") {
+    syncToolButtons();
+    return activate(result.data, activation);
+  }
+  if (result.status !== "stale") {
+    syncToolButtons();
+    showReaderDatasetFailure(key, { ...options, detailIntent: activation.detailIntent });
+  }
 }
 
 function emptyCrossrefRecord() {
@@ -372,18 +363,25 @@ function emptyCrossrefRecord() {
 }
 
 const showLoadedOutline = detailViews.showOutline;
-detailViews.showOutline = (...args) =>
-  runReaderDatasetActivation("outline", () => showLoadedOutline(...args));
+detailViews.showOutline = (options = {}) =>
+  runReaderDatasetActivation("outline", (_data, activation) =>
+    showLoadedOutline({ ...options, detailIntent: activation.detailIntent }),
+    options,
+  );
 
 const showLoadedInterlinearChapter = detailViews.showInterlinearChapter;
-detailViews.showInterlinearChapter = (...args) =>
-  runReaderDatasetActivation("interlinear", () => showLoadedInterlinearChapter(...args));
+detailViews.showInterlinearChapter = (options = {}) =>
+  runReaderDatasetActivation("interlinear", (_data, activation) =>
+    showLoadedInterlinearChapter({ ...options, detailIntent: activation.detailIntent }),
+    options,
+  );
 
 const showLoadedInterlinearVerse = detailViews.showInterlinearVerse;
 detailViews.showInterlinearVerse = (reference, verse, options = {}) =>
   runReaderDatasetActivation(
     "interlinear",
-    () => showLoadedInterlinearVerse(reference, verse, options),
+    (_data, activation) =>
+      showLoadedInterlinearVerse(reference, verse, { ...options, detailIntent: activation.detailIntent }),
     options,
   );
 
@@ -391,11 +389,14 @@ const showLoadedCrossrefs = detailViews.showCrossrefs;
 detailViews.showCrossrefs = (reference, record, options = {}) =>
   runReaderDatasetActivation(
     "crossrefs",
-    () => {
+    (_data, activation) => {
       const resolvedRecord = options.verse
         ? state.crossrefs?.verses?.[`${state.chapter}:${options.verse}`] || null
         : record;
-      return showLoadedCrossrefs(reference, resolvedRecord || emptyCrossrefRecord(), options);
+      return showLoadedCrossrefs(reference, resolvedRecord || emptyCrossrefRecord(), {
+        ...options,
+        detailIntent: activation.detailIntent,
+      });
     },
     options,
   );
@@ -404,20 +405,31 @@ detailViews.showDefaultVerseStudy = async (reference, verse, options = {}) => {
   const activation = captureReaderActivation();
   const crossrefResult = await loadReaderDatasetForActivation("crossrefs", activation);
   if (crossrefResult.status === "stale") return;
+  syncToolButtons();
   const crossRecord = state.crossrefs?.verses?.[`${state.chapter}:${verse}`] || null;
   if (crossrefResult.status === "loaded" && crossRecord) {
-    return showLoadedCrossrefs(reference, crossRecord, options);
+    return showLoadedCrossrefs(reference, crossRecord, {
+      ...options,
+      detailIntent: activation.detailIntent,
+    });
   }
 
   const interlinearResult = await loadReaderDatasetForActivation("interlinear", activation);
   if (interlinearResult.status === "stale") return;
+  syncToolButtons();
   const interlinearTokens = state.interlinear?.chapters?.[state.chapter]?.[verse];
   if (interlinearResult.status === "loaded" && Array.isArray(interlinearTokens) && interlinearTokens.length) {
-    return showLoadedInterlinearVerse(reference, verse, options);
+    return showLoadedInterlinearVerse(reference, verse, {
+      ...options,
+      detailIntent: activation.detailIntent,
+    });
   }
 
   if (canUseCapability("commentary")) {
-    return detailViews.showCommentary(reference, verse, options);
+    return detailViews.showCommentary(reference, verse, {
+      ...options,
+      detailIntent: activation.detailIntent,
+    });
   }
 
   return detailViews.showStudyUnavailable?.(
@@ -426,7 +438,7 @@ detailViews.showDefaultVerseStudy = async (reference, verse, options = {}) => {
       reference,
       capabilityIds: ["crossrefs", "interlinear", "commentary"],
     }),
-    options,
+    { ...options, detailIntent: activation.detailIntent },
   );
 };
 
