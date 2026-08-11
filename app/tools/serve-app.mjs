@@ -1,6 +1,8 @@
 #!/usr/bin/env node
 
 import { readFile } from "node:fs/promises";
+import { stat } from "node:fs/promises";
+import { createHash } from "node:crypto";
 import { createServer } from "node:http";
 import { dirname, extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -8,6 +10,7 @@ import { fileURLToPath } from "node:url";
 const DEFAULT_HOST = "127.0.0.1";
 const DEFAULT_PORT = 8000;
 const DEFAULT_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), "..");
+const SERVE_MODES = new Set(["development", "publish"]);
 
 const CONTENT_TYPES = {
   ".css": "text/css; charset=utf-8",
@@ -41,8 +44,38 @@ function requestFilePath(root, requestUrl) {
   return filePath;
 }
 
-export function createStaticAppServer({ root = DEFAULT_ROOT } = {}) {
+function resolvedMode(value = "development") {
+  const mode = String(value || "development").toLowerCase();
+  if (!SERVE_MODES.has(mode)) throw new Error(`Invalid serve mode: ${value}`);
+  return mode;
+}
+
+function entityTag(body) {
+  return `"${createHash("sha256").update(body).digest("base64url")}"`;
+}
+
+function etagMatches(header, etag) {
+  if (!header) return false;
+  return String(header)
+    .split(",")
+    .map((value) => value.trim().replace(/^W\//, ""))
+    .some((value) => value === "*" || value === etag);
+}
+
+function isNotModified(request, etag, modifiedAt) {
+  const ifNoneMatch = request.headers["if-none-match"];
+  if (ifNoneMatch) return etagMatches(ifNoneMatch, etag);
+  const ifModifiedSince = request.headers["if-modified-since"];
+  if (!ifModifiedSince) return false;
+  const since = Date.parse(ifModifiedSince);
+  if (!Number.isFinite(since)) return false;
+  return Math.floor(modifiedAt.getTime() / 1000) <= Math.floor(since / 1000);
+}
+
+export function createStaticAppServer({ root = DEFAULT_ROOT, mode = "development" } = {}) {
   const resolvedRoot = resolve(root);
+  const serveMode = resolvedMode(mode);
+  const cacheControl = serveMode === "publish" ? "no-cache" : "no-store";
   const server = createServer(async (request, response) => {
     try {
       if (request.method !== "GET" && request.method !== "HEAD") {
@@ -58,12 +91,23 @@ export function createStaticAppServer({ root = DEFAULT_ROOT } = {}) {
         return;
       }
 
-      const body = await readFile(filePath);
+      const [body, fileStats] = await Promise.all([readFile(filePath), stat(filePath)]);
+      const etag = entityTag(body);
+      const responseHeaders = {
+        "Cache-Control": cacheControl,
+        ETag: etag,
+        "Last-Modified": fileStats.mtime.toUTCString(),
+        "X-Content-Type-Options": "nosniff",
+      };
+      if (serveMode === "publish" && isNotModified(request, etag, fileStats.mtime)) {
+        response.writeHead(304, responseHeaders);
+        response.end();
+        return;
+      }
       response.writeHead(200, {
-        "Cache-Control": "no-store",
+        ...responseHeaders,
         "Content-Length": body.length,
         "Content-Type": CONTENT_TYPES[extname(filePath).toLowerCase()] || "application/octet-stream",
-        "X-Content-Type-Options": "nosniff",
       });
       response.end(request.method === "HEAD" ? undefined : body);
     } catch (error) {
@@ -81,8 +125,8 @@ export function createStaticAppServer({ root = DEFAULT_ROOT } = {}) {
   return server;
 }
 
-export async function startStaticAppServer({ host = DEFAULT_HOST, port = DEFAULT_PORT, root = DEFAULT_ROOT } = {}) {
-  const server = createStaticAppServer({ root });
+export async function startStaticAppServer({ host = DEFAULT_HOST, port = DEFAULT_PORT, root = DEFAULT_ROOT, mode = "development" } = {}) {
+  const server = createStaticAppServer({ root, mode });
   await new Promise((resolveListen, reject) => {
     server.once("error", reject);
     server.listen(resolvedPort(port), host, resolveListen);
@@ -96,10 +140,12 @@ async function main() {
   const host = optionValue("--host") || process.env.HOST || DEFAULT_HOST;
   const port = optionValue("--port") || process.env.PORT || DEFAULT_PORT;
   const root = optionValue("--root") || DEFAULT_ROOT;
-  const { server, url } = await startStaticAppServer({ host, port, root });
+  const mode = optionValue("--mode") || (process.argv.includes("--publish") ? "publish" : "development");
+  const { server, url } = await startStaticAppServer({ host, port, root, mode });
 
   console.log(`Bible App Reader available at ${url}`);
   console.log(`Serving ${resolve(root)}`);
+  console.log(`Cache mode: ${resolvedMode(mode)}`);
   console.log("Press Ctrl+C to stop.");
 
   const shutdown = () => server.close(() => process.exit(0));

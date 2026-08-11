@@ -22,6 +22,7 @@
 !/app/scripts/package-state-test.mjs
 !/app/scripts/poll-response-test.mjs
 !/app/scripts/reference-preview-interaction-test.mjs
+!/app/scripts/reader-data-loading-interaction-test.mjs
 !/app/scripts/recovery-scenarios-test.mjs
 !/app/scripts/schema-validation.mjs
 !/app/scripts/semantic-test.mjs

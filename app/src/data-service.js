@@ -1,6 +1,7 @@
 import { DATA_ROOT } from "./config.js";
 
 const cache = new Map();
+const pendingCache = new Map();
 const languageMetadataCache = new Map();
 const LANGUAGE_METADATA_VERSION = "clean-app-v1-sofit4";
 const STUDY_DATA_VERSION = "clean-app-v1-strongs-restore1";
@@ -14,11 +15,17 @@ function versionedStudyPath(path) {
 
 export async function fetchJson(path) {
   if (cache.has(path)) return cache.get(path);
-  const response = await fetch(path);
-  if (!response.ok) throw new Error(`Could not load ${path}`);
-  const value = await response.json();
-  cache.set(path, value);
-  return value;
+  if (pendingCache.has(path)) return pendingCache.get(path);
+  const pending = fetch(path)
+    .then(async (response) => {
+      if (!response.ok) throw new Error(`Could not load ${path}`);
+      const value = await response.json();
+      cache.set(path, value);
+      return value;
+    })
+    .finally(() => pendingCache.delete(path));
+  pendingCache.set(path, pending);
+  return pending;
 }
 
 export async function tryFetchJson(path) {
@@ -44,18 +51,8 @@ export async function translationCanLoadBook(translationId, bookId) {
   return Boolean(await tryFetchJson(`${DATA_ROOT}/verses/${translationId}/${bookId}.json`));
 }
 
-export async function loadReaderBookData(translationId, bookId) {
+export async function loadReaderCoreBookData(translationId, bookId) {
   const verseBook = await fetchJson(`${DATA_ROOT}/verses/${translationId}/${bookId}.json`);
-  const [hasCrossrefs, hasOutlines, hasInterlinear] = await Promise.all([
-    datasetAvailable("crossrefs"),
-    datasetAvailable("outlines"),
-    datasetAvailable("interlinear"),
-  ]);
-  const [crossrefs, outline, interlinear] = await Promise.all([
-    hasCrossrefs ? tryFetchJson(versionedStudyPath(`${DATA_ROOT}/crossrefs/${bookId}.json`)) : null,
-    hasOutlines ? tryFetchJson(versionedStudyPath(`${DATA_ROOT}/outlines/books/${bookId}.json`)) : null,
-    hasInterlinear ? tryFetchJson(versionedStudyPath(`${DATA_ROOT}/interlinear/books/${bookId}.json`)) : null,
-  ]);
 
   if (translationId !== "bsb") {
     const hasOverlay = STRONGS_OVERLAY_TRANSLATIONS.has(translationId) && (await datasetAvailable("strongs"));
@@ -64,9 +61,6 @@ export async function loadReaderBookData(translationId, bookId) {
       : null;
     return {
       verseBook,
-      crossrefs,
-      outline,
-      interlinear,
       footnotes: null,
       presentation: null,
       strongs,
@@ -86,13 +80,29 @@ export async function loadReaderBookData(translationId, bookId) {
 
   return {
     verseBook,
-    crossrefs,
-    outline,
-    interlinear,
     footnotes,
     presentation,
     strongs,
   };
+}
+
+async function loadOptionalBookDataset(datasetKey, path) {
+  if (!(await datasetAvailable(datasetKey))) {
+    return { availability: "unavailable", data: null };
+  }
+  return { availability: "available", data: await fetchJson(versionedStudyPath(path)) };
+}
+
+export function loadBookCrossrefs(bookId) {
+  return loadOptionalBookDataset("crossrefs", `${DATA_ROOT}/crossrefs/${bookId}.json`);
+}
+
+export function loadBookOutline(bookId) {
+  return loadOptionalBookDataset("outlines", `${DATA_ROOT}/outlines/books/${bookId}.json`);
+}
+
+export function loadBookInterlinear(bookId) {
+  return loadOptionalBookDataset("interlinear", `${DATA_ROOT}/interlinear/books/${bookId}.json`);
 }
 
 export function fetchCommentaryAggregate(bookId) {

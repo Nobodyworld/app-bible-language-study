@@ -1,0 +1,610 @@
+#!/usr/bin/env node
+
+import { existsSync } from "node:fs";
+import { chromium } from "playwright-core";
+import { startStaticAppServer } from "../tools/serve-app.mjs";
+
+const BROWSERS = {
+  chrome: "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe",
+  edge: "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe",
+};
+const browserName = process.argv.find((argument) => argument.startsWith("--browser="))?.split("=")[1] || "edge";
+const executablePath = BROWSERS[browserName];
+if (!executablePath || !existsSync(executablePath)) {
+  throw new Error(`Browser executable not found for ${browserName}: ${executablePath || "unsupported browser"}`);
+}
+
+function assert(condition, message) {
+  if (!condition) throw new Error(message);
+}
+
+async function waitForReader(page, bookName, chapter) {
+  await page.waitForFunction(
+    ({ expectedBook, expectedChapter }) =>
+      document.querySelector("#chapterTitle")?.textContent.includes(`${expectedBook} ${expectedChapter}`) &&
+      document.querySelector("#statusText")?.textContent.includes("data loaded") &&
+      document.querySelectorAll(".strong-token").length > 0,
+    { expectedBook: bookName, expectedChapter: String(chapter) },
+    { timeout: 30_000 },
+  );
+}
+
+async function navigateHash(page, hash, bookName, chapter) {
+  await page.evaluate((nextHash) => {
+    window.location.hash = nextHash;
+  }, hash);
+  await waitForReader(page, bookName, chapter);
+}
+
+async function clickExisting(page, selector) {
+  await page.locator(selector).first().evaluate((element) => element.click());
+}
+
+async function openLanguageStudy(page, { keyboard = false } = {}) {
+  if (keyboard) {
+    await page.locator("#showInterlinear").focus();
+    await page.locator("#showInterlinear").press("Enter");
+  } else {
+    await page.locator("#showInterlinear").click();
+  }
+  await page.waitForSelector(".interlinear-picker", { state: "visible", timeout: 20_000 });
+  const firstVerse = page.locator(".interlinear-picker .mini-button").first();
+  if (keyboard) {
+    await firstVerse.focus();
+    await firstVerse.press("Enter");
+  } else {
+    await firstVerse.click();
+  }
+  await page.waitForSelector(".original-language-source-card", { state: "visible", timeout: 20_000 });
+}
+
+async function captureReaderSurface(page) {
+  return page.evaluate(() => ({
+    route: window.location.hash,
+    title: document.querySelector("#chapterTitle")?.textContent,
+    status: document.querySelector("#statusText")?.textContent,
+    chapterPicker: document.querySelector("#chapterPickerButton")?.textContent,
+    detailTitle: document.querySelector("#detailTitle")?.textContent,
+    detailText: document.querySelector("#detailContent")?.textContent,
+    backDisabled: document.querySelector("#detailBack")?.disabled,
+    forwardDisabled: document.querySelector("#detailForward")?.disabled,
+    panelMode: document.querySelector(".detail-pane")?.dataset?.panelMode,
+    historyLength: window.history.length,
+    activeElement: {
+      id: document.activeElement?.id || "",
+      className: document.activeElement?.className || "",
+      verse: document.activeElement?.closest?.(".verse-row")?.dataset?.verse || "",
+      strongCode: document.activeElement?.dataset?.strongCode || "",
+      tokenIndex: document.activeElement?.dataset?.tokenIndex || "",
+      connected: document.activeElement?.isConnected === true,
+    },
+    highlightedVerses: [...document.querySelectorAll(".reader-context-verse")].map((node) => node.dataset.verse || node.id),
+    highlightedTokens: [...document.querySelectorAll(".reader-context-word")].map(
+      (node) => `${node.dataset.strongCode || ""}:${node.dataset.tokenIndex || ""}`,
+    ),
+  }));
+}
+
+async function captureControl(page, selector) {
+  return page.locator(selector).evaluate((control) => ({
+    ariaBusy: control.getAttribute("aria-busy"),
+    ariaLabel: control.getAttribute("aria-label"),
+    title: control.title,
+    disabled: control.disabled,
+    controlState: control.dataset.controlState,
+    unavailable: control.dataset.unavailable,
+  }));
+}
+
+const checks = [];
+const pass = (name) => checks.push(name);
+const requests = [];
+const consoleErrors = [];
+const pageErrors = [];
+const { server, url } = await startStaticAppServer({ port: 0 });
+const browser = await chromium.launch({
+  executablePath,
+  headless: true,
+  args: ["--disable-gpu", "--disable-background-networking", "--disable-extensions", "--no-first-run", "--no-default-browser-check"],
+});
+const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+const page = await context.newPage();
+page.on("request", (request) => requests.push(request.url()));
+page.on("console", (message) => {
+  if (message.type() === "error") consoleErrors.push(message.text());
+});
+page.on("pageerror", (error) => pageErrors.push(error.message));
+
+try {
+  await page.goto(`${url}/#/read/bsb/psalms/23`, { waitUntil: "load" });
+  await waitForReader(page, "Psalms", 23);
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(1000);
+
+  const initialDeferred = requests.filter((requestUrl) =>
+    ["/crossrefs/psalms.json", "/interlinear/books/psalms.json", "/outlines/books/psalms.json"].some((path) => requestUrl.includes(path)),
+  );
+  assert(initialDeferred.length === 0, `fresh reader requested deferred data: ${JSON.stringify(initialDeferred)}`);
+  pass("fresh readiness and post-readiness quiet interval omit deferred datasets");
+
+  const coreState = await page.evaluate(() => ({
+    presentation: document.querySelectorAll(".presentation-block").length,
+    footnotes: document.querySelectorAll(".fn-marker").length,
+    strongs: document.querySelectorAll(".strong-token").length,
+    languageEnabled: !document.querySelector("#showInterlinear")?.disabled,
+    outlineEnabled: !document.querySelector("#showOutline")?.disabled,
+  }));
+  assert(
+    coreState.presentation > 0 && coreState.footnotes > 0 && coreState.strongs > 0,
+    `reader-core rendering is incomplete: ${JSON.stringify(coreState)}`,
+  );
+  assert(coreState.languageEnabled && coreState.outlineEnabled, `deferred capabilities are hidden: ${JSON.stringify(coreState)}`);
+  pass("presentation, footnotes, Strong's, Language Study, and outline capability semantics");
+
+  const heldInterlinearPattern = "**/data/interlinear/books/psalms.json*";
+  let releaseHeldInterlinear;
+  let markHeldInterlinear;
+  const heldInterlinearRelease = new Promise((resolve) => {
+    releaseHeldInterlinear = resolve;
+  });
+  const heldInterlinearRequest = new Promise((resolve) => {
+    markHeldInterlinear = resolve;
+  });
+  await page.route(heldInterlinearPattern, async (route) => {
+    markHeldInterlinear();
+    await heldInterlinearRelease;
+    await route.continue();
+  });
+  const heldInterlinearBefore = requests.filter((requestUrl) =>
+    requestUrl.includes("/interlinear/books/psalms.json"),
+  ).length;
+  await page.locator("#showInterlinear").click();
+  await heldInterlinearRequest;
+  await page.locator(".strong-token").first().click();
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Strong's");
+  await page.waitForSelector(".strong-overview", { state: "visible", timeout: 20_000 });
+  await page.waitForFunction(() => !document.querySelector(".lexicon-extra")?.textContent.includes("Loading"));
+  const immediateStateBeforeRelease = await captureReaderSurface(page);
+  assert(
+    immediateStateBeforeRelease.detailTitle === "Strong's" &&
+      immediateStateBeforeRelease.panelMode === "locked" &&
+      immediateStateBeforeRelease.activeElement.connected &&
+      immediateStateBeforeRelease.activeElement.strongCode,
+    `newer Strong's state was not authoritative before release: ${JSON.stringify(immediateStateBeforeRelease)}`,
+  );
+  releaseHeldInterlinear();
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(100);
+  const immediateStateAfterRelease = await captureReaderSurface(page);
+  assert(
+    JSON.stringify(immediateStateAfterRelease) === JSON.stringify(immediateStateBeforeRelease),
+    `stale Language Study completion changed Strong's route/detail/history/lock/focus/token/highlight state: ${JSON.stringify({ before: immediateStateBeforeRelease, after: immediateStateAfterRelease })}`,
+  );
+  const heldInterlinearAfter = requests.filter((requestUrl) =>
+    requestUrl.includes("/interlinear/books/psalms.json"),
+  ).length;
+  assert(
+    heldInterlinearAfter === heldInterlinearBefore + 1,
+    `held Language Study request count was not exactly one: ${heldInterlinearAfter - heldInterlinearBefore}`,
+  );
+  await page.locator("#showInterlinear").click();
+  await page.waitForSelector(".interlinear-picker", { state: "visible", timeout: 20_000 });
+  assert(
+    requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/psalms.json")).length === heldInterlinearAfter,
+    "stale-but-cached Language Study data refetched on the next activation",
+  );
+  await page.unroute(heldInterlinearPattern);
+  pass("older held Language Study caches without replacing newer immediate Strong's state and is reused without refetch");
+
+  await clickExisting(page, ".fn-marker");
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Footnote");
+  assert(await page.locator(".reader-context-verse").count(), "footnote activation did not preserve reader highlighting");
+  await clickExisting(page, ".strong-token");
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Strong's");
+  await page.waitForSelector(".strong-overview", { state: "visible", timeout: 20_000 });
+  assert(
+    (await page.locator(".detail-pane").getAttribute("data-panel-mode")) === "locked",
+    "Strong's activation did not lock the detail panel",
+  );
+  assert(page.url().endsWith("#/read/bsb/psalms/23"), `study activation changed the reader route: ${page.url()}`);
+  await page.locator("#detailBack").click();
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Footnote");
+  pass("reader presentation, footnote, Strong's, highlight, lock, route, and panel history behavior");
+
+  const interlinearBefore = requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/psalms.json")).length;
+  await openLanguageStudy(page, { keyboard: true });
+  const interlinearAfterFirst = requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/psalms.json")).length;
+  assert(interlinearAfterFirst === interlinearBefore, "cached Language Study activation refetched its interlinear book");
+  assert(await page.locator(".original-language-word-card").count(), "first Language Study activation did not render word cards");
+  assert(await page.evaluate(() => document.activeElement?.isConnected === true), "keyboard Language Study activation left detached focus");
+  await openLanguageStudy(page);
+  const interlinearAfterRepeat = requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/psalms.json")).length;
+  assert(interlinearAfterRepeat === interlinearAfterFirst, "repeat Language Study activation refetched interlinear data");
+  pass("first and repeat Language Study loading");
+
+  const crossrefsBefore = requests.filter((requestUrl) => requestUrl.includes("/crossrefs/psalms.json")).length;
+  await clickExisting(page, '.verse-row[data-verse="1"] .verse-study-button');
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Cross References");
+  await page.waitForSelector(".crossref-panel", { state: "visible", timeout: 20_000 });
+  const crossrefsAfterFirst = requests.filter((requestUrl) => requestUrl.includes("/crossrefs/psalms.json")).length;
+  assert(crossrefsAfterFirst === crossrefsBefore + 1, "first reference activation did not fetch exactly one cross-reference book");
+  assert(await page.locator(".crossref-item").count(), "cross-reference activation rendered no references");
+  await clickExisting(page, '.verse-row[data-verse="1"] .verse-study-button');
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Cross References");
+  const crossrefsAfterRepeat = requests.filter((requestUrl) => requestUrl.includes("/crossrefs/psalms.json")).length;
+  assert(crossrefsAfterRepeat === crossrefsAfterFirst, "repeat reference activation refetched cross-reference data");
+  pass("first and repeat cross-reference loading");
+
+  await openLanguageStudy(page);
+  await page.locator("#detailBack").click();
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Cross References");
+  pass("deferred views preserve panel Back history");
+
+  await navigateHash(page, "#/read/bsb/john/1/1", "John", 1);
+  assert(!(await page.locator(".original-language-word-card").count()), "prior-book Language Study content leaked after navigation");
+  await openLanguageStudy(page);
+  const johnStudy = await page.locator(".original-language-source-card").innerText();
+  assert(/original greek/i.test(johnStudy), `John loaded stale prior-book supplemental data: ${johnStudy.slice(0, 120)}`);
+  pass("book navigation replaces prior-book supplemental data");
+
+  const genesisCrossPattern = "**/data/crossrefs/genesis.json*";
+  await page.route(genesisCrossPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ book: { id: "genesis", name: "Genesis", osis: "Gen" }, verses: {} }),
+    });
+  });
+  await navigateHash(page, "#/read/bsb/genesis/1/1", "Genesis", 1);
+  const genesisCrossrefsBefore = requests.filter((requestUrl) => requestUrl.includes("/crossrefs/genesis.json")).length;
+  const genesisInterlinearBefore = requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/genesis.json")).length;
+  const defaultStudyButton = page.locator('.verse-row[data-verse="1"] .verse-study-button');
+  await page.locator('.verse-row[data-verse="1"] .verse-number').focus();
+  for (let tabCount = 0; tabCount < 100; tabCount += 1) {
+    if (await defaultStudyButton.evaluate((button) => document.activeElement === button)) break;
+    await page.keyboard.press("Tab");
+  }
+  assert(await defaultStudyButton.evaluate((button) => document.activeElement === button), "Tab did not reach the default verse-study button");
+  await page.keyboard.press("Enter");
+  await page
+    .waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Language Study", null, { timeout: 20_000 })
+    .catch(async (error) => {
+      const diagnostics = await page.evaluate(() => ({
+        detailTitle: document.querySelector("#detailTitle")?.textContent,
+        detailText: document.querySelector("#detailContent")?.textContent,
+        status: document.querySelector("#statusText")?.textContent,
+        activeConnected: document.activeElement?.isConnected === true,
+        activeClass: document.activeElement?.className,
+      }));
+      throw new Error(
+        `no-record default study did not open Language Study: ${JSON.stringify({
+          diagnostics,
+          crossrefRequests: requests.filter((requestUrl) => requestUrl.includes("/crossrefs/genesis.json")).length,
+          interlinearRequests: requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/genesis.json")).length,
+          consoleErrors,
+          pageErrors,
+        })}`,
+        { cause: error },
+      );
+    });
+  await page.waitForSelector(".original-language-source-card", { state: "visible", timeout: 20_000 });
+  const genesisCrossrefsAfterFirst = requests.filter((requestUrl) => requestUrl.includes("/crossrefs/genesis.json")).length;
+  const genesisInterlinearAfterFirst = requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/genesis.json")).length;
+  assert(genesisCrossrefsAfterFirst === genesisCrossrefsBefore + 1, "no-record fallback did not fetch cross-references exactly once");
+  assert(genesisInterlinearAfterFirst === genesisInterlinearBefore + 1, "no-record fallback did not fetch Language Study exactly once");
+  const focusedFallback = await page.evaluate(() => ({
+    connected: document.activeElement?.isConnected === true,
+    isStudyButton: document.activeElement?.matches?.(".verse-study-button") === true,
+    verse: document.activeElement?.closest?.(".verse-row")?.dataset?.verse,
+  }));
+  assert(
+    focusedFallback.connected && focusedFallback.isStudyButton && focusedFallback.verse === "1",
+    `default study fallback did not intentionally preserve keyboard focus: ${JSON.stringify(focusedFallback)}`,
+  );
+  await clickExisting(page, '.verse-row[data-verse="3"] .verse-study-button');
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Language Study");
+  assert(
+    requests.filter((requestUrl) => requestUrl.includes("/crossrefs/genesis.json")).length === genesisCrossrefsAfterFirst &&
+      requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/genesis.json")).length === genesisInterlinearAfterFirst,
+    "another no-record verse refetched a loaded deferred dataset",
+  );
+  await page.unroute(genesisCrossPattern);
+  pass("default no-record verse falls through to Language Study in one keyboard activation and reuses both loaded datasets");
+
+  const delayedPattern = "**/data/outlines/books/genesis.json*";
+  let releaseDelayed;
+  let markIntercepted;
+  const delayedRelease = new Promise((resolve) => {
+    releaseDelayed = resolve;
+  });
+  const intercepted = new Promise((resolve) => {
+    markIntercepted = resolve;
+  });
+  await page.route(delayedPattern, async (route) => {
+    markIntercepted();
+    await delayedRelease;
+    await route.continue();
+  });
+  await page.locator("#showOutline").click();
+  await intercepted;
+  await navigateHash(page, "#/read/bsb/genesis/2/1", "Genesis", 2);
+  const sameBookStateBeforeRelease = await captureReaderSurface(page);
+  releaseDelayed();
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(100);
+  const sameBookStateAfterRelease = await captureReaderSurface(page);
+  assert(
+    JSON.stringify(sameBookStateAfterRelease) === JSON.stringify(sameBookStateBeforeRelease),
+    `same-book stale completion changed route/title/panel/history/lock/focus/token/highlight state: ${JSON.stringify({ before: sameBookStateBeforeRelease, after: sameBookStateAfterRelease })}`,
+  );
+  assert(
+    sameBookStateAfterRelease.route === "#/read/bsb/genesis/2/1" &&
+      sameBookStateAfterRelease.title?.includes("Genesis 2") &&
+      sameBookStateAfterRelease.detailTitle !== "Outline",
+    `same-book stale outline activation escaped its route guard: ${JSON.stringify(sameBookStateAfterRelease)}`,
+  );
+  await page.unroute(delayedPattern);
+  pass("pending same-book chapter activation retains its cache without changing the new route or reader/detail state");
+
+  const competingInterlinearPattern = "**/data/interlinear/books/exodus.json*";
+  let releaseCompetingInterlinear;
+  let markCompetingInterlinear;
+  const competingInterlinearRelease = new Promise((resolve) => {
+    releaseCompetingInterlinear = resolve;
+  });
+  const competingInterlinearRequest = new Promise((resolve) => {
+    markCompetingInterlinear = resolve;
+  });
+  await page.route(competingInterlinearPattern, async (route) => {
+    markCompetingInterlinear();
+    await competingInterlinearRelease;
+    await route.continue();
+  });
+  await navigateHash(page, "#/read/bsb/exodus/1/1", "Exodus", 1);
+  const competingInterlinearBefore = requests.filter((requestUrl) =>
+    requestUrl.includes("/interlinear/books/exodus.json"),
+  ).length;
+  await page.locator("#showInterlinear").click();
+  await competingInterlinearRequest;
+  const competingLoadingControl = await captureControl(page, "#showInterlinear");
+  assert(
+    competingLoadingControl.ariaBusy === "true" &&
+      competingLoadingControl.title === "Loading Language Study data..." &&
+      competingLoadingControl.ariaLabel === "Loading Language Study data..." &&
+      !competingLoadingControl.disabled &&
+      competingLoadingControl.controlState === "enabled" &&
+      competingLoadingControl.unavailable === "false",
+    `held Language Study control did not expose enabled/loading state: ${JSON.stringify(competingLoadingControl)}`,
+  );
+  await page.locator("#showOutline").click();
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Outline");
+  await page.waitForSelector("#detailContent h3", { state: "visible", timeout: 20_000 });
+  const competingStateBeforeRelease = await captureReaderSurface(page);
+  releaseCompetingInterlinear();
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(100);
+  const competingStateAfterRelease = await captureReaderSurface(page);
+  assert(
+    JSON.stringify(competingStateAfterRelease) === JSON.stringify(competingStateBeforeRelease),
+    `older Language Study completion changed newer Outline route/detail/history/lock/focus/token/highlight state: ${JSON.stringify({ before: competingStateBeforeRelease, after: competingStateAfterRelease })}`,
+  );
+  assert(
+    competingStateAfterRelease.detailTitle === "Outline",
+    `newer deferred Outline intent was not authoritative: ${JSON.stringify(competingStateAfterRelease)}`,
+  );
+  const competingLoadedControl = await captureControl(page, "#showInterlinear");
+  assert(
+    competingLoadedControl.ariaBusy === "false" &&
+      competingLoadedControl.title === "Language Study" &&
+      competingLoadedControl.ariaLabel === "Language Study" &&
+      !competingLoadedControl.disabled &&
+      competingLoadedControl.controlState === "enabled" &&
+      competingLoadedControl.unavailable === "false",
+    `stale-success Language Study control did not return to normal loaded state: ${JSON.stringify(competingLoadedControl)}`,
+  );
+  const competingInterlinearAfter = requests.filter((requestUrl) =>
+    requestUrl.includes("/interlinear/books/exodus.json"),
+  ).length;
+  assert(
+    competingInterlinearAfter === competingInterlinearBefore + 1,
+    `held competing Language Study request count was not exactly one: ${competingInterlinearAfter - competingInterlinearBefore}`,
+  );
+  await page.locator("#showInterlinear").click();
+  await page.waitForSelector(".interlinear-picker", { state: "visible", timeout: 20_000 });
+  assert(
+    requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/exodus.json")).length === competingInterlinearAfter,
+    "stale-success Language Study cache refetched on the next activation",
+  );
+  await page.unroute(competingInterlinearPattern);
+  pass("stale-success Language Study synchronizes shared controls and cache without replacing newer Outline state");
+
+  const failingInterlinearPattern = "**/data/interlinear/books/deuteronomy.json*";
+  let releaseFailingInterlinear;
+  let markFailingInterlinear;
+  let failingInterlinearAttempts = 0;
+  const failingInterlinearRelease = new Promise((resolve) => {
+    releaseFailingInterlinear = resolve;
+  });
+  const failingInterlinearRequest = new Promise((resolve) => {
+    markFailingInterlinear = resolve;
+  });
+  await page.route(failingInterlinearPattern, async (route) => {
+    failingInterlinearAttempts += 1;
+    if (failingInterlinearAttempts === 1) {
+      markFailingInterlinear();
+      await failingInterlinearRelease;
+      await route.fulfill({ status: 200, contentType: "application/json", body: "{" });
+      return;
+    }
+    await route.continue();
+  });
+  await navigateHash(page, "#/read/bsb/deuteronomy/1/1", "Deuteronomy", 1);
+  await page.locator("#showInterlinear").click();
+  await failingInterlinearRequest;
+  const failingLoadingControl = await captureControl(page, "#showInterlinear");
+  assert(
+    failingLoadingControl.ariaBusy === "true" &&
+      failingLoadingControl.title === "Loading Language Study data..." &&
+      failingLoadingControl.ariaLabel === "Loading Language Study data..." &&
+      !failingLoadingControl.disabled,
+    `held failing Language Study control did not expose loading state: ${JSON.stringify(failingLoadingControl)}`,
+  );
+  await page.locator("#showOutline").click();
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Outline");
+  await page.waitForSelector("#detailContent h3", { state: "visible", timeout: 20_000 });
+  const failingStateBeforeRelease = await captureReaderSurface(page);
+  releaseFailingInterlinear();
+  await page.waitForFunction(() => document.querySelector("#showInterlinear")?.getAttribute("aria-busy") === "false");
+  const failingStateAfterRelease = await captureReaderSurface(page);
+  assert(
+    JSON.stringify(failingStateAfterRelease) === JSON.stringify(failingStateBeforeRelease),
+    `stale Language Study failure changed newer Outline route/detail/status/history/lock/focus/token/highlight state: ${JSON.stringify({ before: failingStateBeforeRelease, after: failingStateAfterRelease })}`,
+  );
+  const failingErrorControl = await captureControl(page, "#showInterlinear");
+  assert(
+    failingErrorControl.ariaBusy === "false" &&
+      failingErrorControl.title === "Language Study data could not be loaded. Select to retry." &&
+      failingErrorControl.ariaLabel === failingErrorControl.title &&
+      !failingErrorControl.disabled &&
+      failingErrorControl.controlState === "enabled" &&
+      failingErrorControl.unavailable === "false",
+    `stale-failure Language Study control did not expose bounded retry state: ${JSON.stringify(failingErrorControl)}`,
+  );
+  assert(
+    failingStateAfterRelease.detailTitle === "Outline" &&
+      !failingStateAfterRelease.detailText.includes("could not be loaded"),
+    `stale Language Study failure opened an error detail over Outline: ${JSON.stringify(failingStateAfterRelease)}`,
+  );
+  await page.locator("#showInterlinear").click();
+  await page.waitForSelector(".interlinear-picker", { state: "visible", timeout: 20_000 });
+  assert(failingInterlinearAttempts === 2, `Language Study retry count was not exactly two attempts: ${failingInterlinearAttempts}`);
+  const failingLoadedControl = await captureControl(page, "#showInterlinear");
+  assert(
+    failingLoadedControl.ariaBusy === "false" &&
+      failingLoadedControl.title === "Language Study" &&
+      failingLoadedControl.ariaLabel === "Language Study" &&
+      !failingLoadedControl.disabled &&
+      failingLoadedControl.controlState === "enabled" &&
+      failingLoadedControl.unavailable === "false",
+    `retried Language Study control did not return to normal loaded state: ${JSON.stringify(failingLoadedControl)}`,
+  );
+  await page.unroute(failingInterlinearPattern);
+  pass("stale-failure Language Study synchronizes retry controls without replacing newer Outline state");
+
+  const crossBookOutlinePattern = "**/data/outlines/books/numbers.json*";
+  let releaseCrossBookOutline;
+  let markCrossBookOutline;
+  const crossBookOutlineRelease = new Promise((resolve) => {
+    releaseCrossBookOutline = resolve;
+  });
+  const crossBookOutlineRequest = new Promise((resolve) => {
+    markCrossBookOutline = resolve;
+  });
+  await page.route(crossBookOutlinePattern, async (route) => {
+    markCrossBookOutline();
+    await crossBookOutlineRelease;
+    await route.continue();
+  });
+  await navigateHash(page, "#/read/bsb/numbers/1/1", "Numbers", 1);
+  await page.locator("#showOutline").click();
+  await crossBookOutlineRequest;
+  await navigateHash(page, "#/read/bsb/john/1/1", "John", 1);
+  const crossBookStateBeforeRelease = await captureReaderSurface(page);
+  releaseCrossBookOutline();
+  await page.waitForLoadState("networkidle");
+  await page.waitForTimeout(100);
+  const crossBookStateAfterRelease = await captureReaderSurface(page);
+  assert(
+    JSON.stringify(crossBookStateAfterRelease) === JSON.stringify(crossBookStateBeforeRelease),
+    `cross-book stale Outline changed the new reader/detail state: ${JSON.stringify({ before: crossBookStateBeforeRelease, after: crossBookStateAfterRelease })}`,
+  );
+  assert(
+    crossBookStateAfterRelease.route === "#/read/bsb/john/1/1" &&
+      crossBookStateAfterRelease.title?.includes("John 1") &&
+      crossBookStateAfterRelease.detailTitle !== "Outline",
+    `cross-book stale Outline escaped its route guard: ${JSON.stringify(crossBookStateAfterRelease)}`,
+  );
+  await page.unroute(crossBookOutlinePattern);
+  pass("pending cross-book activation cannot mutate the destination reader or detail state");
+
+  const leviticusCrossPattern = "**/data/crossrefs/leviticus.json*";
+  const leviticusInterlinearPattern = "**/data/interlinear/books/leviticus.json*";
+  await page.route(leviticusCrossPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ book: { id: "leviticus", name: "Leviticus", osis: "Lev" }, verses: {} }),
+    });
+  });
+  await page.route(leviticusInterlinearPattern, async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "application/json",
+      body: JSON.stringify({ book: { id: "leviticus", name: "Leviticus", osis: "Lev" }, chapters: {} }),
+    });
+  });
+  await navigateHash(page, "#/read/bsb/leviticus/1/1", "Leviticus", 1);
+  const leviticusCrossrefsBefore = requests.filter((requestUrl) => requestUrl.includes("/crossrefs/leviticus.json")).length;
+  const leviticusInterlinearBefore = requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/leviticus.json")).length;
+  await clickExisting(page, '.verse-row[data-verse="1"] .verse-study-button');
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Commentary");
+  await page.waitForFunction(() => !document.querySelector("#detailContent")?.textContent.includes("Loading commentary"));
+  assert(
+    requests.filter((requestUrl) => requestUrl.includes("/crossrefs/leviticus.json")).length === leviticusCrossrefsBefore + 1 &&
+      requests.filter((requestUrl) => requestUrl.includes("/interlinear/books/leviticus.json")).length === leviticusInterlinearBefore + 1,
+    "neither-data fallback did not bound cross-reference and Language Study loading to one request each",
+  );
+  await page.unroute(leviticusCrossPattern);
+  await page.unroute(leviticusInterlinearPattern);
+  pass("default verse study falls through from absent cross-reference and Language Study data to commentary");
+
+  await navigateHash(page, "#/read/bsb/john/1/1", "John", 1);
+
+  const retryPattern = "**/data/outlines/books/john.json*";
+  let outlineAttempts = 0;
+  await page.route(retryPattern, async (route) => {
+    outlineAttempts += 1;
+    if (outlineAttempts === 1) await route.fulfill({ status: 200, contentType: "application/json", body: "{" });
+    else await route.continue();
+  });
+  await page.locator("#showOutline").click();
+  await page.waitForFunction(() => document.querySelector("#detailContent")?.textContent.includes("could not be loaded"));
+  assert(!(await page.locator("#showOutline").isDisabled()), "failed outline load did not leave a retry path");
+  await page.locator("#showOutline").click();
+  await page.waitForFunction(() => document.querySelector("#detailContent h3")?.textContent.includes("John Outline"));
+  assert(outlineAttempts === 2, `outline retry count was not deterministic: ${outlineAttempts}`);
+  await page.unroute(retryPattern);
+  pass("dataset failure is bounded, visible, and retryable");
+
+  const finalState = await page.evaluate(() => ({
+    overflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
+    loadingResidue: document.querySelectorAll("[aria-busy='true'], .loading").length,
+    title: document.querySelector("#chapterTitle")?.textContent,
+  }));
+  assert(finalState.overflow <= 1, `reader has horizontal overflow: ${JSON.stringify(finalState)}`);
+  assert(finalState.loadingResidue === 0, `reader left loading residue: ${JSON.stringify(finalState)}`);
+  assert(!consoleErrors.length, `browser console errors: ${JSON.stringify(consoleErrors)}`);
+  assert(!pageErrors.length, `uncaught page errors: ${JSON.stringify(pageErrors)}`);
+  pass("no overflow, loading residue, console errors, or page errors");
+
+  console.log(
+    JSON.stringify(
+      {
+        status: "ok",
+        browser: browserName,
+        assertions: checks.length,
+        checks,
+        request_counts: {
+          psalms_interlinear: interlinearAfterRepeat,
+          psalms_crossrefs: crossrefsAfterRepeat,
+          outline_attempts: outlineAttempts,
+        },
+      },
+      null,
+      2,
+    ),
+  );
+} finally {
+  await browser.close();
+  await new Promise((resolveClose) => server.close(resolveClose));
+}

@@ -32,7 +32,9 @@ export function createCommentaryOutlineViews(ctx) {
       setDetailMessage("Commentary", capabilityMessage(ctx.getCapabilityState?.("commentary")), options);
       return;
     }
-    setDetailMessage("Commentary", "Loading commentary...", options);
+    const detailIntent = setDetailMessage("Commentary", "Loading commentary...", options);
+    if (detailIntent === null) return;
+    const detailOptions = { ...options, detailIntent };
     const aggregate = await loadCommentaryAggregate();
     const entries = aggregate?.chapters?.[ctx.state.chapter]?.[verse] || [];
     if (!entries.length) {
@@ -42,7 +44,7 @@ export function createCommentaryOutlineViews(ctx) {
       const message = document.createElement("p");
       message.textContent = `No commentary entries found for ${reference}.`;
       empty.append(heading, createVerseContextTabs(ctx, reference, verse, "commentary", ctx.getActiveWordContext?.(verse)), message);
-      setDetail("Commentary", empty, options);
+      setDetail("Commentary", empty, detailOptions);
       return;
     }
 
@@ -65,16 +67,17 @@ export function createCommentaryOutlineViews(ctx) {
       wrap.append(article);
     }
 
-    setDetail("Commentary", wrap, options);
+    setDetail("Commentary", wrap, detailOptions);
   }
 
-  function showOutline() {
+  function showOutline(options = {}) {
     if (!ctx.canUseCapability?.("outlines")) {
       setDetail(
         "Outline",
         createStudyEmptyState(ctx, "outlines", {
           capabilityIds: ["outlines"],
         }),
+        options,
       );
       return;
     }
@@ -88,7 +91,7 @@ export function createCommentaryOutlineViews(ctx) {
       const empty = document.createElement("p");
       empty.textContent = "No outline found for this book.";
       wrap.append(empty);
-      setDetail("Outline", wrap);
+      setDetail("Outline", wrap, options);
       return;
     }
 
@@ -114,7 +117,7 @@ export function createCommentaryOutlineViews(ctx) {
         }
       }),
     );
-    setDetail("Outline", wrap);
+    setDetail("Outline", wrap, options);
   }
 
   return { showCommentary, showOutline };
