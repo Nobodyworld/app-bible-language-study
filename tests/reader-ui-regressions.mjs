@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolveReferencePreviewPlacement } from "../app/src/reference-preview-placement.js";
 
-const [index, css, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, jobsView] = await Promise.all([
+const [index, css, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, jobsView, languageStudyTooltipTest] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
   readFile(new URL("../app/styles.css", import.meta.url), "utf8"),
   readFile(new URL("../app/styles-context.css", import.meta.url), "utf8"),
@@ -19,6 +19,7 @@ const [index, css, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tag
   readFile(new URL("../app/src/views/user-data-view.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/detail-views.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/views/jobs-view.js", import.meta.url), "utf8"),
+  readFile(new URL("../app/scripts/language-study-tooltip-interaction-test.mjs", import.meta.url), "utf8"),
 ]);
 
 assert.equal((index.match(/id="study-marks-icon"/g) || []).length, 1, "Study Marks must have one official icon definition.");
@@ -107,6 +108,15 @@ assert(
   !/renderer\.renderChapter|setStatus|setDetail|setDetailMessage|\.focus\(|scrollTo/.test(ensureReaderDatasetSource) &&
     !/syncToolButtons/.test(runReaderDatasetActivationSource),
   "Dataset synchronization must not restore reader/status/detail/focus mutations or depend on current detail-intent ownership.",
+);
+assert(
+  /expectedStatus:\s*"BSB data loaded"/.test(languageStudyTooltipTest) &&
+    /languageStudy\.getAttribute\("aria-busy"\) === "false"/.test(languageStudyTooltipTest) &&
+    /languageStudy\.dataset\.controlState === "enabled"/.test(languageStudyTooltipTest) &&
+    /page\.on\("requestfailed"/.test(languageStudyTooltipTest) &&
+    /Readiness diagnostics:/.test(languageStudyTooltipTest) &&
+    !/document\.body\.textContent\.includes\("Loading data"\)/.test(languageStudyTooltipTest),
+  "Language Study tooltip readiness must use the maintained reader/control contract and preserve timeout diagnostics.",
 );
 let modeledDetailIntent = 0;
 const beginModeledDetailIntent = () => ++modeledDetailIntent;
@@ -352,4 +362,4 @@ assert(
   "Browser-visible app and stylesheet entry points must use the current cache-buster key.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 65 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 66 }, null, 2));

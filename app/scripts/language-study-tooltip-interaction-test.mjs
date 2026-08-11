@@ -39,14 +39,119 @@ function optionValue(name) {
   return index >= 0 ? cliArgs[index + 1] : "";
 }
 
-function watchPageErrors(page) {
+function watchPageDiagnostics(page) {
   const consoleErrors = [];
   const pageErrors = [];
+  const requestFailures = [];
   page.on("console", (message) => {
-    if (message.type() === "error") consoleErrors.push(message.text());
+    if (message.type() === "error") {
+      consoleErrors.push({ location: message.location(), text: message.text() });
+    }
   });
-  page.on("pageerror", (error) => pageErrors.push(error.message));
-  return { consoleErrors, pageErrors };
+  page.on("pageerror", (error) => {
+    pageErrors.push({ message: error.message, name: error.name, stack: error.stack || "" });
+  });
+  page.on("requestfailed", (request) => {
+    requestFailures.push({
+      errorText: request.failure()?.errorText || "Unknown request failure",
+      method: request.method(),
+      resourceType: request.resourceType(),
+      url: request.url(),
+    });
+  });
+  page.on("response", (response) => {
+    if (response.status() < 400) return;
+    requestFailures.push({
+      errorText: `HTTP ${response.status()} ${response.statusText()}`.trim(),
+      method: response.request().method(),
+      resourceType: response.request().resourceType(),
+      url: response.url(),
+    });
+  });
+  return { consoleErrors, pageErrors, requestFailures };
+}
+
+async function captureReadinessDiagnostics(page, diagnostics, phase) {
+  let pageState;
+  try {
+    pageState = await page.evaluate(
+      ({ languageMarkSelector, morphologySelector, sectionSelector, tokenSelector, transliterationSelector }) => {
+        const snapshotControl = (element) =>
+          element
+            ? {
+                ariaBusy: element.getAttribute("aria-busy"),
+                ariaLabel: element.getAttribute("aria-label"),
+                connected: element.isConnected,
+                controlState: element.dataset.controlState || "",
+                disabled: Boolean(element.disabled),
+                title: element.getAttribute("title") || "",
+                unavailable: element.dataset.unavailable || "",
+              }
+            : null;
+        const verseStudy = document.querySelector(
+          '.verse-row[data-verse="1"] .verse-study-button[aria-label="Open study tools for Psalms 23:1"]',
+        );
+        return {
+          chapterTitle: document.querySelector("#chapterTitle")?.textContent.trim() || "",
+          detailTitle: document.querySelector("#detailTitle")?.textContent.trim() || "",
+          documentReadyState: document.readyState,
+          languageStudyControl: snapshotControl(document.querySelector("#showInterlinear")),
+          languageTab: snapshotControl(
+            document.querySelector(
+              "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language']",
+            ),
+          ),
+          locators: {
+            hydratedLexicalContent: document.querySelectorAll(
+              `${tokenSelector} .original-language-word-origin, ${tokenSelector} .original-language-dictionary-word`,
+            ).length,
+            languageMark: document.querySelectorAll(languageMarkSelector).length,
+            morphology: document.querySelectorAll(morphologySelector).length,
+            section: document.querySelectorAll(sectionSelector).length,
+            token: document.querySelectorAll(tokenSelector).length,
+            transliteration: document.querySelectorAll(transliterationSelector).length,
+            verseStudy: document.querySelectorAll(
+              '.verse-row[data-verse="1"] .verse-study-button[aria-label="Open study tools for Psalms 23:1"]',
+            ).length,
+          },
+          route: window.location.hash,
+          statusText: document.querySelector("#statusText")?.textContent.trim() || "",
+          url: window.location.href,
+          verseStudyControl: snapshotControl(verseStudy),
+        };
+      },
+      {
+        languageMarkSelector: LANGUAGE_MARK_SELECTOR,
+        morphologySelector: MORPHOLOGY_SELECTOR,
+        sectionSelector: SECTION_SELECTOR,
+        tokenSelector: TOKEN_SELECTOR,
+        transliterationSelector: TRANSLITERATION_SELECTOR,
+      },
+    );
+  } catch (error) {
+    pageState = {
+      evaluationError: error instanceof Error ? error.message : String(error),
+      url: page.url(),
+    };
+  }
+  return {
+    consoleErrors: [...diagnostics.consoleErrors],
+    pageErrors: [...diagnostics.pageErrors],
+    pageState,
+    phase,
+    requestFailures: [...diagnostics.requestFailures],
+  };
+}
+
+async function readinessFailure(page, diagnostics, phase, error) {
+  const evidence = await captureReadinessDiagnostics(page, diagnostics, phase);
+  const causeMessage = error instanceof Error ? error.message : String(error);
+  const causeStack = error instanceof Error ? error.stack || "" : "";
+  return new Error(
+    `Language Study readiness failed during ${phase}: ${causeMessage}\n` +
+      `Readiness diagnostics: ${JSON.stringify({ ...evidence, causeStack }, null, 2)}`,
+    { cause: error },
+  );
 }
 
 function themeForIteration(iteration) {
@@ -61,59 +166,84 @@ async function setTheme(page, theme) {
   await page.waitForFunction((expected) => document.documentElement.dataset.theme === expected, theme);
 }
 
-async function waitForLanguageStudyReady(page, baseUrl, theme) {
-  await page.goto(`${baseUrl}/${START_ROUTE}`, { waitUntil: "load" });
-  await page.waitForFunction(
-    () =>
-      document.readyState === "complete" &&
-      document.querySelector("#chapterTitle")?.textContent.includes("Psalms 23") &&
-      !document.body.textContent.includes("Loading data"),
-    null,
-    { timeout: 30_000 },
-  );
-  await setTheme(page, theme);
-  const verseStudy = page.locator('.verse-study-button[aria-label*="Psalms 23:1"]').first();
-  await verseStudy.waitFor({ state: "attached", timeout: 30_000 });
-  await page.evaluate(() => {
-    document.querySelector('.verse-study-button[aria-label*="Psalms 23:1"]')?.click();
-  });
-  const languageTab = page.locator(
-    "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language']",
-  );
-  await languageTab.waitFor({ state: "visible", timeout: 30_000 });
-  await languageTab.click();
+async function waitForLanguageStudyReady(page, baseUrl, theme, diagnostics) {
+  let phase = "navigation";
+  try {
+    await page.goto(`${baseUrl}/${START_ROUTE}`, { waitUntil: "load" });
+    phase = "initial reader readiness";
+    await page.waitForFunction(
+      ({ expectedRoute, expectedStatus, expectedTitle }) => {
+        const languageStudy = document.querySelector("#showInterlinear");
+        const verseStudy = document.querySelector(
+          '.verse-row[data-verse="1"] .verse-study-button[aria-label="Open study tools for Psalms 23:1"]',
+        );
+        return (
+          document.readyState === "complete" &&
+          window.location.hash === expectedRoute &&
+          document.querySelector("#chapterTitle")?.textContent.trim() === expectedTitle &&
+          document.querySelector("#statusText")?.textContent.trim() === expectedStatus &&
+          verseStudy?.isConnected === true &&
+          verseStudy.disabled === false &&
+          verseStudy.dataset.unavailable !== "true" &&
+          languageStudy?.isConnected === true &&
+          languageStudy.disabled === false &&
+          languageStudy.getAttribute("aria-busy") === "false" &&
+          languageStudy.dataset.controlState === "enabled" &&
+          languageStudy.dataset.unavailable === "false"
+        );
+      },
+      { expectedRoute: START_ROUTE, expectedStatus: "BSB data loaded", expectedTitle: "Psalms 23" },
+      { timeout: 30_000 },
+    );
+    phase = "theme readiness";
+    await setTheme(page, theme);
+    phase = "verse study activation";
+    const verseStudy = page.locator(
+      '.verse-row[data-verse="1"] .verse-study-button[aria-label="Open study tools for Psalms 23:1"]',
+    );
+    await verseStudy.evaluate((button) => button.click());
+    const languageTab = page.locator(
+      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language']",
+    );
+    await languageTab.waitFor({ state: "visible", timeout: 30_000 });
+    phase = "Language Study activation";
+    await languageTab.click();
 
-  await page.waitForFunction(
-    ({ languageMarkSelector, morphologySelector, sectionSelector, tokenSelector, transliterationSelector }) => {
-      if (document.querySelector("#detailTitle")?.textContent.trim() !== "Language Study") return false;
-      const section = document.querySelector(sectionSelector);
-      const token = document.querySelector(tokenSelector);
-      const languageMark = document.querySelector(languageMarkSelector);
-      const transliteration = document.querySelector(transliterationSelector);
-      const morphology = document.querySelector(morphologySelector);
-      const hydratedLexicalContent = token?.querySelector(
-        ".original-language-word-origin, .original-language-dictionary-word",
-      );
-      return Boolean(
-        section?.isConnected &&
-          token?.isConnected &&
-          token.dataset.interlinearKey === "verse:1:token:3" &&
-          token.dataset.strongCode === "H3068" &&
-          languageMark?.isConnected &&
-          transliteration?.isConnected &&
-          morphology?.isConnected &&
-          hydratedLexicalContent?.isConnected,
-      );
-    },
-    {
-      languageMarkSelector: LANGUAGE_MARK_SELECTOR,
-      morphologySelector: MORPHOLOGY_SELECTOR,
-      sectionSelector: SECTION_SELECTOR,
-      tokenSelector: TOKEN_SELECTOR,
-      transliterationSelector: TRANSLITERATION_SELECTOR,
-    },
-    { timeout: 30_000 },
-  );
+    phase = "exact H3068 and morphology readiness";
+    await page.waitForFunction(
+      ({ languageMarkSelector, morphologySelector, sectionSelector, tokenSelector, transliterationSelector }) => {
+        if (document.querySelector("#detailTitle")?.textContent.trim() !== "Language Study") return false;
+        const section = document.querySelector(sectionSelector);
+        const token = document.querySelector(tokenSelector);
+        const languageMark = document.querySelector(languageMarkSelector);
+        const transliteration = document.querySelector(transliterationSelector);
+        const morphology = document.querySelector(morphologySelector);
+        const hydratedLexicalContent = token?.querySelector(
+          ".original-language-word-origin, .original-language-dictionary-word",
+        );
+        return Boolean(
+          section?.isConnected &&
+            token?.isConnected &&
+            token.dataset.interlinearKey === "verse:1:token:3" &&
+            token.dataset.strongCode === "H3068" &&
+            languageMark?.isConnected &&
+            transliteration?.isConnected &&
+            morphology?.isConnected &&
+            hydratedLexicalContent?.isConnected,
+        );
+      },
+      {
+        languageMarkSelector: LANGUAGE_MARK_SELECTOR,
+        morphologySelector: MORPHOLOGY_SELECTOR,
+        sectionSelector: SECTION_SELECTOR,
+        tokenSelector: TOKEN_SELECTOR,
+        transliterationSelector: TRANSLITERATION_SELECTOR,
+      },
+      { timeout: 30_000 },
+    );
+  } catch (error) {
+    throw await readinessFailure(page, diagnostics, phase, error);
+  }
 }
 
 async function panelState(page) {
@@ -361,9 +491,9 @@ async function runDesktopViewport(browser, baseUrl, iteration, mode) {
   const theme = themeForIteration(iteration);
   const context = await browser.newContext({ viewport });
   const page = await context.newPage();
-  const errors = watchPageErrors(page);
+  const errors = watchPageDiagnostics(page);
   try {
-    await waitForLanguageStudyReady(page, baseUrl, theme);
+    await waitForLanguageStudyReady(page, baseUrl, theme, errors);
     const before = await panelState(page);
     assertLockedLanguageStudy(before, `${mode} iteration ${iteration} initial state`);
 
@@ -420,6 +550,7 @@ async function runDesktopViewport(browser, baseUrl, iteration, mode) {
       morphologyFocus,
       morphologyHover,
       pageErrors: errors.pageErrors,
+      requestFailures: errors.requestFailures,
       reposition,
       theme,
       viewport,
@@ -526,9 +657,9 @@ async function runTouchIteration(browser, baseUrl, iteration) {
     viewport: VIEWPORTS.mobile,
   });
   const page = await context.newPage();
-  const errors = watchPageErrors(page);
+  const errors = watchPageDiagnostics(page);
   try {
-    await waitForLanguageStudyReady(page, baseUrl, theme);
+    await waitForLanguageStudyReady(page, baseUrl, theme, errors);
     const before = await panelState(page);
     assertLockedLanguageStudy(before, `touch iteration ${iteration} initial state`);
     await installTouchEventTrace(page, LANGUAGE_MARK_SELECTOR, LANGUAGE_TOOLTIP_SELECTOR, "__languageMarkTouchTrace");
@@ -589,6 +720,7 @@ async function runTouchIteration(browser, baseUrl, iteration) {
       morphologyTrace,
       morphologyTouch,
       pageErrors: errors.pageErrors,
+      requestFailures: errors.requestFailures,
       theme,
       viewport: VIEWPORTS.mobile,
     };
