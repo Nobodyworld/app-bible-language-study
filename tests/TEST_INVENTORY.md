@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-07-23
+Reviewed: 2026-08-12
 
 ## Authority
 
@@ -14,7 +14,7 @@ remove, or reclassify a maintained test.
 |---|---|
 | `npm run test:static` | Repository integrity and data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
 | `npm run test:domain` | Job, package, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
-| `npm run test:browser` | Desktop rendered interaction, highlight, Language Study, Language Study tooltip containment, Strong's preview, compact context, Study Marks, and Meaning flows. |
+| `npm run test:browser` | Desktop rendered interaction, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks, and Meaning flows. |
 | `npm run test:browser:mobile` | The maintained interaction journey in mobile mode. |
 | `npm test` | Static, desktop-browser, and mobile-browser suites. |
 | `npm run audit` | Public package/file audit through `app/tools/publish-audit.mjs`. |
@@ -36,8 +36,9 @@ composition above:
 | `npm run test:public-preview` | `tests/public-preview-readiness.mjs`. |
 | `npm run test:word-meaning` | `tests/word-meaning.mjs`. |
 | `npm run test:word-meaning-focus` | `app/scripts/word-meaning-focus-test.mjs`. |
+| `npm run test:study-workspace` | `app/scripts/study-workspace-interaction-test.mjs`. |
 | `npm run test:reader-data-loading` | `app/scripts/reader-data-loading-interaction-test.mjs`. |
-| `npm run test:ui` | UI contracts and compact panel-context model tests. |
+| `npm run test:ui` | UI, compact panel-context, workspace-width model, and contained-surface source contracts. |
 
 ## Static and Source-Level Tests
 
@@ -55,6 +56,8 @@ order:
 | `tests/strong-reference-control.mjs` | Structured Strong's reference resolution and plain-text fallback. |
 | `tests/ui-contracts.mjs` | Control schema, availability, scopes, and panel transitions. |
 | `tests/panel-context-model.mjs` | Compact `Word → Verse` ordering, tool ownership, labels, and responsive contracts. |
+| `tests/study-workspace-width.mjs` | Exact width modes/default, normalization, malformed and throwing storage, isolated preference key, follow/locked separation, and pressed-state synchronization. |
+| `tests/study-workspace-contracts.mjs` | Width-control DOM, responsive clamps, independent scrolling, semantic anchoring, contained tool surface, explicit Study Marks/Meaning presentations, lifecycle cleanup, and reduced motion. |
 | `tests/strong-section-lifecycle.mjs` | Strong's section loading, presence, absence, and rerender lifecycle. |
 | `tests/reader-ui-regressions.mjs` | Reader layout and source-level UI regressions, including retired header controls. |
 | `tests/original-language-source-importer.mjs` | Reproducible original-language source transformation. |
@@ -101,8 +104,9 @@ entry.
 | `app/scripts/original-language-study-interaction-test.mjs` | Desktop | Rendered Language Study data, lazy enhancement, references, history, and tooltip containment. |
 | `app/scripts/language-study-tooltip-interaction-test.mjs` | Desktop, narrow, mobile-width, and optional touch mode | Exact H3068 Language Study readiness plus morphology and original-language mark tooltip interaction, containment, dismissal, repositioning, and state non-mutation. |
 | `app/scripts/strong-preview-hydration-test.mjs` | Desktop | Strong's preview hydration and interaction lifecycle. |
-| `app/scripts/panel-context-interaction-test.mjs` | Desktop | Compact context, scope inheritance, Study Marks containment, responsive layout, and browser-error checks. |
-| `app/scripts/word-meaning-focus-test.mjs` | Desktop | Meaning and Study Marks overlay coordination, dismissal, focus, and non-mutation behavior. |
+| `app/scripts/panel-context-interaction-test.mjs` | Desktop, narrow, and mobile; light/dark | Compact context, scope inheritance, explicit contained Study Marks, stable underlay, focus restoration, responsive layout, and browser-error checks. |
+| `app/scripts/word-meaning-focus-test.mjs` | Desktop and mobile | Contained Meaning and Study Marks overlay coordination, exact-target save/remove, data-neutral dismissal, lifecycle cleanup, and focus restoration. |
+| `app/scripts/study-workspace-interaction-test.mjs` | Desktop, intermediate, mobile, light/dark, and reduced motion | Width switching/persistence/storage failure, semantic reader anchors, independent scroll ownership, contained tools, lifecycle/history/selection preservation, responsive bounds, and browser-error/overflow checks. |
 
 ## Historical July 1 Promotion and Retirement Record
 

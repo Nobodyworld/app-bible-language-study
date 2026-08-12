@@ -934,80 +934,95 @@ async function runQa(page) {
   const studyTrigger = "#detailContext [data-panel-scope='verse'] .study-marks-trigger";
   const secondStudyTrigger = "#favoriteBook";
   const activeSecondStudyTrigger = "#favoriteBook[aria-expanded='true']";
-  const pickerMarksExpression = "[...document.querySelectorAll('.target-tag-picker-menu')].map((menu) => [...menu.querySelectorAll('.tag-picker-option[aria-pressed=\"true\"]')].map((option) => option.getAttribute('aria-label')).sort().join('|')).filter(Boolean).sort().join('||')";
+  const pickerMarksExpression = `JSON.stringify({
+    book: document.querySelector('#favoriteBook')?.getAttribute('aria-pressed') || '',
+    chapter: document.querySelector('#favoriteChapter')?.getAttribute('aria-pressed') || '',
+    verseBadges: [...document.querySelectorAll('.verse-number-wrap .tag-badge')].map((node) => node.textContent.trim()).sort(),
+    readerBadges: [...document.querySelectorAll('.reader-target-badges .target-tag-badge')].map((node) => node.textContent.trim()).sort(),
+    taggedText: [...document.querySelectorAll('.tagged-text-span')].map((node) => node.textContent.trim()).sort()
+  })`;
   const marksBeforeDismissal = await evaluate(
     page,
     pickerMarksExpression,
   );
   await evaluate(page, `document.querySelector(${JSON.stringify(studyTrigger)})?.focus()`);
-  await waitFor(page, `document.querySelector(${JSON.stringify(studyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.menuOpen === 'true'`);
-  await page.press(studyTrigger, "Escape");
+  assert(
+    await evaluate(page, `document.querySelector('#detailToolSurface')?.hidden === true && document.querySelector(${JSON.stringify(studyTrigger)})?.getAttribute('aria-expanded') === 'false'`),
+    "focusing the side-panel Study Marks trigger must not open its contained tool",
+  );
+  await page.press(studyTrigger, "Enter");
+  await waitFor(page, "document.querySelector('#detailToolSurface')?.dataset.toolKind === 'study-marks' && document.querySelector('#detailToolSurface')?.hidden === false");
+  const containedStudyMarksState = await evaluate(page, `(() => {
+    const pane = document.querySelector('.detail-pane');
+    const surface = document.querySelector('#detailToolSurface');
+    const workArea = document.querySelector('#detailWorkArea');
+    const paneRect = pane?.getBoundingClientRect();
+    const surfaceRect = surface?.getBoundingClientRect();
+    return {
+      ariaExpanded: document.querySelector(${JSON.stringify(studyTrigger)})?.getAttribute('aria-expanded'),
+      ariaHidden: surface?.getAttribute('aria-hidden'),
+      title: document.querySelector('#detailToolTitle')?.textContent.trim() || '',
+      target: surface?.dataset.toolTargetId || '',
+      detailTitle: document.querySelector('#detailTitle')?.textContent.trim() || '',
+      inert: Boolean(workArea?.inert || workArea?.hasAttribute('inert')),
+      workAreaHidden: workArea?.getAttribute('aria-hidden'),
+      focusedInside: Boolean(surface?.contains(document.activeElement)),
+      hasFavorite: Boolean(surface?.querySelector('.tag-picker-option[aria-label$="Favorite tag"]')),
+      hasManage: Boolean(surface?.querySelector('.tag-picker-manage')),
+      contained: Boolean(
+        paneRect && surfaceRect &&
+        surfaceRect.left >= paneRect.left - 1 && surfaceRect.right <= paneRect.right + 1 &&
+        surfaceRect.top >= paneRect.top - 1 && surfaceRect.bottom <= paneRect.bottom + 1
+      )
+    };
+  })()`);
+  assert(
+    containedStudyMarksState.ariaExpanded === "true" &&
+      containedStudyMarksState.ariaHidden === "false" &&
+      containedStudyMarksState.title === "Study Marks" &&
+      containedStudyMarksState.target &&
+      containedStudyMarksState.detailTitle === "Parallel" &&
+      containedStudyMarksState.inert &&
+      containedStudyMarksState.workAreaHidden === "true" &&
+      containedStudyMarksState.focusedInside &&
+      containedStudyMarksState.hasFavorite &&
+      containedStudyMarksState.hasManage &&
+      containedStudyMarksState.contained,
+    `side-panel Study Marks must use the inert, bounded contained tool surface: ${JSON.stringify(containedStudyMarksState)}`,
+  );
+  await page.press('#detailToolSurface .tag-picker-option[aria-label$="Favorite tag"]', "Escape");
+  await waitFor(page, "document.querySelector('#detailToolSurface')?.hidden === true");
+  await waitFor(page, `document.activeElement === document.querySelector(${JSON.stringify(studyTrigger)})`);
   const keyboardStudyMarksDismissal = await evaluate(page, `({
     restored: document.activeElement === document.querySelector(${JSON.stringify(studyTrigger)}),
-    closed: document.querySelector(${JSON.stringify(studyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.menuOpen !== 'true',
+    closed: document.querySelector('#detailToolSurface')?.hidden === true && document.querySelector(${JSON.stringify(studyTrigger)})?.getAttribute('aria-expanded') === 'false',
+    interactive: !document.querySelector('#detailWorkArea')?.hasAttribute('inert') && document.querySelector('#detailWorkArea')?.getAttribute('aria-hidden') !== 'true',
     unchanged: ${pickerMarksExpression} === ${JSON.stringify(marksBeforeDismissal)}
   })`);
-  assert(keyboardStudyMarksDismissal.closed && keyboardStudyMarksDismissal.restored && keyboardStudyMarksDismissal.unchanged, `keyboard-open Study Marks Escape must restore its trigger focus without mutation: ${JSON.stringify(keyboardStudyMarksDismissal)}`);
-  const hoverStudyMarksDismissal = await evaluate(page, `(async () => {
-    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    const trigger = document.querySelector(${JSON.stringify(studyTrigger)});
-    const menu = trigger?.closest('.target-tag-picker-menu');
-    const outside = document.querySelector('#themeToggle');
-    const Ctor = window.PointerEvent || Event;
-    outside?.focus();
-    menu?.dispatchEvent(new Ctor('pointerenter', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
-    await wait(0);
-    return { opened: menu?.dataset.menuOpen === 'true', focusOutside: document.activeElement === outside };
-  })()`);
-  await page.press("#themeToggle", "Escape");
-  const hoverEscapeState = await evaluate(page, `({
-    closed: document.querySelector(${JSON.stringify(studyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.menuOpen !== 'true',
-    restored: document.activeElement === document.querySelector(${JSON.stringify(studyTrigger)})
+  assert(keyboardStudyMarksDismissal.closed && keyboardStudyMarksDismissal.restored && keyboardStudyMarksDismissal.interactive && keyboardStudyMarksDismissal.unchanged, `keyboard-open Study Marks Escape must restore its trigger and work area without mutation: ${JSON.stringify(keyboardStudyMarksDismissal)}`);
+
+  await click(page, studyTrigger);
+  await waitFor(page, "document.querySelector('#detailToolSurface')?.dataset.toolKind === 'study-marks'");
+  await click(page, "#detailToolClose");
+  await waitFor(page, "document.querySelector('#detailToolSurface')?.hidden === true");
+  await waitFor(page, `document.activeElement === document.querySelector(${JSON.stringify(studyTrigger)})`);
+  assert(
+    await evaluate(page, `${pickerMarksExpression} === ${JSON.stringify(marksBeforeDismissal)}`),
+    "closing the contained Study Marks surface must not mutate tag assertions",
+  );
+
+  await click(page, studyTrigger);
+  await waitFor(page, "document.querySelector('#detailToolSurface')?.dataset.toolKind === 'study-marks'");
+  await click(page, secondStudyTrigger);
+  await evaluate(page, `document.querySelector(${JSON.stringify(secondStudyTrigger)})?.focus()`);
+  await waitForStudyMarksMenuOpen(page, secondStudyTrigger);
+  const menuSwitchState = await evaluate(page, `({
+    firstClosed: document.querySelector('#detailToolSurface')?.hidden === true,
+    firstCollapsed: document.querySelector(${JSON.stringify(studyTrigger)})?.getAttribute('aria-expanded') === 'false',
+    secondOpened: document.querySelector(${JSON.stringify(secondStudyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.menuOpen === 'true',
+    secondFocused: document.activeElement === document.querySelector(${JSON.stringify(secondStudyTrigger)})
   })`);
-  assert(hoverStudyMarksDismissal.opened && hoverStudyMarksDismissal.focusOutside && hoverEscapeState.closed && hoverEscapeState.restored, `hover-open Study Marks Escape must restore its active trigger: ${JSON.stringify({ hoverStudyMarksDismissal, hoverEscapeState })}`);
-
-  const outsideDismissal = await evaluate(page, `(async () => {
-    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    const trigger = document.querySelector(${JSON.stringify(studyTrigger)});
-    const menu = trigger?.closest('.target-tag-picker-menu');
-    const outside = document.querySelector('#themeToggle');
-    const Ctor = window.PointerEvent || Event;
-    trigger?.focus();
-    menu?.dispatchEvent(new Ctor('pointerenter', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
-    await wait(0);
-    const openedBeforeDismissal = menu?.dataset.menuOpen === 'true';
-    outside?.dispatchEvent(new Ctor('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
-    outside?.focus();
-    return {
-      openedBeforeDismissal,
-      closed: menu?.dataset.menuOpen !== 'true',
-      outsideRetainedFocus: document.activeElement === outside,
-    };
-  })()`);
-  assert(outsideDismissal.openedBeforeDismissal && outsideDismissal.closed && outsideDismissal.outsideRetainedFocus, `outside pointer dismissal must not steal focus: ${JSON.stringify(outsideDismissal)}`);
-
-  const menuSwitchState = await evaluate(page, `(async () => {
-    const wait = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-    const firstTrigger = document.querySelector(${JSON.stringify(studyTrigger)});
-    const firstMenu = firstTrigger?.closest('.target-tag-picker-menu');
-    const secondTrigger = document.querySelector(${JSON.stringify(secondStudyTrigger)});
-    const secondMenu = secondTrigger?.closest('.target-tag-picker-menu');
-    const Ctor = window.PointerEvent || Event;
-    firstTrigger?.focus();
-    firstMenu?.dispatchEvent(new Ctor('pointerenter', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
-    await wait(0);
-    const firstOpened = firstMenu?.dataset.menuOpen === 'true';
-    secondTrigger?.dispatchEvent(new Ctor('pointerdown', { bubbles: true, cancelable: true, pointerType: 'mouse' }));
-    secondTrigger?.click();
-    secondTrigger?.focus();
-    return {
-      firstOpened,
-      firstClosed: firstMenu?.dataset.menuOpen !== 'true',
-      secondOpened: secondMenu?.dataset.menuOpen === 'true',
-      secondFocused: document.activeElement === secondTrigger,
-    };
-  })()`);
-  assert(menuSwitchState.firstOpened && menuSwitchState.firstClosed && menuSwitchState.secondOpened && menuSwitchState.secondFocused, `opening picker B must close picker A without returning focus to A: ${JSON.stringify(menuSwitchState)}`);
+  assert(menuSwitchState.firstClosed && menuSwitchState.firstCollapsed && menuSwitchState.secondOpened && menuSwitchState.secondFocused, `opening reader picker B must replace contained tool A without returning focus to A: ${JSON.stringify(menuSwitchState)}`);
   await page.press(activeSecondStudyTrigger, "Escape");
   await waitFor(page, `document.querySelector(${JSON.stringify(secondStudyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.restoringFocus !== 'true'`);
   const marksAfterDismissal = await evaluate(
@@ -1015,25 +1030,9 @@ async function runQa(page) {
     pickerMarksExpression,
   );
   assert(marksAfterDismissal === marksBeforeDismissal, "all Study Marks dismissal paths must leave tag assertions unchanged");
-  if (qaDevice === "mobile") {
-    const touchMarksBefore = await evaluate(
-      page,
-      `[...(document.querySelector(${JSON.stringify(studyTrigger)})?.closest('.target-tag-picker-menu')?.querySelectorAll('.tag-picker-option[aria-pressed=\"true\"]') || [])].map((option) => option.getAttribute('aria-label')).sort().join('|')`,
-    );
-    await page.tap("#openStudyPanel");
-    await waitFor(page, "document.querySelector('.detail-pane')?.classList.contains('visible')");
-    await page.tap(studyTrigger);
-    await waitFor(page, `document.querySelector(${JSON.stringify(studyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.menuOpen === 'true'`);
-    await page.press(studyTrigger, "Escape");
-    const touchStudyMarks = await evaluate(page, `({
-      closed: document.querySelector(${JSON.stringify(studyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.menuOpen !== 'true',
-      unchanged: [...(document.querySelector(${JSON.stringify(studyTrigger)})?.closest('.target-tag-picker-menu')?.querySelectorAll('.tag-picker-option[aria-pressed=\"true\"]') || [])].map((option) => option.getAttribute('aria-label')).sort().join('|') === ${JSON.stringify(touchMarksBefore)}
-    })`);
-    assert(touchStudyMarks.closed && touchStudyMarks.unchanged, `touch Study Marks activation must open once without mutating marks: ${JSON.stringify(touchStudyMarks)}`);
-  }
   const secondMarksBeforeClosedEscape = await evaluate(
     page,
-    `[...(document.querySelector(${JSON.stringify(secondStudyTrigger)})?.closest('.target-tag-picker-menu')?.querySelectorAll('.tag-picker-option[aria-pressed="true"]') || [])].map((option) => option.getAttribute('aria-label')).sort().join('|')`,
+    pickerMarksExpression,
   );
   await evaluate(page, "document.querySelector('#themeToggle')?.focus()");
   await page.press("#themeToggle", "Escape");
@@ -1041,7 +1040,7 @@ async function runQa(page) {
     page,
     `({
       focusUnchanged: document.activeElement === document.querySelector('#themeToggle'),
-      marksUnchanged: [...(document.querySelector(${JSON.stringify(secondStudyTrigger)})?.closest('.target-tag-picker-menu')?.querySelectorAll('.tag-picker-option[aria-pressed="true"]') || [])].map((option) => option.getAttribute('aria-label')).sort().join('|') === ${JSON.stringify(secondMarksBeforeClosedEscape)}
+      marksUnchanged: ${pickerMarksExpression} === ${JSON.stringify(secondMarksBeforeClosedEscape)}
     })`,
   );
   assert(closedPickerEscape.focusUnchanged && closedPickerEscape.marksUnchanged, `Escape with no active Study Marks picker must leave focus and marks unchanged: ${JSON.stringify(closedPickerEscape)}`);
@@ -1617,14 +1616,26 @@ async function runQa(page) {
   await click(page, ".interlinear-token .token-study-marks-button");
   await waitFor(
     page,
-    "document.querySelector('.interlinear-token .study-marks-menu .target-tag-picker-popover') && getComputedStyle(document.querySelector('.interlinear-token .study-marks-menu .target-tag-picker-popover')).display === 'grid'",
+    "document.querySelector('#detailToolSurface')?.dataset.toolKind === 'study-marks' && document.querySelector('#detailToolSurface')?.hidden === false",
   );
   assert(
-    await evaluate(page, "document.querySelector('#detailTitle')?.textContent === 'Language Study'"),
-    "interlinear token tag button should keep the tag picker local to the token card",
+    await evaluate(page, `(() => {
+      const surface = document.querySelector('#detailToolSurface');
+      const pane = document.querySelector('.detail-pane');
+      const workArea = document.querySelector('#detailWorkArea');
+      const surfaceRect = surface?.getBoundingClientRect();
+      const paneRect = pane?.getBoundingClientRect();
+      return document.querySelector('#detailTitle')?.textContent === 'Language Study' &&
+        Boolean(workArea?.inert || workArea?.hasAttribute('inert')) &&
+        surface?.contains(document.activeElement) &&
+        surfaceRect.left >= paneRect.left - 1 && surfaceRect.right <= paneRect.right + 1;
+    })()`),
+    "interlinear token Study Marks should keep Language Study intact under the contained panel tool",
   );
-  await click(page, '.interlinear-token .study-marks-menu .tag-picker-option[aria-label="Add Positive tag"]');
+  await click(page, '#detailToolSurface .tag-picker-option[aria-label="Add Positive tag"]');
   await waitFor(page, "document.querySelector('.interlinear-token .token-target-badges .target-tag-badge')");
+  await click(page, "#detailToolClose");
+  await waitFor(page, "document.querySelector('#detailToolSurface')?.hidden === true");
   await click(page, ".interlinear-token .token-target-badges .target-tag-picker-trigger");
   await waitFor(
     page,
@@ -1640,7 +1651,8 @@ async function runQa(page) {
 
   await click(page, ".verse-study-button");
   await click(page, "#detailContext [data-panel-scope='verse'] .study-marks-trigger");
-  await click(page, "#detailContext [data-panel-scope='verse'] .tag-picker-manage");
+  await waitFor(page, "document.querySelector('#detailToolSurface')?.dataset.toolKind === 'study-marks'");
+  await click(page, "#detailToolSurface .tag-picker-manage");
   await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Tags'");
   await click(page, "#detailContent .tag-editor-toggle");
   await waitFor(page, "document.querySelector('.tag-badge')?.textContent.includes('Positive')");
@@ -1666,7 +1678,8 @@ async function runQa(page) {
   );
   await click(page, ".verse-study-button");
   await click(page, "#detailContext [data-panel-scope='verse'] .study-marks-trigger");
-  await click(page, "#detailContext [data-panel-scope='verse'] .tag-picker-manage");
+  await waitFor(page, "document.querySelector('#detailToolSurface')?.dataset.toolKind === 'study-marks'");
+  await click(page, "#detailToolSurface .tag-picker-manage");
   await waitFor(page, `document.querySelector('#detailContent')?.textContent.includes(${JSON.stringify(customTagLabel)})`);
   await evaluate(
     page,

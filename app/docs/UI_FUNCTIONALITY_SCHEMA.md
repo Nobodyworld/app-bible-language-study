@@ -1,6 +1,6 @@
 # UI Functionality Contract
 
-Reviewed: 2026-07-23
+Reviewed: 2026-08-12
 
 ## Control placement
 
@@ -56,10 +56,19 @@ Local maintenance exposes `Refresh Study Marks index` as a repeat-safe recovery 
 
 ## Responsive panel placement
 
-- Desktop keeps the side panel sticky beside the reader and requires the detail heading to remain visible.
-- From `769px` through `960px`, the shell becomes one column and the app header becomes three rows. The detail panel therefore uses a larger sticky offset and reduced viewport height so its heading and context summary begin below the header.
+- Desktop keeps the side panel sticky beside the reader and requires the detail heading to remain visible. The reader and study workspace remain two practical columns at every width above the established mobile breakpoint.
+- The desktop-only width group exposes `compact`, `standard`, and `expanded`; Standard is the default. The stored mode is declarative on the root element and is separate from the detail panel's `follow`/`locked` interaction state.
+- Normal desktop bounds are `clamp(320px, 25vw, 420px)`, `clamp(400px, 33vw, 620px)`, and `clamp(500px, 40vw, 760px)`. From `769px` through `1100px`, they are constrained to `clamp(300px, 32vw, 340px)`, `clamp(340px, 38vw, 400px)`, and `clamp(380px, 44vw, 440px)` so Expanded cannot force horizontal overflow.
+- From `769px` through `960px`, the app header becomes three rows. The still-adjacent detail panel therefore uses a larger sticky offset and reduced viewport height so its heading and context summary begin below the header.
 - At `768px` and below, the detail panel becomes the existing full-screen mobile surface.
-- Context controls wrap; the scoped navigation must not create horizontal document or panel overflow.
+- Width controls are hidden on mobile without changing the stored desktop mode; returning above `768px` reapplies that mode's responsive bounds.
+- Context controls wrap; the scoped navigation must not create horizontal document or panel overflow. The sticky pane has a bounded usable-viewport height, while `#detailContent` owns panel scrolling independently from document/reader scrolling.
+
+## Study-workspace width preference and anchoring
+
+The browser-local UI preference key is `bibleapp:study-workspace-width:v1`. Only the exact strings `compact`, `standard`, and `expanded` are supported. Missing, malformed, unsupported, unavailable, or throwing storage falls back to Standard without blocking startup. The key is never part of the portable `bibleapp:user-data` export.
+
+Changing width synchronously records the selected source word or active verse as a semantic anchor, falling back to the first meaningfully visible verse/source segment. It records the anchor's viewport top, applies only the root width attribute, re-resolves the same reference/token identity, and corrects document scroll by the resulting delta. It also retains the detail scroller's practical `scrollTop`. Width changes do not render the reader, replace the detail DOM, call `scrollIntoView`, or mutate route, hash, browser history, panel history/forward history, selection, Strong's section, follow/locked state, focus, or user data.
 
 ## Control availability
 
@@ -79,6 +88,8 @@ The chapter Language Study control requires the internal interlinear capability 
 |---|---|
 | `follow` | Reader Strong's hover may show transient word details. |
 | `locked` | The selected panel remains open while reader and interlinear tokens can still highlight each other. |
+
+These interaction modes are unrelated to the three study-workspace width modes and share no normalization, persistence, or transition authority.
 
 Transitions:
 
@@ -153,13 +164,16 @@ IndexedDB initialization and migration have a three-second boundary. If the brow
 
 - `tests/ui-contracts.mjs`: availability, panel transitions, control schema, corrected data scopes, and token identity.
 - `tests/panel-context-model.mjs`: Word-first scope order, tool ownership, active-word API, shell ordering, full visible labels, responsive wrapping, and narrow sticky-offset contracts.
+- `tests/study-workspace-width.mjs`: exact width-mode normalization/defaults, fault-tolerant persistence, key isolation, follow/locked separation, and active-button state.
+- `tests/study-workspace-contracts.mjs`: declarative widths, responsive clamps, independent scrolling, semantic anchors, reusable contained surface, lifecycle cleanup, and explicit panel presentations.
 - `tests/reference-context.mjs`: hierarchy normalization and stable keys.
 - `tests/interlinear.mjs`: packaged interlinear data contracts, Greek marked-glyph reconstruction, and shared Hebrew gematria behavior.
 - `tests/module-singletons.mjs`: one release key and singleton URLs for stateful runtime modules.
 - `tests/strong-reference-control.mjs`: exact concordance reference resolution and unresolved plain-text fallback.
 - `tests/reader-ui-regressions.mjs`: source-level reader layout, panel-aware tooltip, concordance control, and navigation-reset regressions.
 - `tests/original-language-study.mjs`: visible Language Study naming and source-backed study/reference behavior.
-- `app/scripts/panel-context-interaction-test.mjs`: light/dark desktop, narrow, and mobile Word-first ordering, inherited Verse navigation, Verse-only clearing, contained source-word and verse Study Marks popovers, picker-wheel ownership, horizontal-overflow checks, sticky-header placement, visible headings, and browser-error coverage.
+- `app/scripts/panel-context-interaction-test.mjs`: light/dark desktop, narrow, and mobile Word-first ordering, inherited Verse navigation, Verse-only clearing, explicit contained source-word and verse Study Marks tools, focus restoration, horizontal-overflow checks, sticky-header placement, visible headings, and browser-error coverage.
+- `app/scripts/study-workspace-interaction-test.mjs`: all three width modes, reload/storage failure, reader-anchor and panel-state preservation, independent scroll ownership, contained tools, responsive desktop/mobile transitions, theme/reduced-motion, overflow, and browser-error coverage.
 - `app/scripts/original-language-study-interaction-test.mjs`: rendered source/transliteration rows, lazy study enhancement, related-reference preview/navigation/history, and tooltip-containment behavior when the browser runner is available.
 - `app/scripts/interaction-test.mjs`: rendered interaction behavior, including reader text-span selection, favorite controls, editable target badges, source-token tagging, Favorites grouping, panel history, and cleanup, when the browser runner is available.
 ## Compact side-panel Study Marks contract
@@ -168,4 +182,8 @@ The reader side panel is limited to the current exact Word (when present) and Ve
 
 The reader verse number retains its inline picker as the canonical verse Study Marks control, while the adjacent ellipsis opens verse study tools. Book and Chapter use actual visible scope labels inside their shared triggers, not CSS-generated label text.
 
-Inside the compact detail pane, source-word and verse Study Marks pickers right-anchor within the intersection of the pane and viewport. They retain vertical picker scrolling, stay above Strong's detail content, and never change the selected word, panel lock, or detail history while opened, hovered, scrolled, or dismissed.
+Inside the detail pane, source-word and verse Study Marks open only after explicit button activation and use the shared contained tool surface layered over the existing work area. The surface shows the exact target label/preview, Favorite, every valid tag, and Manage tags. Opening, closing, Escape, and Cancel-like dismissal are data-neutral; an explicit toggle updates that exact canonical target immediately. The preserved work area becomes inert and `aria-hidden` without reflow or DOM replacement, and Close/Escape restores the original trigger or a stable same-target replacement after a legitimate rerender. Manage tags cleanly transitions to the full editor through the existing single detail-history entry.
+
+Meaning uses the same surface only through its explicit `presentation: "detail-pane"` contract; the default non-panel fixed-dialog presentation remains available. Contained Meaning retains exact `source_token` validation, lazy exact-English/lexicon suggestions, quick choices, Other/custom input, Save, Cancel, and Remove. Open/close/Cancel are data-neutral, while Save and Remove mutate only the exact canonical source token. Study Marks and Meaning remain separate tools that replace one another through the single overlay coordinator without stale Escape ownership.
+
+The reusable surface is a sibling of the preserved work area inside `.detail-workspace`; it never participates in `#detailContent` snapshots or adds panel height. Escape closes only the active contained tool. Detail replacement, Back, Forward, Clear/reset, route navigation, and mobile dismissal remove its ownership before any underlying detail snapshot or replacement.

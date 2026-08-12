@@ -8,6 +8,7 @@ import { dirname, extname, join, resolve, sep } from "node:path";
 import { createServer } from "node:net";
 import { fileURLToPath } from "node:url";
 import { chromium } from "playwright-core";
+import { DEFAULT_TAGS } from "../src/config.js";
 
 const screenshotRoot = String(process.env.PANEL_CONTEXT_SCREENSHOT_DIR || "").trim();
 const captureOnly = process.env.PANEL_CONTEXT_CAPTURE_ONLY === "1";
@@ -130,7 +131,7 @@ async function createTemporaryTags(page, labels) {
       labelInput.value = label;
       colorInput.value = "#4f6f91";
       iconInput.value = "Q";
-      descriptionInput.value = "Temporary panel popover browser test tag";
+      descriptionInput.value = "Temporary contained Study Marks browser test tag";
       form.requestSubmit();
     }
     return temporaryLabels.every((label) =>
@@ -170,8 +171,26 @@ async function removeTemporaryTags(page, labels) {
 }
 
 async function openStrongFromReader(page) {
+  await page.mouse.move(0, 0);
   await click(page, ".verse-study-button");
-  await waitFor(page, () => Boolean(document.querySelector("#detailContext .panel-context-navigation")));
+  try {
+    await waitFor(page, () => Boolean(document.querySelector("#detailContext .panel-context-navigation")));
+  } catch (error) {
+    const diagnostics = await page.evaluate(() => ({
+      chapterTitle: document.querySelector("#chapterTitle")?.textContent || "",
+      detailContextHidden: document.querySelector("#detailContext")?.hidden ?? null,
+      detailMode: document.querySelector(".detail-pane")?.dataset.panelMode || "",
+      detailPaneVisible: document.querySelector(".detail-pane")?.classList.contains("visible") || false,
+      detailTitle: document.querySelector("#detailTitle")?.textContent || "",
+      routeHash: window.location.hash,
+      studyButtonCount: document.querySelectorAll(".verse-study-button").length,
+      studyButtonUnavailable: document.querySelector(".verse-study-button")?.dataset.unavailable || "",
+      surfaceHidden: document.querySelector("#detailToolSurface")?.hidden ?? null,
+      surfaceKind: document.querySelector("#detailToolSurface")?.dataset.toolKind || "",
+      workAreaInert: Boolean(document.querySelector("#detailWorkArea")?.inert),
+    }));
+    throw new Error(`${error.message}; verse-study diagnostics: ${JSON.stringify(diagnostics)}`);
+  }
   await click(
     page,
     "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language']",
@@ -189,8 +208,144 @@ async function openStrongFromReader(page) {
   );
 }
 
+function expectedStudyMarkLabels(targetType, temporaryLabels) {
+  return [
+    ...DEFAULT_TAGS
+      .filter((tag) => tag.status !== "retired" && tag.allowed_target_types.includes(targetType))
+      .map((tag) => tag.label),
+    ...temporaryLabels,
+  ].sort((left, right) => left.localeCompare(right));
+}
+
+async function readStoredTagStore(page) {
+  return page.evaluate(async () => {
+    const readFallback = () => {
+      try {
+        return JSON.parse(window.localStorage.getItem("bibleapp:verse-tags:v1") || "null");
+      } catch {
+        return null;
+      }
+    };
+    if (!window.indexedDB) return readFallback();
+    return new Promise((resolveStore) => {
+      const request = window.indexedDB.open("bibleapp");
+      request.onerror = () => resolveStore(readFallback());
+      request.onsuccess = () => {
+        const database = request.result;
+        if (!database.objectStoreNames.contains("user_stores")) {
+          database.close();
+          resolveStore(readFallback());
+          return;
+        }
+        const transaction = database.transaction("user_stores", "readonly");
+        const getRequest = transaction.objectStore("user_stores").get("tags");
+        getRequest.onerror = () => {
+          database.close();
+          resolveStore(readFallback());
+        };
+        getRequest.onsuccess = () => {
+          const value = getRequest.result?.value || readFallback();
+          transaction.oncomplete = () => database.close();
+          resolveStore(value);
+        };
+      };
+    });
+  });
+}
+
+function targetAssertionFingerprint(tagStore, targetId) {
+  return Object.values(tagStore?.tag_assertions || {})
+    .filter((assertion) => assertion?.target_id === targetId || assertion?.target?.target_id === targetId)
+    .map((assertion) => ({
+      id: assertion.id,
+      tagId: assertion.tag_id,
+      active: Boolean(assertion.active),
+      reviewStatus: assertion.review_status,
+      revision: assertion.revision,
+      note: assertion.note || "",
+      targetId: assertion.target_id || assertion.target?.target_id || "",
+    }))
+    .sort((left, right) => left.id.localeCompare(right.id));
+}
+
+async function storedTargetAssertionFingerprint(page, targetId) {
+  return targetAssertionFingerprint(await readStoredTagStore(page), targetId);
+}
+
+async function waitForStoredFavorite(page, targetId, active, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  let latest = [];
+  while (Date.now() < deadline) {
+    const store = await readStoredTagStore(page);
+    latest = Object.values(store?.tag_assertions || {});
+    const assertion = latest.find(
+      (candidate) =>
+        (candidate?.target_id === targetId || candidate?.target?.target_id === targetId) &&
+        (candidate?.tag_id === "tag:favorite" || candidate?.legacy_tag_id === "favorite"),
+    );
+    if (assertion && Boolean(assertion.active) === active) return assertion;
+    await delay(75);
+  }
+  throw new Error(
+    `Timed out waiting for Favorite=${active} on ${targetId}: ${JSON.stringify(targetAssertionFingerprint({ tag_assertions: Object.fromEntries(latest.map((assertion) => [assertion.id, assertion])) }, targetId))}`,
+  );
+}
+
+async function waitForReaderWordPreserved(page, oldTargetId, label, timeoutMs = 15000) {
+  const deadline = Date.now() + timeoutMs;
+  let diagnostics = null;
+  while (Date.now() < deadline) {
+    diagnostics = await page.evaluate((expectedTargetId) => {
+      const words = [...document.querySelectorAll(".reader-context-word")];
+      const verses = [...document.querySelectorAll(".reader-context-verse")];
+      const targetParts = expectedTargetId.split(":");
+      const expectedTokenIndex = targetParts[1] === "source_token" ? targetParts.at(-1) : "";
+      const selectedVerse = verses[0]?.dataset.verse || targetParts[6] || "";
+      const row = selectedVerse
+        ? document.querySelector(`.verse-row[data-verse="${CSS.escape(selectedVerse)}"]`)
+        : null;
+      return {
+        activeWordControl: document.querySelector("#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Word']")?.getAttribute("aria-current") || "",
+        contextSummary: String(document.querySelector("#detailContext .panel-context-summary")?.textContent || "").replace(/\s+/gu, " ").trim(),
+        detailMode: document.querySelector(".detail-pane")?.dataset.panelMode || "",
+        detailTitle: document.querySelector("#detailTitle")?.textContent?.trim() || "",
+        newTriggerTargetIds: [...document.querySelectorAll("#detailContext [data-study-marks-target-id]")]
+          .map((trigger) => trigger.dataset.studyMarksTargetId)
+          .filter(Boolean),
+        oldTargetId: expectedTargetId,
+        readerVerseCount: verses.length,
+        readerVerses: verses.map((verse) => ({
+          refKey: verse.dataset.refKey || "",
+          segmentId: verse.dataset.segmentId || "",
+          verse: verse.dataset.verse || "",
+        })),
+        readerWordCount: words.length,
+        readerWords: words.map((word) => ({
+          interlinearKey: word.dataset.interlinearKey || "",
+          strongCode: word.dataset.strongCode || "",
+          tokenIndex: word.dataset.tokenIndex || "",
+        })),
+        routeHash: window.location.hash,
+        selectedRowStrongTokens: [...(row?.querySelectorAll(".strong-token") || [])].map((word) => ({
+          highlighted: word.classList.contains("reader-context-word"),
+          interlinearKey: word.dataset.interlinearKey || "",
+          matchesExpectedTokenIndex: Boolean(expectedTokenIndex && word.dataset.tokenIndex === expectedTokenIndex),
+          strongCode: word.dataset.strongCode || "",
+          tokenIndex: word.dataset.tokenIndex || "",
+        })),
+        surfaceKind: document.querySelector("#detailToolSurface")?.dataset.toolKind || "",
+        surfaceTargetId: document.querySelector("#detailToolSurface")?.dataset.targetId || "",
+      };
+    }, oldTargetId);
+    if (diagnostics.readerWordCount === 1 && diagnostics.readerVerseCount === 1) return diagnostics;
+    await delay(75);
+  }
+  throw new Error(`${label}: selected reader word/verse was not preserved after the Study Marks rerender: ${JSON.stringify(diagnostics)}`);
+}
+
 async function panelStudyMarksState(page, selector) {
   return page.evaluate((target) => {
+    const clean = (value) => String(value || "").replace(/\s+/gu, " ").trim();
     const rect = (node) => {
       if (!node) return null;
       const value = node.getBoundingClientRect();
@@ -204,15 +359,24 @@ async function panelStudyMarksState(page, selector) {
       };
     };
     const trigger = document.querySelector(target);
-    const menu = trigger?.closest(".target-tag-picker-menu");
-    const popover = menu?.querySelector(".target-tag-picker-popover");
     const controls = trigger?.closest(".panel-context-controls");
     const pane = document.querySelector(".detail-pane");
+    const workspace = document.querySelector("#detailWorkspace");
+    const workArea = document.querySelector("#detailWorkArea");
     const detail = document.querySelector("#detailContent");
+    const surface = document.querySelector("#detailToolSurface");
+    const surfaceContent = document.querySelector("#detailToolContent");
+    const targetId = trigger?.dataset.studyMarksTargetId || surface?.dataset.targetId || "";
+    const targetType = targetId.split(":")[1] || "";
+    const selectedToken = clean(document.querySelector("#detailContent .strong-code")?.textContent);
+    const summary = clean(document.querySelector("#detailContext .panel-context-summary")?.textContent);
+    const sourceMarker = selectedToken ? ` · ${selectedToken} · in ` : "";
+    const sourceMarkerIndex = sourceMarker ? summary.indexOf(sourceMarker) : -1;
+    const sourceOriginal = sourceMarkerIndex >= 0 ? summary.slice(0, sourceMarkerIndex) : "";
+    const verse = targetId.split(":").at(-1);
+    const versePreview = clean(document.querySelector(`.verse-row[data-verse="${CSS.escape(verse || "")}"] .verse-body`)?.textContent);
+    const activeElement = document.activeElement;
     return {
-      activeMarks: [...(popover?.querySelectorAll('.tag-picker-option[aria-pressed="true"]') || [])]
-        .map((option) => option.getAttribute("aria-label"))
-        .sort(),
       activeWord: document.querySelector("#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Word']")?.getAttribute("aria-current") || "",
       controlHeight: controls?.getBoundingClientRect().height || 0,
       controlRows: controls
@@ -221,30 +385,66 @@ async function panelStudyMarksState(page, selector) {
       controls: rect(controls),
       detailChildCount: detail?.children.length || 0,
       detailScrollTop: detail?.scrollTop || 0,
-      detailTitle: document.querySelector("#detailTitle")?.textContent.trim() || "",
+      detailTitle: clean(document.querySelector("#detailTitle")?.textContent),
       documentOverflow: document.documentElement.scrollWidth - window.innerWidth,
-      focusedTrigger: document.activeElement === trigger,
+      expectedPreview: targetType === "source_token"
+        ? [sourceOriginal, selectedToken].filter(Boolean).join(" — ")
+        : versePreview,
+      focusedInSurface: Boolean(surface?.contains(activeElement)),
+      focusedTargetId: activeElement?.dataset?.studyMarksTargetId || "",
+      focusedTrigger: activeElement === trigger,
       forwardDisabled: document.querySelector("#detailForward")?.disabled ?? null,
       historyBackDisabled: document.querySelector("#detailBack")?.disabled ?? null,
+      localPopoverCount: document.querySelectorAll("#detailContext .target-tag-picker-popover").length,
       lock: pane?.dataset.panelMode || "",
-      menuBoundary: menu?.dataset.menuBoundary || "",
-      menuOpen: menu?.dataset.menuOpen === "true",
       pane: rect(pane),
+      paneContainsSurface: Boolean(pane?.contains(surface)),
       paneOverflow: pane ? pane.scrollWidth - pane.clientWidth : 0,
-      popover: rect(popover),
-      popoverClientHeight: popover?.clientHeight || 0,
-      popoverScrollHeight: popover?.scrollHeight || 0,
-      popoverScrollTop: popover?.scrollTop || 0,
-      popoverWidthOverflow: popover ? popover.scrollWidth - popover.clientWidth : 0,
       readerToken:
         document.querySelector(".reader-context-word")?.dataset.strongCode ||
-        document.querySelector(".reader-context-word")?.textContent.trim() ||
-        "",
-      selectedToken: document.querySelector("#detailContent .strong-code")?.textContent.trim() || "",
+        clean(document.querySelector(".reader-context-word")?.textContent),
+      routeHash: window.location.hash,
+      sameDetailFirstChild: window.__panelStudyMarksDetailFirstChild === detail?.firstElementChild,
+      selectedToken,
       strongDetail: Boolean(document.querySelector("#detailContent .strong-detail")),
+      surface: rect(surface),
+      surfaceAriaHidden: surface?.getAttribute("aria-hidden") || "",
+      surfaceClientHeight: surfaceContent?.clientHeight || 0,
+      surfaceContainsTarget: surface?.dataset.targetId === targetId,
+      surfaceContentChildCount: surfaceContent?.children.length || 0,
+      surfaceHidden: surface?.hidden ?? null,
+      surfaceKind: surface?.dataset.toolKind || "",
+      surfaceOpen: Boolean(surface && !surface.hidden && surface.getAttribute("aria-hidden") === "false"),
+      surfaceOptionLabels: [...(surfaceContent?.querySelectorAll(".tag-picker-option") || [])]
+        .map((option) => clean(option.querySelector("span:last-child")?.textContent))
+        .filter(Boolean)
+        .sort((left, right) => left.localeCompare(right)),
+      surfaceOptions: [...(surfaceContent?.querySelectorAll(".tag-picker-option") || [])].map((option) => ({
+        label: clean(option.querySelector("span:last-child")?.textContent),
+        pressed: option.getAttribute("aria-pressed"),
+        ariaLabel: option.getAttribute("aria-label") || "",
+      })),
+      surfaceOverflow: surface ? surface.scrollWidth - surface.clientWidth : 0,
+      surfaceParentId: surface?.parentElement?.id || "",
+      surfacePreview: clean(surfaceContent?.querySelector(".target-tag-picker-preview")?.textContent),
+      surfaceScrollHeight: surfaceContent?.scrollHeight || 0,
+      surfaceScrollTop: surfaceContent?.scrollTop || 0,
+      surfaceTargetId: surface?.dataset.targetId || "",
+      surfaceTargetTitle: clean(surfaceContent?.querySelector(".tag-picker-title")?.textContent),
+      surfaceTitle: clean(document.querySelector("#detailToolTitle")?.textContent),
+      targetId,
+      targetType,
       theme: document.documentElement.dataset.theme || "",
       trigger: rect(trigger),
+      triggerAriaControls: trigger?.getAttribute("aria-controls") || "",
+      triggerAriaExpanded: trigger?.getAttribute("aria-expanded") || "",
+      triggerAriaHaspopup: trigger?.getAttribute("aria-haspopup") || "",
+      triggerAriaLabel: trigger?.getAttribute("aria-label") || "",
       viewport: { width: window.innerWidth, height: window.innerHeight },
+      workAreaAriaHidden: workArea?.getAttribute("aria-hidden") || "",
+      workAreaInert: Boolean(workArea && (workArea.inert || workArea.hasAttribute("inert"))),
+      workspace: rect(workspace),
+      workspaceContainsSurface: Boolean(workspace?.contains(surface)),
     };
   }, selector);
 }
@@ -259,120 +459,366 @@ function assertRectStable(before, after, label) {
   });
 }
 
-function assertPanelStudyMarksInvariant(before, after, label) {
-  assert.equal(after.detailTitle, before.detailTitle, `${label}: menu interaction changed the detail title`);
-  assert.equal(after.selectedToken, before.selectedToken, `${label}: menu interaction changed the selected Strong's token`);
-  assert.equal(after.readerToken, before.readerToken, `${label}: menu interaction changed the reader highlight`);
-  assert.equal(after.lock, before.lock, `${label}: menu interaction changed panel lock state`);
-  assert.equal(after.activeWord, before.activeWord, `${label}: menu interaction changed the active Word state`);
-  assert.equal(after.historyBackDisabled, before.historyBackDisabled, `${label}: menu interaction changed Back history state`);
-  assert.equal(after.forwardDisabled, before.forwardDisabled, `${label}: menu interaction changed Forward history state`);
-  assert.equal(after.detailChildCount, before.detailChildCount, `${label}: menu interaction rebuilt the Strong's detail`);
-  assert.equal(after.controlRows, before.controlRows, `${label}: menu interaction changed control-strip wrapping`);
-  assert.equal(after.controlHeight, before.controlHeight, `${label}: menu interaction changed control-strip height`);
-  assert.deepEqual(after.activeMarks, before.activeMarks, `${label}: menu interaction changed Study Marks assertions`);
-  assertRectStable(before.trigger, after.trigger, `${label}: trigger geometry`);
-  assertRectStable(before.controls, after.controls, `${label}: control-strip geometry`);
+function assertPanelStudyMarksInvariant(before, after, label, { geometry = true } = {}) {
+  assert.equal(after.detailTitle, before.detailTitle, `${label}: tool interaction changed the detail title`);
+  assert.equal(after.selectedToken, before.selectedToken, `${label}: tool interaction changed the selected Strong's token`);
+  assert.equal(after.readerToken, before.readerToken, `${label}: tool interaction changed the reader highlight`);
+  assert.equal(after.lock, before.lock, `${label}: tool interaction changed panel lock state`);
+  assert.equal(after.activeWord, before.activeWord, `${label}: tool interaction changed the active Word state`);
+  assert.equal(after.historyBackDisabled, before.historyBackDisabled, `${label}: tool interaction changed Back history state`);
+  assert.equal(after.forwardDisabled, before.forwardDisabled, `${label}: tool interaction changed Forward history state`);
+  assert.equal(after.routeHash, before.routeHash, `${label}: tool interaction changed the browser route`);
+  assert.equal(after.detailChildCount, before.detailChildCount, `${label}: tool interaction rebuilt the Strong's detail`);
+  assert.equal(after.detailScrollTop, before.detailScrollTop, `${label}: tool interaction moved the underlying detail scroll`);
+  assert(after.sameDetailFirstChild, `${label}: tool interaction replaced the underlying Strong's detail node`);
+  if (geometry) {
+    assert.equal(after.controlRows, before.controlRows, `${label}: tool interaction changed control-strip wrapping`);
+    assert.equal(after.controlHeight, before.controlHeight, `${label}: tool interaction changed control-strip height`);
+    assertRectStable(before.trigger, after.trigger, `${label}: trigger geometry`);
+    assertRectStable(before.controls, after.controls, `${label}: control-strip geometry`);
+  }
 }
 
-function assertPanelStudyMarksContainment(state, label) {
-  assert.equal(state.menuBoundary, "detail-pane", `${label}: picker is not opted into detail-pane containment`);
-  assert(state.menuOpen, `${label}: picker did not remain open: ${JSON.stringify(state)}`);
-  assert(state.popover && state.pane, `${label}: popover or detail pane geometry is missing`);
-  const left = Math.max(0, state.pane.left);
-  const top = Math.max(0, state.pane.top);
-  const right = Math.min(state.viewport.width, state.pane.right);
-  const bottom = Math.min(state.viewport.height, state.pane.bottom);
-  assert(
-    state.popover.left >= left - 1 &&
-      state.popover.right <= right + 1 &&
-      state.popover.top >= top - 1 &&
-      state.popover.bottom <= bottom + 1,
-    `${label}: picker escaped the detail pane or viewport: ${JSON.stringify({ popover: state.popover, pane: state.pane, viewport: state.viewport })}`,
-  );
-  assert(state.popoverWidthOverflow <= 1, `${label}: picker has horizontal overflow`);
+function assertPanelStudyMarksClosed(state, label) {
+  assert(!state.surfaceOpen && state.surfaceHidden, `${label}: contained tool surface remained visible`);
+  assert.equal(state.surfaceAriaHidden, "true", `${label}: closed surface is not hidden from assistive technology`);
+  assert.equal(state.surfaceKind, "", `${label}: closed surface retained stale tool ownership`);
+  assert.equal(state.surfaceTargetId, "", `${label}: closed surface retained a stale target`);
+  assert.equal(state.surfaceContentChildCount, 0, `${label}: closed surface retained stale content`);
+  assert(!state.workAreaInert, `${label}: underlying detail work area remained inert`);
+  assert.notEqual(state.workAreaAriaHidden, "true", `${label}: underlying detail work area remained aria-hidden`);
+}
+
+function assertPanelStudyMarksContainment(
+  state,
+  label,
+  { expectedLabel, expectedLabels, expectedPreview = state.expectedPreview, expectedTargetId },
+) {
+  assert(state.surfaceOpen, `${label}: contained tool surface did not remain open: ${JSON.stringify(state)}`);
+  assert.equal(state.surfaceKind, "study-marks", `${label}: shared surface has the wrong tool kind`);
+  assert.equal(state.surfaceTargetId, expectedTargetId, `${label}: shared surface has the wrong canonical target`);
+  assert(state.surfaceContainsTarget, `${label}: trigger and shared surface target identities diverged`);
+  assert.equal(state.surfaceParentId, "detailWorkspace", `${label}: shared surface is not a direct workspace child`);
+  assert(state.paneContainsSurface && state.workspaceContainsSurface, `${label}: shared surface escaped the detail workspace`);
+  assert(state.surface && state.pane && state.workspace, `${label}: shared surface geometry is missing`);
+  for (const boundary of [state.pane, state.workspace]) {
+    assert(
+      state.surface.left >= boundary.left - 1 &&
+        state.surface.right <= boundary.right + 1 &&
+        state.surface.top >= boundary.top - 1 &&
+        state.surface.bottom <= boundary.bottom + 1,
+      `${label}: shared surface escaped its containing geometry: ${JSON.stringify({ surface: state.surface, boundary })}`,
+    );
+  }
+  assert.equal(state.surfaceTitle, "Study Marks", `${label}: shared surface title is incorrect`);
+  assert.equal(state.surfaceTargetTitle, expectedLabel, `${label}: exact target label is incorrect`);
+  assert(expectedPreview, `${label}: expected target preview could not be resolved`);
+  assert.equal(state.surfacePreview, expectedPreview, `${label}: exact target preview is incorrect`);
+  assert.deepEqual(state.surfaceOptionLabels, expectedLabels, `${label}: not every valid target tag is shown exactly once`);
+  assert(state.surfaceOptionLabels.includes("Favorite"), `${label}: Favorite is missing`);
+  assert(state.workAreaInert, `${label}: underlying detail work area is interactive`);
+  assert.equal(state.workAreaAriaHidden, "true", `${label}: underlying detail work area is exposed to assistive technology`);
+  assert.equal(state.triggerAriaHaspopup, "dialog", `${label}: trigger does not expose dialog semantics`);
+  assert.equal(state.triggerAriaExpanded, "true", `${label}: trigger does not expose the open state`);
+  assert.equal(state.triggerAriaControls, "detailToolSurface", `${label}: trigger does not identify the shared surface`);
+  assert.match(state.triggerAriaLabel, new RegExp(`^Study Marks for ${expectedLabel.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\.`), `${label}: trigger accessible label is inaccurate`);
+  assert.equal(state.localPopoverCount, 0, `${label}: side-panel trigger retained a local downward popover`);
+  assert(state.focusedInSurface, `${label}: opening did not place focus inside the contained tool`);
+  assert(state.surfaceOverflow <= 1, `${label}: shared surface has horizontal overflow`);
   assert(state.paneOverflow <= 1, `${label}: detail pane has horizontal overflow`);
   assert(state.documentOverflow <= 1, `${label}: document has horizontal overflow`);
 }
 
-async function exercisePanelStudyMarksPopover(page, selector, label) {
-  await page.evaluate(() => document.querySelector("#themeToggle")?.focus());
+async function activatePanelStudyMarks(page, selector, activation) {
+  const trigger = page.locator(selector);
+  if (activation === "Enter") {
+    await trigger.focus();
+    await page.keyboard.press("Enter");
+  } else {
+    await trigger.click();
+  }
+  await page.waitForFunction(
+    (target) => {
+      const surface = document.querySelector("#detailToolSurface");
+      return Boolean(
+        surface &&
+          !surface.hidden &&
+          surface.getAttribute("aria-hidden") === "false" &&
+          surface.dataset.toolKind === "study-marks" &&
+          surface.dataset.targetId === document.querySelector(target)?.dataset.studyMarksTargetId &&
+          surface.contains(document.activeElement),
+      );
+    },
+    selector,
+  );
+}
+
+async function waitForContainedToolClose(page, selector, targetId) {
+  await page.waitForFunction(
+    ({ target, expectedTargetId }) => {
+      const surface = document.querySelector("#detailToolSurface");
+      const workArea = document.querySelector("#detailWorkArea");
+      const currentTrigger = document.querySelector(target);
+      const active = document.activeElement;
+      const focusRestored = active === currentTrigger || active?.dataset?.studyMarksTargetId === expectedTargetId;
+      return Boolean(
+        surface?.hidden &&
+          surface.getAttribute("aria-hidden") === "true" &&
+          !workArea?.inert &&
+          !workArea?.hasAttribute("inert") &&
+          workArea?.getAttribute("aria-hidden") !== "true" &&
+          focusRestored,
+      );
+    },
+    { target: selector, expectedTargetId: targetId },
+  );
+}
+
+function assertStoredFavoriteTarget(assertion, targetId, targetType, active, label) {
+  assert.equal(assertion.target_id, targetId, `${label}: persisted assertion has the wrong canonical target ID`);
+  assert.equal(assertion.target?.target_id, targetId, `${label}: persisted assertion target payload diverged`);
+  assert.equal(assertion.target?.target_type, targetType, `${label}: persisted assertion has the wrong target type`);
+  assert.equal(assertion.target?.translation_id, "bsb", `${label}: persisted assertion has the wrong translation`);
+  assert.equal(assertion.target?.reference?.book_id, "proverbs", `${label}: persisted assertion has the wrong book`);
+  assert.equal(assertion.target?.reference?.chapter, 1, `${label}: persisted assertion has the wrong chapter`);
+  assert.equal(assertion.target?.reference?.verse_start, 1, `${label}: persisted assertion has the wrong verse`);
+  assert.equal(Boolean(assertion.active), active, `${label}: persisted assertion has the wrong active state`);
+  if (targetType === "source_token") {
+    assert.equal(
+      assertion.target?.token?.token_index,
+      Number(targetId.split(":").at(-1)),
+      `${label}: persisted assertion has the wrong exact source token`,
+    );
+  }
+}
+
+async function exercisePanelStudyMarksSurface(
+  page,
+  selector,
+  label,
+  { activation, expectedLabel, expectedPreview, targetType, temporaryLabels },
+) {
+  const triggerLocator = page.locator(selector);
+  await triggerLocator.scrollIntoViewIfNeeded();
+  const triggerBox = await triggerLocator.boundingBox();
+  assert(triggerBox, `${label}: Study Marks trigger is not visible`);
+
+  await triggerLocator.focus();
+  await page.waitForFunction((target) => document.activeElement === document.querySelector(target), selector);
+  const focusOnly = await panelStudyMarksState(page, selector);
+  assertPanelStudyMarksClosed(focusOnly, `${label}: focus alone`);
+  assert(focusOnly.focusedTrigger, `${label}: trigger did not retain visible keyboard focus`);
+  assert.equal(focusOnly.triggerAriaHaspopup, "dialog", `${label}: trigger has the wrong popup role`);
+  assert.equal(focusOnly.triggerAriaExpanded, "false", `${label}: focused trigger incorrectly reports an open tool`);
+
   await page.evaluate(() => {
     const detail = document.querySelector("#detailContent");
     if (!detail) return;
     detail.scrollTop = Math.min(64, Math.max(0, detail.scrollHeight - detail.clientHeight));
+    window.__panelStudyMarksDetailFirstChild = detail.firstElementChild;
   });
-  const triggerLocator = page.locator(selector);
-  await triggerLocator.scrollIntoViewIfNeeded();
   const before = await panelStudyMarksState(page, selector);
   assert.equal(before.detailTitle, "Strong's", `${label}: expected a Strong's panel`);
-  assert(
-    before.strongDetail && before.selectedToken,
-    `${label}: selected Strong's context is incomplete: ${JSON.stringify(before)}`,
-  );
+  assert(before.strongDetail && before.selectedToken, `${label}: selected Strong's context is incomplete: ${JSON.stringify(before)}`);
+  assert.equal(before.targetType, targetType, `${label}: trigger has the wrong canonical target type`);
+  assert(before.targetId.startsWith(`target:${targetType}:bsb:`), `${label}: trigger has an invalid canonical target ID`);
+  assert(before.sameDetailFirstChild, `${label}: underlying detail identity marker was not captured`);
+  const targetId = before.targetId;
+  const expectedLabels = expectedStudyMarkLabels(targetType, temporaryLabels);
+  const initialAssertions = await storedTargetAssertionFingerprint(page, targetId);
 
-  const triggerBox = await triggerLocator.boundingBox();
-  assert(triggerBox, `${label}: Study Marks trigger is not visible`);
-  if (await page.evaluate(() => window.matchMedia("(hover: hover)").matches)) {
-    await triggerLocator.hover();
-  } else {
-    await triggerLocator.click();
-  }
-  await page.waitForFunction(
-    (target) => document.querySelector(target)?.closest(".target-tag-picker-menu")?.dataset.menuOpen === "true",
-    selector,
-  );
+  await activatePanelStudyMarks(page, selector, activation);
   const opened = await panelStudyMarksState(page, selector);
-  assertPanelStudyMarksContainment(opened, `${label}: opening`);
+  assertPanelStudyMarksContainment(opened, `${label}: ${activation} opening`, {
+    expectedLabel,
+    expectedLabels,
+    expectedPreview,
+    expectedTargetId: targetId,
+  });
   assertPanelStudyMarksInvariant(before, opened, `${label}: opening`);
   assert(
-    opened.popoverScrollHeight > opened.popoverClientHeight,
-    `${label}: temporary tags did not make the picker vertically scrollable`,
+    opened.surfaceScrollHeight >= opened.surfaceClientHeight,
+    `${label}: contained tool reported impossible scroll geometry`,
+  );
+  assert.deepEqual(
+    await storedTargetAssertionFingerprint(page, targetId),
+    initialAssertions,
+    `${label}: opening the contained tool mutated persisted Study Marks`,
   );
 
-  const popoverPoint = {
-    x: opened.popover.left + opened.popover.width / 2,
-    y: opened.popover.top + Math.min(16, opened.popover.height / 2),
-  };
-  await page.mouse.move(popoverPoint.x, popoverPoint.y);
-  const pointerEntry = await page.evaluate(({ target, point }) => {
-    const menu = document.querySelector(target)?.closest(".target-tag-picker-menu");
-    const element = document.elementFromPoint(point.x, point.y);
-    return {
-      element: element?.className || element?.tagName || "",
-      menuContainsPoint: Boolean(menu?.contains(element)),
-      menuHovered: menu?.matches(":hover") || false,
-    };
-  }, { target: selector, point: popoverPoint });
-  assert(
-    pointerEntry.menuContainsPoint && pointerEntry.menuHovered,
-    `${label}: pointer could not enter the contained popover: ${JSON.stringify(pointerEntry)}`,
-  );
-  await delay(220);
-  const hovered = await panelStudyMarksState(page, selector);
-  assertPanelStudyMarksContainment(hovered, `${label}: pointer transition`);
-  assertPanelStudyMarksInvariant(before, hovered, `${label}: pointer transition`);
-
-  await page.mouse.wheel(0, 180);
-  await delay(120);
+  const surfaceHasOverflow = opened.surfaceScrollHeight > opened.surfaceClientHeight;
+  await page.evaluate((shouldScroll) => {
+    const content = document.querySelector("#detailToolContent");
+    if (content && shouldScroll) {
+      content.scrollTop = Math.min(180, Math.max(0, content.scrollHeight - content.clientHeight));
+    }
+  }, surfaceHasOverflow);
+  if (surfaceHasOverflow) {
+    await page.waitForFunction(() => document.querySelector("#detailToolContent")?.scrollTop > 0);
+  }
   const scrolled = await panelStudyMarksState(page, selector);
-  assertPanelStudyMarksContainment(scrolled, `${label}: wheel scroll`);
-  assertPanelStudyMarksInvariant(before, scrolled, `${label}: wheel scroll`);
-  assert(scrolled.popoverScrollTop > hovered.popoverScrollTop, `${label}: wheel did not scroll the picker`);
-  assert.equal(scrolled.detailScrollTop, before.detailScrollTop, `${label}: wheel scrolled underlying Strong's content`);
-
-  await page.keyboard.press("Escape");
-  await page.waitForFunction(
-    (target) => document.querySelector(target)?.closest(".target-tag-picker-menu")?.dataset.menuOpen !== "true",
-    selector,
+  assertPanelStudyMarksContainment(scrolled, `${label}: contained-tool scroll`, {
+    expectedLabel,
+    expectedLabels,
+    expectedPreview,
+    expectedTargetId: targetId,
+  });
+  assertPanelStudyMarksInvariant(before, scrolled, `${label}: contained-tool scroll`);
+  assert.equal(
+    scrolled.surfaceScrollTop > 0,
+    surfaceHasOverflow,
+    `${label}: contained tool scroll state does not match its available overflow`,
   );
-  const dismissed = await panelStudyMarksState(page, selector);
-  assertPanelStudyMarksInvariant(before, dismissed, `${label}: Escape dismissal`);
-  assert(dismissed.focusedTrigger, `${label}: Escape did not restore focus to the active trigger`);
+
+  await page.locator("#detailToolClose").click();
+  await waitForContainedToolClose(page, selector, targetId);
+  const closed = await panelStudyMarksState(page, selector);
+  assertPanelStudyMarksClosed(closed, `${label}: Close`);
+  assertPanelStudyMarksInvariant(before, closed, `${label}: Close`);
+  assert.equal(closed.focusedTargetId, targetId, `${label}: Close did not restore trigger or replacement focus`);
+  assert.deepEqual(
+    await storedTargetAssertionFingerprint(page, targetId),
+    initialAssertions,
+    `${label}: Close mutated persisted Study Marks`,
+  );
+
+  await activatePanelStudyMarks(page, selector, "Enter");
+  const escapeAssertions = await storedTargetAssertionFingerprint(page, targetId);
+  await page.keyboard.press("Escape");
+  await waitForContainedToolClose(page, selector, targetId);
+  const escaped = await panelStudyMarksState(page, selector);
+  assertPanelStudyMarksClosed(escaped, `${label}: Escape`);
+  assertPanelStudyMarksInvariant(before, escaped, `${label}: Escape`);
+  assert.equal(escaped.focusedTargetId, targetId, `${label}: Escape did not restore trigger or replacement focus`);
+  assert.deepEqual(
+    await storedTargetAssertionFingerprint(page, targetId),
+    escapeAssertions,
+    `${label}: Escape mutated persisted Study Marks`,
+  );
+
+  await activatePanelStudyMarks(page, selector, activation);
+  const favorite = page.locator("#detailToolContent .tag-picker-option[aria-label='Add Favorite tag']");
+  assert.equal(await favorite.getAttribute("aria-pressed"), "false", `${label}: Favorite should start inactive`);
+  await favorite.click();
+  await page.waitForFunction(
+    () => document.querySelector("#detailToolContent .tag-picker-option[aria-label='Remove Favorite tag']")?.getAttribute("aria-pressed") === "true",
+  );
+  await waitForReaderWordPreserved(page, targetId, `${label}: Favorite add`);
+  const persistedAdd = await waitForStoredFavorite(page, targetId, true);
+  assertStoredFavoriteTarget(persistedAdd, targetId, targetType, true, `${label}: Favorite add`);
+  const toggled = await panelStudyMarksState(page, selector);
+  assertPanelStudyMarksContainment(toggled, `${label}: Favorite add`, {
+    expectedLabel,
+    expectedLabels,
+    expectedPreview,
+    expectedTargetId: targetId,
+  });
+  assertPanelStudyMarksInvariant(before, toggled, `${label}: Favorite add`, { geometry: false });
+  assert.match(toggled.triggerAriaLabel, /1 selected\./u, `${label}: selected mark count did not update immediately`);
+
+  await page.locator("#detailToolClose").click();
+  await waitForContainedToolClose(page, selector, targetId);
+  const persistedWhileClosed = await storedTargetAssertionFingerprint(page, targetId);
+  await activatePanelStudyMarks(page, selector, "Enter");
+  const reopened = await panelStudyMarksState(page, selector);
+  assert.equal(
+    reopened.surfaceOptions.find((option) => option.label === "Favorite")?.pressed,
+    "true",
+    `${label}: persisted Favorite was not selected when the tool reopened`,
+  );
+  assertPanelStudyMarksInvariant(before, reopened, `${label}: persistence reopen`, { geometry: false });
+  assert.deepEqual(
+    await storedTargetAssertionFingerprint(page, targetId),
+    persistedWhileClosed,
+    `${label}: reopening mutated the persisted Favorite`,
+  );
+
+  await page.locator("#detailToolContent .tag-picker-option[aria-label='Remove Favorite tag']").click();
+  await page.waitForFunction(
+    () => document.querySelector("#detailToolContent .tag-picker-option[aria-label='Add Favorite tag']")?.getAttribute("aria-pressed") === "false",
+  );
+  await waitForReaderWordPreserved(page, targetId, `${label}: Favorite remove`);
+  const persistedRemove = await waitForStoredFavorite(page, targetId, false);
+  assertStoredFavoriteTarget(persistedRemove, targetId, targetType, false, `${label}: Favorite remove`);
+  const removedAssertions = await storedTargetAssertionFingerprint(page, targetId);
+  await page.keyboard.press("Escape");
+  await waitForContainedToolClose(page, selector, targetId);
+  const removedAndClosed = await panelStudyMarksState(page, selector);
+  assertPanelStudyMarksClosed(removedAndClosed, `${label}: post-remove Escape`);
+  assertPanelStudyMarksInvariant(before, removedAndClosed, `${label}: post-remove Escape`, { geometry: false });
+  assert.deepEqual(
+    await storedTargetAssertionFingerprint(page, targetId),
+    removedAssertions,
+    `${label}: post-remove Escape mutated persisted Study Marks`,
+  );
+
+  await activatePanelStudyMarks(page, selector, activation);
+  const beforeManageAssertions = await storedTargetAssertionFingerprint(page, targetId);
+  await page.locator("#detailToolContent .tag-picker-manage").click();
+  await page.waitForFunction(
+    () =>
+      document.querySelector("#detailToolSurface")?.hidden &&
+      document.querySelector("#detailTitle")?.textContent === "Tags" &&
+      Boolean(document.querySelector("#detailContent .target-tag-editor")) &&
+      !document.querySelector("#detailWorkArea")?.inert,
+  );
+  const managed = await page.evaluate(() => ({
+    editorPreview: String(document.querySelector("#detailContent .target-tag-preview")?.textContent || "").replace(/\s+/gu, " ").trim(),
+    editorTitle: String(document.querySelector("#detailContent .target-tag-editor h3")?.textContent || "").replace(/\s+/gu, " ").trim(),
+    routeHash: window.location.hash,
+    surfaceAriaHidden: document.querySelector("#detailToolSurface")?.getAttribute("aria-hidden") || "",
+    surfaceContentChildren: document.querySelector("#detailToolContent")?.children.length || 0,
+    surfaceHidden: document.querySelector("#detailToolSurface")?.hidden ?? null,
+    surfaceKind: document.querySelector("#detailToolSurface")?.dataset.toolKind || "",
+    title: document.querySelector("#detailTitle")?.textContent || "",
+    workAreaAriaHidden: document.querySelector("#detailWorkArea")?.getAttribute("aria-hidden") || "",
+    workAreaInert: Boolean(document.querySelector("#detailWorkArea")?.inert),
+  }));
+  assert.equal(managed.title, "Tags", `${label}: Manage tags did not open the full detail editor`);
+  assert.equal(managed.editorTitle, expectedLabel, `${label}: Manage tags lost the exact target label`);
+  assert.equal(managed.editorPreview, expectedPreview || opened.expectedPreview, `${label}: Manage tags lost the exact target preview`);
+  assert(managed.surfaceHidden && managed.surfaceAriaHidden === "true", `${label}: Manage tags left the contained surface visible`);
+  assert.equal(managed.surfaceKind, "", `${label}: Manage tags left stale overlay ownership`);
+  assert.equal(managed.surfaceContentChildren, 0, `${label}: Manage tags left stale contained content`);
+  assert(!managed.workAreaInert && managed.workAreaAriaHidden !== "true", `${label}: Manage tags left the detail editor inert`);
+  assert.equal(managed.routeHash, before.routeHash, `${label}: Manage tags changed the browser route`);
+  assert.deepEqual(
+    await storedTargetAssertionFingerprint(page, targetId),
+    beforeManageAssertions,
+    `${label}: Manage tags mutated data without an explicit toggle`,
+  );
+
+  await click(page, "#detailBack");
+  await waitFor(page, () =>
+    document.querySelector("#detailTitle")?.textContent === "Strong's" &&
+    Boolean(document.querySelector("#detailContent .strong-detail")) &&
+    Boolean(document.querySelector("#detailContext .study-marks-trigger")) &&
+    document.querySelector("#detailToolSurface")?.hidden,
+  );
+  const restored = await panelStudyMarksState(page, selector);
+  assert.equal(restored.detailTitle, before.detailTitle, `${label}: Back did not restore the prior panel view`);
+  assert.equal(restored.selectedToken, before.selectedToken, `${label}: Back did not restore the selected Strong's token`);
+  assert.equal(restored.readerToken, before.readerToken, `${label}: Back did not restore the reader highlight`);
+  assert.equal(restored.lock, before.lock, `${label}: Manage transition changed the panel lock`);
+  assert.equal(restored.activeWord, before.activeWord, `${label}: Manage transition changed the active Word section`);
+  assert.equal(restored.routeHash, before.routeHash, `${label}: Manage transition changed the browser route`);
+  assert(restored.sameDetailFirstChild, `${label}: Back did not restore the underlying detail node`);
+  assertPanelStudyMarksClosed(restored, `${label}: Manage transition cleanup`);
+
+  await page.evaluate(() => {
+    delete window.__panelStudyMarksDetailFirstChild;
+  });
   return {
-    placement: opened.popover?.top >= opened.trigger?.bottom ? "below" : "above",
-    popoverScrollTop: scrolled.popoverScrollTop,
-    popoverScrollHeight: opened.popoverScrollHeight,
+    activation,
+    optionCount: opened.surfaceOptionLabels.length,
+    surfaceKind: opened.surfaceKind,
+    surfaceHasOverflow,
+    surfaceScrollHeight: opened.surfaceScrollHeight,
+    surfaceScrollTop: scrolled.surfaceScrollTop,
+    targetId,
+    targetType,
+    title: opened.surfaceTitle,
+    managed: true,
   };
 }
 
@@ -636,10 +1082,14 @@ function assertLanguageSpecificStrong(state, expectedSection, label) {
 }
 
 async function exerciseGreekStrong(page, baseUrl, mode, theme) {
+  await page.mouse.move(0, 0);
   await page.goto(`${baseUrl}/#/read/bsb/john/1/1`, { waitUntil: "load" });
   await waitFor(page, () =>
     document.querySelector("#chapterTitle")?.textContent.includes("John 1") &&
-    !document.body.textContent.includes("Loading data"),
+    !document.body.textContent.includes("Loading data") &&
+    document.querySelector("#detailTitle")?.textContent === "Details" &&
+    document.querySelector("#detailToolSurface")?.hidden &&
+    !document.querySelector("#detailWorkArea")?.inert,
   );
   await openStrongFromReader(page);
   await page.waitForFunction(
@@ -862,15 +1312,28 @@ async function runScenario(browser, baseUrl, mode, theme) {
     );
     await createTemporaryTags(page, temporaryTagLabels);
     await openStrongFromReader(page);
-    const sourcePopover = await exercisePanelStudyMarksPopover(
+    const sourceContainedTool = await exercisePanelStudyMarksSurface(
       page,
       "#detailContext [data-panel-scope='word'] .study-marks-trigger",
       `${mode}/${theme}: source-word Study Marks`,
+      {
+        activation: "click",
+        expectedLabel: "selected source word in Proverbs 1:1",
+        targetType: "source_token",
+        temporaryLabels: temporaryTagLabels,
+      },
     );
-    const versePopover = await exercisePanelStudyMarksPopover(
+    const verseContainedTool = await exercisePanelStudyMarksSurface(
       page,
       "#detailContext [data-panel-scope='verse'] .study-marks-trigger",
       `${mode}/${theme}: verse Study Marks`,
+      {
+        activation: "Enter",
+        expectedLabel: "verse Proverbs 1:1",
+        expectedPreview: "These are the proverbs of Solomon son of David, king of Israel,",
+        targetType: "verse",
+        temporaryLabels: temporaryTagLabels,
+      },
     );
     await removeTemporaryTags(page, temporaryTagLabels);
     temporaryTagsCleaned = true;
@@ -887,8 +1350,8 @@ async function runScenario(browser, baseUrl, mode, theme) {
       detailHeaderTop: wordState.detailHeaderTop,
       wordOrder: wordState.scopeOrder,
       inheritedOrder: inheritedState.scopeOrder,
-      sourcePopover,
-      versePopover,
+      sourceContainedTool,
+      verseContainedTool,
       verseOnlyOrder: verseOnlyState.scopeOrder,
       greekOrder: greekState.scopeOrder,
     };

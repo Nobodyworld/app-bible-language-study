@@ -538,9 +538,11 @@ export function createStrongsView(ctx = null) {
   function scrollStrongSection(section) {
     const target = currentStrongDetail?.querySelector(`[data-strong-section="${section}"]`);
     if (!target) return false;
+    currentStrongDetail.querySelectorAll("[data-strong-section-active]").forEach((node) => {
+      delete node.dataset.strongSectionActive;
+    });
     target.scrollIntoView({ block: "start", behavior: "smooth" });
     target.dataset.strongSectionActive = "true";
-    window.setTimeout(() => delete target.dataset.strongSectionActive, 700);
     return true;
   }
 

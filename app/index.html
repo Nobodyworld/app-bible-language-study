@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" data-study-workspace-width="standard">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -9,6 +9,7 @@
     />
     <title>Bible App Reader</title>
     <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%231d4ed8'/%3E%3Ctext x='8' y='12' font-size='10' font-family='sans-serif' fill='white' text-anchor='middle'%3EB%3C/text%3E%3C/svg%3E" />
+    <script src="./src/study-workspace-width-boot.js?v=issue55-workspace"></script>
     <link rel="stylesheet" href="./styles.css?v=pr13-live-qa-20260711e" />
     <link rel="stylesheet" href="./styles-polish.css?v=pr13-live-qa-20260711e" />
     <link rel="stylesheet" href="./styles-context.css?v=pr13-live-qa-20260711e" />
@@ -118,22 +119,41 @@
 
       <aside class="detail-pane" aria-label="Reference details">
         <div class="detail-header">
-          <h2 id="detailTitle">Details</h2>
-          <div class="detail-header-actions">
-            <button id="clearDetail" type="button">Clear</button>
+          <div class="detail-header-main">
+            <h2 id="detailTitle">Details</h2>
+            <div class="detail-header-actions">
+              <button id="clearDetail" type="button">Clear</button>
+            </div>
+          </div>
+          <div id="studyWorkspaceWidthControls" class="study-workspace-width-controls" role="group" aria-label="Study workspace width">
+            <span class="study-workspace-width-label">Width</span>
+            <button type="button" data-study-workspace-width-mode="compact" aria-pressed="false">Compact</button>
+            <button type="button" data-study-workspace-width-mode="standard" aria-pressed="true">Standard</button>
+            <button type="button" data-study-workspace-width-mode="expanded" aria-pressed="false">Expanded</button>
           </div>
         </div>
-        <div id="detailContext" class="detail-context" hidden></div>
-        <div class="detail-floating-nav" aria-label="Detail panel history">
-          <button id="detailBack" class="detail-nav-arrow" type="button" title="Panel history back" aria-label="Panel history back" disabled>
-            ↶
-          </button>
-          <button id="detailForward" class="detail-nav-arrow" type="button" title="Panel history forward" aria-label="Panel history forward" disabled>
-            ↷
-          </button>
-        </div>
-        <div id="detailContent" class="detail-content">
-          Select a verse, tag, or reader tool.
+        <div id="detailWorkspace" class="detail-workspace">
+          <div id="detailWorkArea" class="detail-work-area">
+            <div id="detailContext" class="detail-context" hidden></div>
+            <div class="detail-floating-nav" aria-label="Detail panel history">
+              <button id="detailBack" class="detail-nav-arrow" type="button" title="Panel history back" aria-label="Panel history back" disabled>
+                ↶
+              </button>
+              <button id="detailForward" class="detail-nav-arrow" type="button" title="Panel history forward" aria-label="Panel history forward" disabled>
+                ↷
+              </button>
+            </div>
+            <div id="detailContent" class="detail-content">
+              Select a verse, tag, or reader tool.
+            </div>
+          </div>
+          <section id="detailToolSurface" class="detail-tool-surface" role="dialog" aria-labelledby="detailToolTitle" aria-hidden="true" hidden>
+            <div class="detail-tool-surface-header">
+              <h3 id="detailToolTitle">Study tool</h3>
+              <button id="detailToolClose" class="detail-tool-close" type="button" aria-label="Close study tool">Close</button>
+            </div>
+            <div id="detailToolContent" class="detail-tool-surface-content"></div>
+          </section>
         </div>
       </aside>
     </main>
