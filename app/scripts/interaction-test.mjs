@@ -179,6 +179,68 @@ async function waitFor(page, expression, timeoutMs = 10000) {
   throw new Error(`Timed out waiting for: ${expression}`);
 }
 
+async function studyMarksFocusDiagnostics(page, triggerSelector) {
+  return evaluate(
+    page,
+    `(() => {
+      const trigger = document.querySelector(${JSON.stringify(triggerSelector)});
+      const menu = trigger?.closest('.target-tag-picker-menu');
+      const style = trigger ? getComputedStyle(trigger) : null;
+      const rect = trigger?.getBoundingClientRect();
+      const identify = (node) => node ? {
+        tag: node.tagName?.toLowerCase() || '',
+        id: node.id || '',
+        classes: typeof node.className === 'string' ? node.className : '',
+      } : null;
+      return {
+        trigger: {
+          present: Boolean(trigger),
+          isConnected: trigger?.isConnected ?? false,
+          disabled: trigger?.disabled ?? null,
+          tabIndex: trigger?.tabIndex ?? null,
+          display: style?.display || '',
+          visibility: style?.visibility || '',
+          opacity: style?.opacity || '',
+          width: rect?.width || 0,
+          height: rect?.height || 0,
+          ariaExpanded: trigger?.getAttribute('aria-expanded') ?? null,
+        },
+        activeElement: identify(document.activeElement),
+        menu: {
+          identity: identify(menu),
+          isConnected: menu?.isConnected ?? false,
+          menuOpen: menu?.dataset.menuOpen ?? null,
+          restoringFocus: menu?.dataset.restoringFocus ?? null,
+        },
+        staleMenuConnected: window.__staleReaderTagMenu?.isConnected ?? null,
+        openMenus: [...document.querySelectorAll('.target-tag-picker-menu[data-menu-open="true"]')].map(identify),
+        route: location.href,
+        theme: document.documentElement.getAttribute('data-theme'),
+        detailTitle: document.querySelector('#detailTitle')?.textContent.trim() || '',
+        consoleErrors: window.__qaErrors || [],
+      };
+    })()`,
+  );
+}
+
+async function waitForStudyMarksMenuOpen(page, triggerSelector, timeoutMs = 10000) {
+  try {
+    return await waitFor(
+      page,
+      `document.querySelector(${JSON.stringify(triggerSelector)})?.closest('.target-tag-picker-menu')?.dataset.menuOpen === 'true'`,
+      timeoutMs,
+    );
+  } catch (error) {
+    let diagnostics;
+    try {
+      diagnostics = await studyMarksFocusDiagnostics(page, triggerSelector);
+    } catch (diagnosticError) {
+      diagnostics = { captureError: diagnosticError?.message || String(diagnosticError) };
+    }
+    throw new Error(`${error.message}; Study Marks focus diagnostics: ${JSON.stringify(diagnostics)}`, { cause: error });
+  }
+}
+
 function workspacePersistenceExpression(referenceKey, expectedDraft, expectedRendering) {
   return `new Promise((resolve) => {
     const readLocalWorkspace = () => {
@@ -947,6 +1009,7 @@ async function runQa(page) {
   })()`);
   assert(menuSwitchState.firstOpened && menuSwitchState.firstClosed && menuSwitchState.secondOpened && menuSwitchState.secondFocused, `opening picker B must close picker A without returning focus to A: ${JSON.stringify(menuSwitchState)}`);
   await page.press(activeSecondStudyTrigger, "Escape");
+  await waitFor(page, `document.querySelector(${JSON.stringify(secondStudyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.restoringFocus !== 'true'`);
   const marksAfterDismissal = await evaluate(
     page,
     pickerMarksExpression,
@@ -989,7 +1052,7 @@ async function runQa(page) {
       window.__staleReaderTagMenu = trigger?.closest('.target-tag-picker-menu');
       trigger?.focus();
     })()`);
-    await waitFor(page, `document.querySelector(${JSON.stringify(rerenderingStudyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.menuOpen === 'true'`);
+    await waitForStudyMarksMenuOpen(page, rerenderingStudyTrigger);
     const initialReaderFavoriteAction = await evaluate(
       page,
       `document.querySelector(${JSON.stringify(rerenderingStudyTrigger)})?.closest('.target-tag-picker-menu')?.querySelector('.tag-picker-option[aria-label$="Favorite tag"]')?.getAttribute('aria-label') || ''`,
@@ -1010,7 +1073,7 @@ async function runQa(page) {
       : initialReaderFavoriteAction.replace("Remove ", "Add ");
     const reverseReaderFavoriteSelector = `${rerenderingStudyTrigger} ~ .target-tag-picker-popover .tag-picker-option[aria-label=${JSON.stringify(reverseReaderFavoriteAction)}]`;
     await evaluate(page, `document.querySelector(${JSON.stringify(rerenderingStudyTrigger)})?.focus()`);
-    await waitFor(page, `document.querySelector(${JSON.stringify(rerenderingStudyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.menuOpen === 'true'`);
+    await waitForStudyMarksMenuOpen(page, rerenderingStudyTrigger);
     await click(page, reverseReaderFavoriteSelector);
     await waitFor(page, `document.querySelector(${JSON.stringify(rerenderingStudyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.menuOpen !== 'true'`);
     await evaluate(page, "document.querySelector('#themeToggle')?.focus()");
