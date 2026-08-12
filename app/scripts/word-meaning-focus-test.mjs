@@ -23,10 +23,10 @@ function findEdgePath() {
   return found;
 }
 
-async function waitFor(page, predicate, timeoutMs = 15000) {
+async function waitFor(page, predicate, argument = undefined, timeoutMs = 15000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    if (await page.evaluate(predicate)) return;
+    if (await page.evaluate(predicate, argument)) return;
     await delay(100);
   }
   throw new Error(`Timed out waiting for: ${predicate.toString()}`);
@@ -109,6 +109,236 @@ async function workspaceSnapshot(page) {
   });
 }
 
+function findRendering(snapshot, targetId) {
+  const tokenRenderings = JSON.parse(snapshot).tokenRenderings || {};
+  for (const verseBucket of Object.values(tokenRenderings)) {
+    for (const record of Object.values(verseBucket || {})) {
+      if (record?.target_id === targetId || record?.target?.target_id === targetId) return record;
+    }
+  }
+  return null;
+}
+
+async function assertSurface(page, profile, kind, targetId) {
+  try {
+    await waitFor(page, () => {
+      const content = document.querySelector("#detailToolContent");
+      return Boolean(content && document.activeElement && content.contains(document.activeElement));
+    });
+  } catch (error) {
+    const diagnostics = await page.evaluate(async () => {
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      const content = document.querySelector("#detailToolContent");
+      const active = document.activeElement;
+      const focusTarget = content?.querySelector(".word-meaning-option, .tag-picker-option, button:not([disabled])");
+      let manualFocusSucceeded = false;
+      if (focusTarget) {
+        focusTarget.focus({ preventScroll: true });
+        manualFocusSucceeded = document.activeElement === focusTarget;
+      }
+      return {
+        activeElement: active ? `${active.tagName}#${active.id}.${active.className}` : null,
+        surfaceKind: document.querySelector("#detailToolSurface")?.dataset.toolKind,
+        surfaceHidden: document.querySelector("#detailToolSurface")?.hidden,
+        contentChildren: content?.childElementCount,
+        contentButtons: content?.querySelectorAll("button").length,
+        expanded: [...document.querySelectorAll('[aria-expanded="true"]')]
+          .map((node) => `${node.tagName}#${node.id}.${node.className}:${node.dataset.wordMeaningTargetId || node.dataset.studyMarksTargetId || ""}`),
+        manualFocusSucceeded,
+      };
+    });
+    error.message += `; diagnostics=${JSON.stringify(diagnostics)}`;
+    throw error;
+  }
+  const state = await page.evaluate(({ expectedKind, expectedTargetId }) => {
+    const pane = document.querySelector(".detail-pane");
+    const surface = document.querySelector("#detailToolSurface");
+    const workArea = document.querySelector("#detailWorkArea");
+    const content = document.querySelector("#detailToolContent");
+    const paneBounds = pane?.getBoundingClientRect();
+    const surfaceBounds = surface?.getBoundingClientRect();
+    const active = document.activeElement;
+    return {
+      surfaceCount: document.querySelectorAll("#detailToolSurface").length,
+      hidden: surface?.hidden,
+      ariaHidden: surface?.getAttribute("aria-hidden"),
+      kind: surface?.dataset.toolKind,
+      targetId: surface?.dataset.targetId,
+      title: document.querySelector("#detailToolTitle")?.textContent?.trim(),
+      workAreaInert: Boolean(workArea?.inert || workArea?.hasAttribute("inert")),
+      workAreaAriaHidden: workArea?.getAttribute("aria-hidden"),
+      focusInside: Boolean(active && content?.contains(active)),
+      contained:
+        Boolean(paneBounds && surfaceBounds) &&
+        surfaceBounds.left >= paneBounds.left - 1 &&
+        surfaceBounds.right <= paneBounds.right + 1 &&
+        surfaceBounds.top >= paneBounds.top - 1 &&
+        surfaceBounds.bottom <= paneBounds.bottom + 1,
+      position: surface ? getComputedStyle(surface).position : "",
+      expectedKind,
+      expectedTargetId,
+    };
+  }, { expectedKind: kind, expectedTargetId: targetId });
+  assert(
+    state.surfaceCount === 1 && !state.hidden && state.ariaHidden === "false" &&
+      state.kind === kind && state.targetId === targetId,
+    `${profile.name}: contained tool state is incorrect: ${JSON.stringify(state)}`,
+  );
+  assert(
+    state.workAreaInert && state.workAreaAriaHidden === "true",
+    `${profile.name}: underlying detail work area was not inert: ${JSON.stringify(state)}`,
+  );
+  assert(
+    state.contained && state.position !== "fixed",
+    `${profile.name}: ${kind} escaped the detail pane or used page-level fixed positioning: ${JSON.stringify(state)}`,
+  );
+  return state;
+}
+
+async function assertSurfaceClosed(page, profile, label) {
+  const state = await page.evaluate(() => {
+    const surface = document.querySelector("#detailToolSurface");
+    const workArea = document.querySelector("#detailWorkArea");
+    return {
+      hidden: surface?.hidden,
+      ariaHidden: surface?.getAttribute("aria-hidden"),
+      kind: surface?.dataset.toolKind || "",
+      targetId: surface?.dataset.targetId || "",
+      contentChildren: document.querySelector("#detailToolContent")?.childElementCount,
+      workAreaInert: Boolean(workArea?.inert || workArea?.hasAttribute("inert")),
+      workAreaAriaHidden: workArea?.getAttribute("aria-hidden"),
+    };
+  });
+  assert(
+    state.hidden && state.ariaHidden === "true" && !state.kind && !state.targetId &&
+      state.contentChildren === 0 && !state.workAreaInert && state.workAreaAriaHidden !== "true",
+    `${profile.name}: ${label} left stale contained-tool state: ${JSON.stringify(state)}`,
+  );
+}
+
+async function exerciseDelayedSavedMeaningFocus(page, profile) {
+  const fixture = await page.evaluate(async () => {
+    const [{ createWordMeaningControl }, { createSourceTokenTarget }] = await Promise.all([
+      import(new URL("./src/word-meaning.js", document.baseURI).href),
+      import(new URL("./src/semantic-targets.js", document.baseURI).href),
+    ]);
+    const target = createSourceTokenTarget({
+      translation_id: "bsb",
+      testament: "old",
+      book_id: "proverbs",
+      chapter: 1,
+      verse: 1,
+    }, {
+      token_index: 999,
+      strong_code: "H9999",
+      language: "hebrew",
+      original: "qa",
+    }, "bsb");
+    const state = {
+      workspaceStore: {
+        token_renderings: {
+          "proverbs:1:1": {
+            999: {
+              schema_version: 2,
+              rendering: "W".repeat(180),
+              original: "qa",
+              strong_code: "H9999",
+              target,
+              target_id: target.target_id,
+              reference_key: "proverbs:1:1",
+              token_index: 999,
+            },
+          },
+        },
+      },
+    };
+    let resolveExact;
+    const exactPromise = new Promise((resolve) => {
+      resolveExact = resolve;
+    });
+    const control = createWordMeaningControl({
+      state,
+      target,
+      token: {},
+      label: "delayed saved QA token",
+      presentation: "detail-pane",
+      loadExactMappedEnglish: () => exactPromise,
+    });
+    control.id = "delayedSavedMeaningFixture";
+    document.querySelector("#detailContent")?.append(control);
+    window.__resolveDelayedSavedMeaning = resolveExact;
+    return { targetId: target.target_id };
+  });
+
+  const root = page.locator("#delayedSavedMeaningFixture");
+  const trigger = root.locator(".word-meaning-trigger");
+  const badge = root.locator(".word-meaning-badge");
+  await trigger.click();
+  await waitFor(page, () => Boolean(document.querySelector("#detailToolContent .word-meaning-remove")));
+  const savedLayout = await page.evaluate(() => {
+    const content = document.querySelector("#detailToolContent");
+    const saved = content?.querySelector(".word-meaning-saved-actions > span");
+    const contentBounds = content?.getBoundingClientRect();
+    const savedBounds = saved?.getBoundingClientRect();
+    return {
+      contentOverflow: content ? content.scrollWidth - content.clientWidth : null,
+      contained: Boolean(contentBounds && savedBounds) &&
+        savedBounds.left >= contentBounds.left - 1 && savedBounds.right <= contentBounds.right + 1,
+      text: saved?.textContent || "",
+    };
+  });
+  assert(
+    savedLayout.contentOverflow <= 1 && savedLayout.contained && savedLayout.text.includes("W".repeat(180)),
+    `${profile.name}: maximum-length unbroken saved Meaning overflowed its contained surface: ${JSON.stringify(savedLayout)}`,
+  );
+  await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  await page.locator("#detailToolContent .word-meaning-remove").focus();
+  await waitFor(page, () => document.activeElement?.classList.contains("word-meaning-remove"));
+  await page.evaluate(() => window.__resolveDelayedSavedMeaning?.("Lazy exact QA"));
+  await waitFor(page, () => (
+    Boolean(document.querySelector('#detailToolContent .word-meaning-option[data-source="exact_bsb"]')) &&
+    document.activeElement?.classList.contains("word-meaning-remove")
+  ));
+  assert(
+    await page.evaluate(() => (
+      !document.querySelector("#detailToolSurface")?.hidden &&
+      document.querySelector("#detailToolContent")?.contains(document.activeElement)
+    )),
+    `${profile.name}: lazy Meaning rerender moved Remove focus outside the contained tool`,
+  );
+  await page.keyboard.press("Escape");
+  await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
+  await waitFor(page, () => document.activeElement === document.querySelector("#delayedSavedMeaningFixture .word-meaning-trigger"));
+
+  await badge.click();
+  await waitFor(page, (targetId) => document.querySelector("#detailToolSurface")?.dataset.targetId === targetId, fixture.targetId);
+  await page.evaluate(async () => {
+    const marker = document.createElement("span");
+    marker.hidden = true;
+    document.querySelector("#detailToolContent")?.append(marker);
+    marker.remove();
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+  const badgeOwnership = await page.evaluate(() => ({
+    badgeConnected: Boolean(document.querySelector("#delayedSavedMeaningFixture .word-meaning-badge")?.isConnected),
+    badgeExpanded: document.querySelector("#delayedSavedMeaningFixture .word-meaning-badge")?.getAttribute("aria-expanded"),
+    surfaceOpen: !document.querySelector("#detailToolSurface")?.hidden,
+  }));
+  assert(
+    badgeOwnership.badgeConnected && badgeOwnership.badgeExpanded === "true" && badgeOwnership.surfaceOpen,
+    `${profile.name}: shared surface migrated ownership away from its connected saved badge: ${JSON.stringify(badgeOwnership)}`,
+  );
+  await page.keyboard.press("Escape");
+  await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
+  await waitFor(page, () => document.activeElement === document.querySelector("#delayedSavedMeaningFixture .word-meaning-badge"));
+  assert(
+    await badge.evaluate((node) => document.activeElement === node),
+    `${profile.name}: delayed Meaning rerender did not restore its still-connected badge opener`,
+  );
+  await root.evaluate((node) => node.remove());
+  await page.evaluate(() => delete window.__resolveDelayedSavedMeaning);
+}
+
 async function runProfile(browser, url, profile) {
   const context = await browser.newContext({
     viewport: profile.viewport,
@@ -116,22 +346,38 @@ async function runProfile(browser, url, profile) {
     hasTouch: profile.mobile,
     deviceScaleFactor: profile.mobile ? 3 : 1,
     userAgent: profile.mobile
-      ? "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0 Mobile Safari/537.36 BibleAppQA"
+      ? "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/151.0 Mobile Safari/537.36 BibleAppQA"
       : undefined,
   });
   const page = await context.newPage();
+  const failures = [];
   let stage = "navigate";
+
+  page.on("console", (message) => {
+    if (message.type() === "error") failures.push(`console: ${message.text()}`);
+  });
+  page.on("pageerror", (error) => failures.push(`pageerror: ${error.message}`));
+  page.on("requestfailed", (request) => {
+    failures.push(`requestfailed: ${request.method()} ${request.url()} (${request.failure()?.errorText || "unknown"})`);
+  });
+  page.on("response", (response) => {
+    if (response.status() >= 400) failures.push(`response: ${response.status()} ${response.url()}`);
+  });
+
+  const assertWorkspaceUnchanged = async (before, label) => {
+    const after = await workspaceSnapshot(page);
+    assert(
+      before === after,
+      `${profile.name}: ${label} mutated token renderings, Study Marks, jobs, IndexedDB, or local storage`,
+    );
+  };
 
   try {
     await page.goto(`${url}/#/read/bsb/proverbs/1/1`, { waitUntil: "load" });
     await waitFor(page, () => Boolean(document.querySelector("#chapterTitle")?.textContent.includes("Proverbs 1")));
 
     stage = "open verse context";
-    await page.evaluate(() => {
-      const button = document.querySelector(".verse-study-button");
-      if (!button) throw new Error("Verse study button not found");
-      button.click();
-    });
+    await page.locator(".verse-study-button").first().evaluate((button) => button.click());
     await waitFor(page, () =>
       [...document.querySelectorAll("#detailContext .verse-context-tab")].some(
         (button) => button.textContent.trim() === "Int" && !button.disabled,
@@ -139,206 +385,385 @@ async function runProfile(browser, url, profile) {
     );
 
     stage = "open Language Study";
-    await page
-      .locator("#detailContext .verse-context-tab")
-      .filter({ hasText: /^Int$/ })
-      .first()
-      .click();
-    await waitFor(page, () => Boolean(document.querySelector("#detailTitle")?.textContent === "Language Study"));
+    await page.locator("#detailContext .verse-context-tab").filter({ hasText: /^Int$/ }).first().click();
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study");
     await waitFor(page, () =>
-      Boolean(document.querySelector('.interlinear-verse-section[data-verse="1"] .word-meaning-control')),
+      document.querySelectorAll('.interlinear-verse-section[data-verse="1"] .word-meaning-control').length >= 2,
     );
 
     stage = "prepare exact-token controls";
-    const cards = page
-      .locator('.interlinear-verse-section[data-verse="1"] .interlinear-token')
-      .filter({ has: page.locator(".word-meaning-control") });
+    const cardSelector = '.interlinear-verse-section[data-verse="1"] .interlinear-token:has(.word-meaning-control)';
+    const cards = page.locator(cardSelector);
     assert((await cards.count()) >= 2, `${profile.name}: two exact-token Meaning controls were not rendered`);
     const firstCard = cards.nth(0);
     const secondCard = cards.nth(1);
     const firstMeaning = firstCard.locator(".word-meaning-trigger");
     const secondMeaning = secondCard.locator(".word-meaning-trigger");
     const firstStudyMarks = firstCard.locator(".study-marks-trigger");
-    await firstCard.evaluate((node) => {
-      const existing = node.querySelector("#qa-word-meaning-outside-focus");
-      if (existing) existing.remove();
-      const outside = document.createElement("button");
-      outside.id = "qa-word-meaning-outside-focus";
-      outside.type = "button";
-      outside.textContent = "Outside focus target";
-      node.append(outside);
-    });
-    const outsideControl = firstCard.locator("#qa-word-meaning-outside-focus");
-    const assertWorkspaceUnchanged = async (label) => {
-      const after = await workspaceSnapshot(page);
-      assert(before === after, `${profile.name}: ${label} mutated token renderings, Study Marks, jobs, IndexedDB, or local storage`);
-    };
-    const before = await workspaceSnapshot(page);
+    const targets = await page.evaluate((selector) => {
+      const cards = [...document.querySelectorAll(selector)].slice(0, 2);
+      return cards.map((card) => ({
+        meaning: card.querySelector(".word-meaning-trigger")?.dataset.wordMeaningTargetId,
+        marks: card.querySelector(".study-marks-trigger")?.dataset.studyMarksTargetId,
+      }));
+    }, cardSelector);
+    assert(
+      targets.length === 2 && targets[0].meaning && targets[1].meaning &&
+        targets[0].meaning !== targets[1].meaning && targets[0].meaning === targets[0].marks,
+      `${profile.name}: exact canonical source-token identities were not distinct and shared: ${JSON.stringify(targets)}`,
+    );
+    const firstTargetId = targets[0].meaning;
+    const secondTargetId = targets[1].meaning;
+    const baseline = await workspaceSnapshot(page);
+    let historyBaseline = await page.evaluate(() => ({
+      hash: location.hash,
+      browserLength: history.length,
+      title: document.querySelector("#detailTitle")?.textContent,
+      backDisabled: document.querySelector("#detailBack")?.disabled,
+      forwardDisabled: document.querySelector("#detailForward")?.disabled,
+    }));
 
-    stage = "Meaning A to Meaning B";
-    await firstMeaning.scrollIntoViewIfNeeded();
+    stage = "Study Marks requires explicit activation";
+    await firstStudyMarks.focus();
+    assert(
+      await page.evaluate(() => document.querySelector("#detailToolSurface")?.hidden === true),
+      `${profile.name}: focusing Study Marks opened a large contained tool`,
+    );
+    await firstStudyMarks.press("Enter");
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.dataset.toolKind === "study-marks");
+    await assertSurface(page, profile, "study-marks", firstTargetId);
+    const marksState = await page.evaluate((targetId) => ({
+      hasContainedPicker: Boolean(document.querySelector("#detailToolContent .contained-target-tag-picker")),
+      hasPreview: Boolean(document.querySelector("#detailToolContent .target-tag-picker-preview")?.textContent?.trim()),
+      options: document.querySelectorAll("#detailToolContent .tag-picker-option").length,
+      favorite: [...document.querySelectorAll("#detailToolContent .tag-picker-option")]
+        .some((button) => /favorite/i.test(button.textContent || button.getAttribute("aria-label") || "")),
+      triggerExpanded: document.querySelector(`[data-study-marks-target-id="${CSS.escape(targetId)}"]`)?.getAttribute("aria-expanded"),
+    }), firstTargetId);
+    assert(
+      marksState.hasContainedPicker && marksState.hasPreview && marksState.options > 0 &&
+        marksState.favorite && marksState.triggerExpanded === "true",
+      `${profile.name}: contained Study Marks omitted target preview, Favorite, tags, or trigger state: ${JSON.stringify(marksState)}`,
+    );
+
+    stage = "Study Marks to Meaning replacement";
+    await page.evaluate((targetId) => {
+      const trigger = [...document.querySelectorAll("button[data-word-meaning-target-id]")]
+        .find((button) => button.dataset.wordMeaningTargetId === targetId && button.classList.contains("word-meaning-trigger"));
+      trigger?.click();
+    }, firstTargetId);
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.dataset.toolKind === "meaning");
+    await assertSurface(page, profile, "meaning", firstTargetId);
+    const marksToMeaning = await page.evaluate((targetId) => ({
+      marksExpanded: [...document.querySelectorAll("button[data-study-marks-target-id]")]
+        .find((button) => button.dataset.studyMarksTargetId === targetId)?.getAttribute("aria-expanded"),
+      meaningExpanded: [...document.querySelectorAll("button.word-meaning-trigger[data-word-meaning-target-id]")]
+        .find((button) => button.dataset.wordMeaningTargetId === targetId)?.getAttribute("aria-expanded"),
+      containedMeaning: Boolean(document.querySelector("#detailToolContent .word-meaning-contained")),
+      fixedPopoverVisible: document.querySelectorAll(".word-meaning-menu:not([hidden])").length,
+    }), firstTargetId);
+    assert(
+      marksToMeaning.marksExpanded === "false" && marksToMeaning.meaningExpanded === "true" &&
+        marksToMeaning.containedMeaning && marksToMeaning.fixedPopoverVisible === 0,
+      `${profile.name}: Study Marks and Meaning competed for overlay ownership: ${JSON.stringify(marksToMeaning)}`,
+    );
+
+    stage = "lazy Meaning candidates";
+    await waitFor(page, () => {
+      const content = document.querySelector("#detailToolContent");
+      const sourced = [...content.querySelectorAll(".word-meaning-option[data-source]")];
+      return Boolean(content.querySelector(".word-meaning-other")) &&
+        sourced.some((option) => option.dataset.source === "exact_bsb") &&
+        sourced.some((option) => option.dataset.source === "lexicon") &&
+        content.contains(document.activeElement);
+    });
+    const candidateState = await page.evaluate(() => ({
+      other: Boolean(document.querySelector("#detailToolContent .word-meaning-other")),
+      sources: [...document.querySelectorAll("#detailToolContent .word-meaning-option[data-source]")]
+        .map((button) => button.dataset.source),
+      firstControlFocused: Boolean(document.activeElement?.closest("#detailToolContent")),
+    }));
+    assert(
+      candidateState.other && candidateState.firstControlFocused &&
+        candidateState.sources.includes("exact_bsb") && candidateState.sources.includes("lexicon"),
+      `${profile.name}: lazy exact-English or lexicon Meaning choices did not load: ${JSON.stringify(candidateState)}`,
+    );
+
+    stage = "Meaning Escape restoration";
+    await page.keyboard.press("Escape");
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
+    await waitFor(page, (targetId) => document.activeElement?.dataset.wordMeaningTargetId === targetId, firstTargetId);
+    await assertSurfaceClosed(page, profile, "Meaning Escape");
+    assert(
+      await firstMeaning.evaluate((node) => document.activeElement === node),
+      `${profile.name}: Meaning Escape did not restore the exact trigger focus`,
+    );
+    await assertWorkspaceUnchanged(baseline, "Study Marks/Meaning open, replacement, and Escape");
+
+    stage = "Meaning A to Meaning B replacement";
+    await firstMeaning.press("Enter");
+    await waitFor(page, (targetId) => document.querySelector("#detailToolSurface")?.dataset.targetId === targetId, firstTargetId);
+    await page.evaluate((targetId) => {
+      const trigger = [...document.querySelectorAll("button.word-meaning-trigger[data-word-meaning-target-id]")]
+        .find((button) => button.dataset.wordMeaningTargetId === targetId);
+      trigger?.click();
+    }, secondTargetId);
+    await waitFor(page, (targetId) => document.querySelector("#detailToolSurface")?.dataset.targetId === targetId, secondTargetId);
+    await assertSurface(page, profile, "meaning", secondTargetId);
+    const meaningSwitch = await page.evaluate(({ firstId, secondId }) => {
+      const triggers = [...document.querySelectorAll("button.word-meaning-trigger[data-word-meaning-target-id]")];
+      return {
+        firstExpanded: triggers.find((button) => button.dataset.wordMeaningTargetId === firstId)?.getAttribute("aria-expanded"),
+        secondExpanded: triggers.find((button) => button.dataset.wordMeaningTargetId === secondId)?.getAttribute("aria-expanded"),
+      };
+    }, { firstId: firstTargetId, secondId: secondTargetId });
+    assert(
+      meaningSwitch.firstExpanded === "false" && meaningSwitch.secondExpanded === "true",
+      `${profile.name}: Meaning A to B did not leave B as the sole tool owner: ${JSON.stringify(meaningSwitch)}`,
+    );
+    await page.keyboard.press("Escape");
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
+    await waitFor(page, (targetId) => document.activeElement?.dataset.wordMeaningTargetId === targetId, secondTargetId);
+    assert(
+      await secondMeaning.evaluate((node) => document.activeElement === node),
+      `${profile.name}: Meaning B did not regain focus after replacement and Escape`,
+    );
+    await assertWorkspaceUnchanged(baseline, "Meaning A to B replacement");
+
+    stage = "Meaning to Study Marks replacement";
+    await firstMeaning.press("Enter");
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.dataset.toolKind === "meaning");
+    await page.evaluate((targetId) => {
+      const trigger = [...document.querySelectorAll("button[data-study-marks-target-id]")]
+        .find((button) => button.dataset.studyMarksTargetId === targetId);
+      trigger?.click();
+    }, firstTargetId);
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.dataset.toolKind === "study-marks");
+    await assertSurface(page, profile, "study-marks", firstTargetId);
+    assert(
+      await firstMeaning.getAttribute("aria-expanded") === "false",
+      `${profile.name}: Meaning remained expanded behind Study Marks`,
+    );
+    await page.keyboard.press("Escape");
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
+    await waitFor(page, (targetId) => document.activeElement?.dataset.studyMarksTargetId === targetId, firstTargetId);
+    assert(
+      await page.evaluate((targetId) => document.activeElement?.dataset.studyMarksTargetId === targetId, firstTargetId),
+      `${profile.name}: Study Marks Escape did not restore its exact or stable replacement trigger focus`,
+    );
+    await assertWorkspaceUnchanged(baseline, "Meaning to Study Marks replacement");
+
+    stage = "Meaning Cancel is data-neutral";
     await firstMeaning.focus();
     await firstMeaning.press("Enter");
-    await waitFor(page, () => document.querySelectorAll(".word-meaning-menu:not([hidden])").length === 1);
+    await waitFor(page, () => Boolean(document.querySelector("#detailToolContent .word-meaning-other")));
+    await page.locator("#detailToolContent .word-meaning-other").click();
+    await waitFor(page, () => document.activeElement?.classList.contains("word-meaning-custom-input"));
+    await page.locator("#detailToolContent .word-meaning-custom-input").fill(`Unsaved ${profile.name} meaning`);
+    await page.locator("#detailToolContent .word-meaning-cancel").click();
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
+    await waitFor(page, (targetId) => document.activeElement?.dataset.wordMeaningTargetId === targetId, firstTargetId);
+    assert(
+      await firstMeaning.evaluate((node) => document.activeElement === node),
+      `${profile.name}: Meaning Cancel did not restore the trigger focus`,
+    );
+    await assertWorkspaceUnchanged(baseline, "Meaning Cancel");
+
+    stage = "Meaning Close is data-neutral";
+    await firstMeaning.press("Enter");
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.dataset.toolKind === "meaning");
+    await page.locator("#detailToolClose").click();
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
+    await waitFor(page, (targetId) => document.activeElement?.dataset.wordMeaningTargetId === targetId, firstTargetId);
+    assert(
+      await firstMeaning.evaluate((node) => document.activeElement === node),
+      `${profile.name}: contained tool Close did not restore Meaning trigger focus`,
+    );
+    await assertWorkspaceUnchanged(baseline, "Meaning Close");
+
+    stage = "save first exact Meaning";
+    const firstValue = `QA ${profile.name} exact one`;
+    await firstMeaning.press("Enter");
+    await waitFor(page, () => Boolean(document.querySelector("#detailToolContent .word-meaning-other")));
+    await page.locator("#detailToolContent .word-meaning-other").click();
+    await page.locator("#detailToolContent .word-meaning-custom-input").fill(firstValue);
+    await page.locator("#detailToolContent .word-meaning-save").click();
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
+    await waitFor(page, ({ targetId, value }) => [...document.querySelectorAll(".word-meaning-badge")]
+      .some((badge) => badge.dataset.wordMeaningTargetId === targetId && badge.textContent === value), {
+      targetId: firstTargetId,
+      value: firstValue,
+    });
+    const firstSavedSnapshot = await workspaceSnapshot(page);
+    assert(
+      findRendering(firstSavedSnapshot, firstTargetId)?.rendering === firstValue &&
+        !findRendering(firstSavedSnapshot, secondTargetId),
+      `${profile.name}: Save wrote beyond the first exact source token`,
+    );
+
+    stage = "save second exact Meaning";
+    const secondValue = `QA ${profile.name} exact two`;
     await secondMeaning.focus();
     await secondMeaning.press("Enter");
-    await waitFor(page, () => document.querySelectorAll(".word-meaning-menu:not([hidden])").length === 1);
-    const meaningSwitch = await page.evaluate(() => {
-      const triggers = [...document.querySelectorAll('.interlinear-verse-section[data-verse="1"] .word-meaning-trigger')];
-      return {
-        visible: document.querySelectorAll(".word-meaning-menu:not([hidden])").length,
-        firstExpanded: triggers[0]?.getAttribute("aria-expanded"),
-        secondExpanded: triggers[1]?.getAttribute("aria-expanded"),
-        firstFocused: document.activeElement === triggers[0],
-      };
+    await waitFor(page, () => Boolean(document.querySelector("#detailToolContent .word-meaning-other")));
+    await page.locator("#detailToolContent .word-meaning-other").click();
+    await page.locator("#detailToolContent .word-meaning-custom-input").fill(secondValue);
+    await page.locator("#detailToolContent .word-meaning-save").click();
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
+    await waitFor(page, ({ targetId, value }) => [...document.querySelectorAll(".word-meaning-badge")]
+      .some((badge) => badge.dataset.wordMeaningTargetId === targetId && badge.textContent === value), {
+      targetId: secondTargetId,
+      value: secondValue,
     });
+    const bothSavedSnapshot = await workspaceSnapshot(page);
     assert(
-      meaningSwitch.visible === 1 && meaningSwitch.firstExpanded === "false" &&
-        meaningSwitch.secondExpanded === "true" && !meaningSwitch.firstFocused,
-      `${profile.name}: Meaning A to B did not leave B as the sole overlay: ${JSON.stringify(meaningSwitch)}`,
+      findRendering(bothSavedSnapshot, firstTargetId)?.rendering === firstValue &&
+        findRendering(bothSavedSnapshot, secondTargetId)?.rendering === secondValue,
+      `${profile.name}: exact-token saves collided: ${JSON.stringify({ firstTargetId, secondTargetId })}`,
     );
-    await secondMeaning.press("Escape");
-    const meaningEscape = await page.evaluate(() => {
-      const triggers = [...document.querySelectorAll('.interlinear-verse-section[data-verse="1"] .word-meaning-trigger')];
-      return {
-        visible: document.querySelectorAll(".word-meaning-menu:not([hidden])").length,
-        secondFocused: document.activeElement === triggers[1],
-      };
-    });
-    assert(meaningEscape.visible === 0 && meaningEscape.secondFocused, `${profile.name}: Escape did not close/focus Meaning B`);
-    await assertWorkspaceUnchanged("Meaning A to Meaning B switching");
 
-    stage = "Study Marks focus to Meaning";
-    await firstStudyMarks.focus();
-    await waitFor(page, () => document.querySelector('.interlinear-verse-section[data-verse="1"] .study-marks-menu')?.dataset.menuOpen === "true");
+    stage = "remove first exact Meaning only";
     await firstMeaning.focus();
     await firstMeaning.press("Enter");
-    const marksToMeaning = await page.evaluate(() => {
-      const card = document.querySelector('.interlinear-verse-section[data-verse="1"] .interlinear-token:has(.word-meaning-control)');
-      return {
-        marksOpen: card?.querySelector(".study-marks-menu")?.dataset.menuOpen === "true",
-        meaningsVisible: document.querySelectorAll(".word-meaning-menu:not([hidden])").length,
-      };
-    });
-    assert(!marksToMeaning.marksOpen && marksToMeaning.meaningsVisible === 1, `${profile.name}: Study Marks to Meaning overlap: ${JSON.stringify(marksToMeaning)}`);
-    await firstMeaning.press("Escape");
-    assert(await firstMeaning.evaluate((node) => document.activeElement === node), `${profile.name}: Meaning trigger did not regain focus`);
-    await assertWorkspaceUnchanged("Study Marks focus to Meaning switching");
-
-    stage = "Study Marks click to Meaning";
-    await outsideControl.focus();
-    await firstStudyMarks.evaluate((trigger) => trigger.click());
-    await waitFor(page, () => document.querySelector('.interlinear-verse-section[data-verse="1"] .study-marks-menu')?.dataset.menuOpen === "true");
-    await firstMeaning.focus();
-    await firstMeaning.press("Enter");
+    await waitFor(page, () => Boolean(document.querySelector("#detailToolContent .word-meaning-remove")));
+    await page.locator("#detailToolContent .word-meaning-remove").click();
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
+    const removedSnapshot = await workspaceSnapshot(page);
     assert(
-      await page.evaluate(() =>
-        document.querySelector('.interlinear-verse-section[data-verse="1"] .study-marks-menu')?.dataset.menuOpen !== "true" &&
-        document.querySelectorAll(".word-meaning-menu:not([hidden])").length === 1),
-      `${profile.name}: click-open Study Marks remained open behind Meaning`,
+      !findRendering(removedSnapshot, firstTargetId) &&
+        findRendering(removedSnapshot, secondTargetId)?.rendering === secondValue,
+      `${profile.name}: Remove deleted the wrong source-token rendering`,
     );
-    await firstMeaning.press("Escape");
-    await assertWorkspaceUnchanged("Study Marks click to Meaning switching");
+
+    stage = "saved badge opener focus restoration";
+    const secondBadge = secondCard.locator(`.word-meaning-badge[data-word-meaning-target-id="${secondTargetId}"]`);
+    await secondBadge.focus();
+    await secondBadge.press("Enter");
+    await waitFor(page, (targetId) => document.querySelector("#detailToolSurface")?.dataset.targetId === targetId, secondTargetId);
+    await page.locator("#detailToolClose").click();
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
+    await waitFor(page, (targetId) => (
+      document.activeElement?.classList.contains("word-meaning-badge") &&
+      document.activeElement?.dataset.wordMeaningTargetId === targetId
+    ), secondTargetId);
+    assert(
+      await secondBadge.evaluate((node) => document.activeElement === node),
+      `${profile.name}: closing a badge-opened Meaning did not restore badge focus`,
+    );
+    await assertWorkspaceUnchanged(removedSnapshot, "saved badge open and Close");
 
     if (!profile.mobile) {
-      stage = "Study Marks hover to Meaning";
-      const studyMenu = firstCard.locator(".study-marks-menu");
-      await outsideControl.focus();
-      await studyMenu.hover();
-      await waitFor(page, () => document.querySelector('.interlinear-verse-section[data-verse="1"] .study-marks-menu')?.dataset.menuOpen === "true");
-      await firstMeaning.focus();
-      await firstMeaning.press("Enter");
-      assert(
-        await page.evaluate(() =>
-          document.querySelector('.interlinear-verse-section[data-verse="1"] .study-marks-menu')?.dataset.menuOpen !== "true" &&
-          document.querySelectorAll(".word-meaning-menu:not([hidden])").length === 1),
-        `${profile.name}: hover-open Study Marks remained open behind Meaning`,
-      );
-      await firstMeaning.press("Escape");
-      await assertWorkspaceUnchanged("Study Marks hover to Meaning switching");
+      stage = "delayed saved Meaning focus stability";
+      await exerciseDelayedSavedMeaningFocus(page, profile);
+      await assertWorkspaceUnchanged(removedSnapshot, "delayed saved Meaning focus fixture");
     }
 
-    stage = "Meaning to Study Marks";
-    await firstMeaning.focus();
-    await firstMeaning.press("Enter");
-    await waitFor(page, () => document.querySelectorAll(".word-meaning-menu:not([hidden])").length === 1);
-    await firstStudyMarks.focus();
-    await waitFor(page, () => document.querySelector('.interlinear-verse-section[data-verse="1"] .study-marks-menu')?.dataset.menuOpen === "true");
-    const meaningToMarks = await page.evaluate(() => ({
-      meaningsVisible: document.querySelectorAll(".word-meaning-menu:not([hidden])").length,
-      marksOpen: document.querySelector('.interlinear-verse-section[data-verse="1"] .study-marks-menu')?.dataset.menuOpen === "true",
-    }));
-    assert(meaningToMarks.meaningsVisible === 0 && meaningToMarks.marksOpen, `${profile.name}: Meaning to Study Marks overlap: ${JSON.stringify(meaningToMarks)}`);
-    await firstStudyMarks.press("Escape");
-    assert(await firstStudyMarks.evaluate((node) => document.activeElement === node), `${profile.name}: Study Marks trigger did not regain focus`);
-    await assertWorkspaceUnchanged("Meaning to Study Marks switching");
-
-    stage = "outside dismissal";
-    await firstMeaning.focus();
-    await firstMeaning.press("Enter");
-    await waitFor(page, () => Boolean(document.querySelector(".word-meaning-menu:not([hidden])")));
-    await outsideControl.click();
-    await waitFor(page, () => !document.querySelector(".word-meaning-menu:not([hidden])"));
-    await delay(100);
-    const focusState = await page.evaluate(() => ({
-      outsideFocused: document.activeElement?.id === "qa-word-meaning-outside-focus",
-      meaningFocused: document.activeElement?.classList?.contains("word-meaning-trigger") || false,
-    }));
-    const after = await workspaceSnapshot(page);
-
-    assert(
-      focusState.outsideFocused && !focusState.meaningFocused,
-      `${profile.name}: outside control did not retain focus after Meaning dismissal: ${JSON.stringify(focusState)}`,
-    );
-    assert(before === after, `${profile.name}: outside Meaning dismissal mutated workspace data`);
-
-    stage = "detached Meaning cleanup";
-    const preRerenderState = await page.evaluate(() => ({
-      title: document.querySelector("#detailTitle")?.textContent,
-      meanings: document.querySelectorAll(".word-meaning-control").length,
+    stage = "detail history cleanup and restoration";
+    if (!(await page.locator("#detailBack").isEnabled())) {
+      const strongLink = page.locator("#detailContent .token-meta button:not([disabled])").first();
+      assert(await strongLink.count(), `${profile.name}: no Strong's control was available to establish panel history`);
+      await strongLink.click();
+      await waitFor(page, () => document.querySelector("#detailTitle")?.textContent !== "Language Study");
+      await page.locator(".verse-study-button").first().evaluate((button) => button.click());
+      await waitFor(page, () => [...document.querySelectorAll("#detailContext .verse-context-tab")]
+        .some((button) => button.textContent.trim() === "Int" && !button.disabled));
+      await page.locator("#detailContext .verse-context-tab").filter({ hasText: /^Int$/ }).first().click();
+      await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study" &&
+        document.querySelectorAll('.interlinear-verse-section[data-verse="1"] .word-meaning-control').length >= 2);
+    }
+    assert(await page.locator("#detailBack").isEnabled(), `${profile.name}: failed to establish panel Back history`);
+    historyBaseline = await page.evaluate(() => ({
       hash: location.hash,
-      focus: document.activeElement?.id || document.activeElement?.className || document.activeElement?.tagName,
+      browserLength: history.length,
+      title: document.querySelector("#detailTitle")?.textContent,
+      backDisabled: document.querySelector("#detailBack")?.disabled,
+      forwardDisabled: document.querySelector("#detailForward")?.disabled,
     }));
-    assert(preRerenderState.meanings >= 2, `${profile.name}: Language Study rerendered unexpectedly before cleanup test: ${JSON.stringify(preRerenderState)}`);
-    await firstMeaning.focus();
-    await firstMeaning.press("Enter");
-    await waitFor(page, () => Boolean(document.querySelector(".word-meaning-menu:not([hidden])")));
+    await secondMeaning.focus();
+    await secondMeaning.press("Enter");
+    await waitFor(page, (targetId) => document.querySelector("#detailToolSurface")?.dataset.targetId === targetId, secondTargetId);
     await page.evaluate(() => {
-      const current = [...document.querySelectorAll("#detailContext .verse-context-tab")]
-        .find((button) => !button.disabled && button.getAttribute("aria-current") !== "page");
-      if (!current) throw new Error("No non-destructive detail rerender control is available");
-      current.dataset.qaRerenderTarget = "true";
-      window.__detachedMeaningRoot = document.querySelector('.interlinear-verse-section[data-verse="1"] .word-meaning-control');
-      current.focus();
+      document.querySelector("#detailBack")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
     });
-    await page.locator('[data-qa-rerender-target="true"]').press("Enter");
-    await waitFor(page, () => Boolean(window.__detachedMeaningRoot && !window.__detachedMeaningRoot.isConnected));
-    await page.locator("#themeToggle").focus();
-    await page.locator("#themeToggle").press("Escape");
-    const detachedState = await page.evaluate(() => ({
-      focusUnchanged: document.activeElement?.id === "themeToggle",
-      visibleMeanings: document.querySelectorAll(".word-meaning-menu:not([hidden])").length,
-      detachedExpanded: window.__detachedMeaningRoot?.querySelector(".word-meaning-trigger")?.getAttribute("aria-expanded"),
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true &&
+      document.querySelector("#detailForward")?.disabled === false);
+    await assertSurfaceClosed(page, profile, "detail Back");
+    assert(await page.locator("#detailForward").isEnabled(), `${profile.name}: detail Back did not enable Forward`);
+    await page.locator("#detailForward").click();
+    await waitFor(page, ({ targetId, value }) => document.querySelector("#detailTitle")?.textContent === "Language Study" &&
+      [...document.querySelectorAll(".word-meaning-badge")]
+        .some((badge) => badge.dataset.wordMeaningTargetId === targetId && badge.textContent === value), {
+      targetId: secondTargetId,
+      value: secondValue,
+    });
+    await assertWorkspaceUnchanged(removedSnapshot, "detail Back/Forward contained-tool cleanup");
+
+    stage = "detail history invariants";
+    const historyAfterTools = await page.evaluate(() => ({
+      hash: location.hash,
+      browserLength: history.length,
+      title: document.querySelector("#detailTitle")?.textContent,
+      backDisabled: document.querySelector("#detailBack")?.disabled,
+      forwardDisabled: document.querySelector("#detailForward")?.disabled,
     }));
     assert(
-      detachedState.focusUnchanged && detachedState.visibleMeanings === 0 && detachedState.detachedExpanded === "false",
-      `${profile.name}: detached Meaning owner responded to Escape: ${JSON.stringify(detachedState)}`,
+      historyAfterTools.hash === historyBaseline.hash &&
+        historyAfterTools.browserLength === historyBaseline.browserLength &&
+        historyAfterTools.title === historyBaseline.title &&
+        historyAfterTools.backDisabled === historyBaseline.backDisabled &&
+        historyAfterTools.forwardDisabled === historyBaseline.forwardDisabled,
+      `${profile.name}: tools added duplicate browser/detail history: ${JSON.stringify({ historyBaseline, historyAfterTools })}`,
     );
-    await assertWorkspaceUnchanged("detached Meaning cleanup");
+
+    stage = "route-change cleanup";
+    const restoredSecondMeaning = page.locator(
+      `button.word-meaning-trigger[data-word-meaning-target-id="${secondTargetId}"]`,
+    ).first();
+    await restoredSecondMeaning.focus();
+    await restoredSecondMeaning.press("Enter");
+    await waitFor(page, (targetId) => document.querySelector("#detailToolSurface")?.dataset.targetId === targetId, secondTargetId);
+    await page.evaluate(() => { location.hash = "#/read/bsb/proverbs/1/2"; });
+    await waitFor(page, () => location.hash === "#/read/bsb/proverbs/1/2" &&
+      document.querySelector("#detailToolSurface")?.hidden === true);
+    await assertSurfaceClosed(page, profile, "route change");
+    await assertWorkspaceUnchanged(removedSnapshot, "route-change cleanup");
+
+    stage = "Clear cleanup";
+    let clearMeaning = page.locator(
+      `button.word-meaning-trigger[data-word-meaning-target-id="${secondTargetId}"]`,
+    ).first();
+    if (!(await clearMeaning.count())) {
+      await page.locator(".verse-study-button").nth(1).evaluate((button) => button.click());
+      await waitFor(page, () => [...document.querySelectorAll("#detailContext .verse-context-tab")]
+        .some((button) => button.textContent.trim() === "Int" && !button.disabled));
+      await page.locator("#detailContext .verse-context-tab").filter({ hasText: /^Int$/ }).first().click();
+      await waitFor(page, () => Boolean(document.querySelector("button.word-meaning-trigger")));
+      clearMeaning = page.locator("button.word-meaning-trigger").first();
+    }
+    await clearMeaning.focus();
+    await clearMeaning.press("Enter");
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.dataset.toolKind === "meaning");
+    await page.locator("#clearDetail").click();
+    await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true &&
+      document.querySelector("#detailTitle")?.textContent === "Details");
+    await assertSurfaceClosed(page, profile, "Clear");
+    await assertWorkspaceUnchanged(removedSnapshot, "Clear cleanup");
 
     stage = "closed-state Escape";
     const closedEscapeTarget = page.locator("#themeToggle");
     await closedEscapeTarget.focus();
     await closedEscapeTarget.press("Escape");
-    assert(await closedEscapeTarget.evaluate((node) => document.activeElement === node), `${profile.name}: closed-state Escape moved focus`);
     assert(
-      await page.evaluate(() => !document.querySelector(".word-meaning-menu:not([hidden])") &&
-        !document.querySelector('.target-tag-picker-menu[data-menu-open="true"]')),
-      `${profile.name}: closed-state Escape exposed an overlay`,
+      await closedEscapeTarget.evaluate((node) => document.activeElement === node),
+      `${profile.name}: closed-state Escape moved focus`,
     );
-    await assertWorkspaceUnchanged("closed-state Escape");
+    await assertSurfaceClosed(page, profile, "closed-state Escape");
+    await assertWorkspaceUnchanged(removedSnapshot, "closed-state Escape");
 
-    return { name: profile.name, assertions: profile.mobile ? 18 : 20 };
+    stage = "console and request health";
+    assert(failures.length === 0, `${profile.name}: application failures: ${JSON.stringify(failures)}`);
+
+    return { name: profile.name, assertions: profile.mobile ? 49 : 54 };
   } catch (error) {
     error.message = `${profile.name} at ${stage}: ${error.message}`;
     throw error;
