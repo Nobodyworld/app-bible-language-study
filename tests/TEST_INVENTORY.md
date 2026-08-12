@@ -70,7 +70,7 @@ order:
 | `tests/word-meaning.mjs` | Exact canonical source-token Meaning storage and compatibility. |
 | `tests/word-meaning-hidden.mjs` | Hidden Meaning-dialog regression behavior. |
 | `tests/public-preview-readiness.mjs` | Public-preview status, rights/provenance, security, and release-authorization boundaries. |
-| `tests/public-screenshot-contract.mjs` | Public capture manifest, retired-dependency guard, generated inventory, documentation references, and tracked screenshot consistency. |
+| `tests/public-screenshot-contract.mjs` | Public capture manifest, Standard-width and contained-tool capture guards, browser-health enforcement, retired-dependency guard, generated inventory, documentation references, and tracked screenshot consistency. |
 | `app/scripts/accessibility-test.mjs` | Static accessibility and retired-control source assertions. |
 | `app/scripts/doc-consistency-test.mjs` | Classified maintained-document, command, manifest, job, schema, and current-product consistency. |
 

@@ -29,6 +29,7 @@ const expectedFilenames = Object.freeze([
   "mobile.png",
   "mobile-dark.png",
 ]);
+const exactSourceTokenTarget = "target:source_token:bsb:new:john:1:1:2";
 
 const retiredFilenames = Object.freeze([
   `${["verse", "context", "tabs"].join("-")}.png`,
@@ -41,6 +42,94 @@ const retiredSelectors = Object.freeze([
 ]);
 const retiredVisibleTitle = ["Inter", "linear"].join("");
 const quotedRetiredTitlePattern = new RegExp(`(["'\`])${retiredVisibleTitle}\\1`, "g");
+
+const obsoleteCaptureDependencies = Object.freeze([
+  {
+    pattern: /\.word-meaning-menu\[role=(["'])dialog\1\]:not\(\[hidden\]\)/,
+    description: "the retired viewport Meaning dialog",
+  },
+  {
+    pattern: /\.study-marks-menu/,
+    description: "the retired Study Marks popover",
+  },
+]);
+
+const standardWidthCaptureRequirements = Object.freeze([
+  [/bibleapp:study-workspace-width:v1/, "the isolated study-workspace width preference"],
+  [/localStorage\.setItem/, "deterministic width preference setup"],
+  [/localStorage\.getItem/, "deterministic width preference verification"],
+  [/data-study-workspace-width/, "the root study-workspace width state"],
+  [/data-study-workspace-width-mode/, "the visible study-workspace width controls"],
+  [/aria-pressed/, "the width-control pressed states"],
+  [/\bcompact\b/, "the Compact width control state"],
+  [/\bstandard\b/, "the Standard width control state"],
+  [/\bexpanded\b/, "the Expanded width control state"],
+  [/scrollWidth/, "horizontal overflow measurement"],
+  [/clientWidth|innerWidth/, "horizontal overflow bounds"],
+  [/#detailWorkArea/, "study-workspace work-area overflow"],
+  [/\.detail-pane/, "study-workspace panel overflow"],
+  [/#detailToolSurface/, "contained-tool surface overflow"],
+  [/#detailToolContent/, "contained-tool content overflow"],
+  [/standardPressed\s*!==\s*["']true["']/, "the pressed Standard width control"],
+  [/compactPressed\s*!==\s*["']false["']/, "the unpressed Compact width control"],
+  [/expandedPressed\s*!==\s*["']false["']/, "the unpressed Expanded width control"],
+]);
+
+const themeCaptureRequirements = Object.freeze([
+  [/bibleAppTheme/, "the persisted public-capture theme"],
+  [/locator\(\s*["']#themeToggle["']\s*\)\.click\(/, "theme changes through the visible application control"],
+  [/#themeToggle/, "the theme control state"],
+  [/rootTheme/, "the rendered root theme"],
+  [/aria-pressed/, "the theme control pressed state"],
+  [/Switch to [^`]+ theme/, "the theme control accessible action"],
+]);
+
+const containedToolCaptureRequirements = Object.freeze([
+  [/#detailToolSurface\[data-tool-kind=(["'])meaning\1\]:not\(\[hidden\]\)/, "the contained Meaning surface"],
+  [/#detailToolSurface\[data-tool-kind=(["'])study-marks\1\]:not\(\[hidden\]\)/, "the contained Study Marks surface"],
+  [/#detailToolSurface:not\(\[hidden\]\)/, "single visible contained-tool inspection"],
+  [/#detailToolTitle/, "contained surface title verification"],
+  [/#detailToolContent/, "supported contained-tool interactions"],
+  [/#detailWorkArea/, "contained surface underlay verification"],
+  [/\binert\b/, "inert work-area verification"],
+  [/getBoundingClientRect/, "contained surface geometry verification"],
+  [/\.word-meaning-trigger/, "the visible Meaning trigger"],
+  [/\.word-meaning-option\[data-source=(["'])exact_bsb\1\]/, "the exact-English Meaning choice"],
+  [/\.word-meaning-option\[data-source=(["'])lexicon\1\]/, "the lexicon Meaning choice"],
+  [/\.word-meaning-other/, "the Other Meaning choice"],
+  [/\.word-meaning-custom-input/, "the custom Meaning input"],
+  [/\.word-meaning-save/, "the Meaning Save action"],
+  [/\.word-meaning-remove/, "the Meaning Remove action"],
+  [/\borigin\b/, "the deterministic saved personal meaning"],
+  [/data-target-id/, "the canonical source-token target identity"],
+  [/data-token-index/, "the exact source-token index"],
+  [/data-strong-code/, "the exact source-token Strong's identity"],
+  [/\.(?:study-marks-trigger|token-study-marks-button)/, "the visible side-panel Study Marks trigger"],
+  [/\.tag-picker-option\[aria-label=(["'])(?:Add|Remove) Favorite tag\1\]/, "the contained Favorite interaction"],
+  [/#detailToolContent \.tag-picker-option/, "Meaning and Study Marks content separation"],
+  [/Escape|#detailToolClose/, "supported contained-tool closing"],
+]);
+
+const browserHealthCaptureRequirements = Object.freeze([
+  [
+    /page\.on\(\s*["']console["'](?=[\s\S]{0,700}\bwarning\b)(?=[\s\S]{0,700}\berror\b)/,
+    "console warning/error capture",
+  ],
+  [/page\.on\(\s*["']pageerror["']/, "page-error capture"],
+  [/page\.on\(\s*["']requestfailed["'][\s\S]{0,700}?request\.url\(\)/, "failed application-request capture"],
+  [/page\.on\(\s*["']response["'][\s\S]{0,700}?response\.status\(\)[\s\S]{0,300}?400[\s\S]{0,700}?response\.url\(\)/, "HTTP application-response failure capture"],
+]);
+
+const atomicOutputCaptureRequirements = Object.freeze([
+  [/mkdtemp/, "owned staged screenshot output"],
+  [/rename\(outputRoot,\s*backupRoot\)/, "transactional preservation of the prior screenshot set"],
+  [/rename\(stagingRoot,\s*outputRoot\)/, "transactional promotion of the complete staged set"],
+  [/maxRetries\s*:\s*\d+/, "Windows cleanup retries for owned directories"],
+  [
+    /existsSync\(path\)[\s\S]{0,200}!existsSync\(outputRoot\)[\s\S]{0,400}Preserved the only prior screenshot backup/,
+    "rollback-failure preservation of the only prior screenshot backup",
+  ],
+]);
 
 const [captureSource, readme, showcase, trackedInventory] = await Promise.all([
   readFile(captureScriptPath, "utf8"),
@@ -62,6 +151,67 @@ for (const filename of retiredFilenames) {
     captureSource.includes(filename),
     false,
     `Capture source must not retain a literal dependency on retired file ${filename}.`,
+  );
+}
+
+for (const { pattern, description } of obsoleteCaptureDependencies) {
+  assert.equal(
+    pattern.test(captureSource),
+    false,
+    `Capture source must not depend on ${description}.`,
+  );
+}
+
+for (const [pattern, description] of [
+  ...standardWidthCaptureRequirements,
+  ...themeCaptureRequirements,
+  ...containedToolCaptureRequirements,
+  ...browserHealthCaptureRequirements,
+  ...atomicOutputCaptureRequirements,
+]) {
+  assert.equal(
+    pattern.test(captureSource),
+    true,
+    `Capture source must enforce ${description}.`,
+  );
+}
+
+assert.equal(
+  /\.word-meaning-trigger[\s\S]{0,500}?\.click\(/.test(captureSource),
+  true,
+  "Personal-data setup must open Meaning through a visible trigger click.",
+);
+assert.equal(
+  /\.(?:study-marks-trigger|token-study-marks-button)[\s\S]{0,700}?\.click\(/.test(captureSource),
+  true,
+  "Personal-data setup must open Study Marks through a visible trigger click.",
+);
+
+assert.equal(
+  /Compact, Standard, and Expanded widths[\s\S]*?Standard as the default[\s\S]*?reader and study workspace scroll\s+independently/i.test(readme),
+  true,
+  "README must describe the flexible desktop workspace and its default and scroll ownership.",
+);
+assert.equal(
+  /contained exact-source-token Meaning surface with saved `origin`/i.test(readme),
+  true,
+  "README must describe the maintained Meaning image as a contained exact-source-token surface.",
+);
+assert.equal(
+  /Contained Study Marks[\s\S]*?contained exact-token Study Marks workflow[\s\S]*?Dark Study Marks index/i.test(showcase),
+  true,
+  "Screenshot showcase must distinguish the contained light Study Marks workflow from the dark index.",
+);
+assert.equal(
+  /Contained Meaning[\s\S]*?saved `origin` plus exact-English and lexicon choices/i.test(showcase),
+  true,
+  "Screenshot showcase must describe the contained Meaning state and its deterministic choices.",
+);
+for (const [markdown, label] of [[readme, "README"], [showcase, "Screenshot showcase"]]) {
+  assert.equal(
+    /Meaning dialog|Compact `Word → Verse` detail|compact Verse study panel/i.test(markdown),
+    false,
+    `${label} must not retain the obsolete screenshot narrative.`,
   );
 }
 
@@ -93,6 +243,41 @@ for (const [index, descriptor] of PUBLIC_SCREENSHOT_MANIFEST.entries()) {
     "string",
     `Screenshot manifest entry ${index + 1} must declare a filename.`,
   );
+  assert.match(
+    descriptor.route,
+    /^\/#\/read\/[a-z0-9-]+\/[a-z0-9-]+\/\d+(?:\/\d+)?$/,
+    `Screenshot manifest entry ${index + 1} must declare an exact reader route.`,
+  );
+  assert.ok(
+    Number.isInteger(descriptor.viewport?.width) && Number.isInteger(descriptor.viewport?.height),
+    `Screenshot manifest entry ${index + 1} must declare an exact viewport.`,
+  );
+  assert.ok(
+    descriptor.theme === "light" || descriptor.theme === "dark",
+    `Screenshot manifest entry ${index + 1} must declare its light or dark theme.`,
+  );
+  assert.equal(
+    descriptor.widthMode,
+    descriptor.viewport.width <= 768 ? "mobile-drawer" : "standard",
+    `Screenshot manifest entry ${index + 1} must declare its maintained workspace width mode.`,
+  );
+  assert.ok(
+    typeof descriptor.panelTitle === "string" && descriptor.panelTitle.length > 0,
+    `Screenshot manifest entry ${index + 1} must declare its expected panel title.`,
+  );
+  assert.ok(
+    ["", "meaning", "study-marks"].includes(descriptor.toolKind),
+    `Screenshot manifest entry ${index + 1} must declare its expected contained-tool state.`,
+  );
+  assert.equal(
+    typeof descriptor.selectedVerse,
+    "string",
+    `Screenshot manifest entry ${index + 1} must declare its expected selected-verse state.`,
+  );
+  assert.ok(
+    typeof descriptor.intendedState === "string" && descriptor.intendedState.length > 0,
+    `Screenshot manifest entry ${index + 1} must declare its intended visible state.`,
+  );
 }
 
 const manifestFilenames = PUBLIC_SCREENSHOT_MANIFEST.map(({ filename }) => filename);
@@ -105,6 +290,49 @@ assert.deepEqual(
   manifestFilenames,
   expectedFilenames,
   "Public screenshot manifest must contain the required 19 files in the maintained order.",
+);
+
+const manifestByFilename = new Map(
+  PUBLIC_SCREENSHOT_MANIFEST.map((descriptor) => [descriptor.filename, descriptor]),
+);
+assert.deepEqual(
+  {
+    panelTitle: manifestByFilename.get("meaning.png")?.panelTitle,
+    selectedTokenId: manifestByFilename.get("meaning.png")?.selectedTokenId,
+    toolKind: manifestByFilename.get("meaning.png")?.toolKind,
+    widthMode: manifestByFilename.get("meaning.png")?.widthMode,
+  },
+  {
+    panelTitle: "Language Study",
+    selectedTokenId: exactSourceTokenTarget,
+    toolKind: "meaning",
+    widthMode: "standard",
+  },
+  "meaning.png must represent contained Meaning inside the Standard Language Study workspace.",
+);
+assert.deepEqual(
+  {
+    panelTitle: manifestByFilename.get("study-marks.png")?.panelTitle,
+    selectedTokenId: manifestByFilename.get("study-marks.png")?.selectedTokenId,
+    toolKind: manifestByFilename.get("study-marks.png")?.toolKind,
+    widthMode: manifestByFilename.get("study-marks.png")?.widthMode,
+  },
+  {
+    panelTitle: "Language Study",
+    selectedTokenId: exactSourceTokenTarget,
+    toolKind: "study-marks",
+    widthMode: "standard",
+  },
+  "study-marks.png must represent contained exact-token Study Marks in the Standard workspace.",
+);
+assert.deepEqual(
+  {
+    panelTitle: manifestByFilename.get("study-marks-dark.png")?.panelTitle,
+    toolKind: manifestByFilename.get("study-marks-dark.png")?.toolKind,
+    widthMode: manifestByFilename.get("study-marks-dark.png")?.widthMode,
+  },
+  { panelTitle: "Study Marks", toolKind: "", widthMode: "standard" },
+  "study-marks-dark.png must retain the distinct dark Study Marks index.",
 );
 
 for (const filename of retiredFilenames) {
