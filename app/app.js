@@ -32,6 +32,19 @@ import { normalizeRoute, parseReaderRoute, writeReaderRoute } from "./src/routin
 import { getTagTargets, initStores, listenForUserDataChanges } from "./src/stores.js?v=pr13-live-qa-20260711e";
 import { createStudyEmptyState, studyUnavailableLabel } from "./src/study-empty-state.js";
 import { chapterSwipeDirection, CONTROL_STATES, resolveControlState } from "./src/ui-contracts.js?v=pr13-live-qa-20260711e";
+import { dismissContainedDetailTool } from "./src/detail-tool-surface.js";
+import {
+  bindStudyWorkspaceWidthControls,
+  initializeStudyWorkspaceWidth,
+} from "./src/study-workspace-width.js";
+
+const studyWorkspaceWidthControls = [
+  ...document.querySelectorAll("[data-study-workspace-width-mode]"),
+];
+initializeStudyWorkspaceWidth({
+  root: document.documentElement,
+  controls: studyWorkspaceWidthControls,
+});
 
 const state = {
   manifest: null,
@@ -300,13 +313,16 @@ function restoreReaderHighlightFromContext(context) {
     document.getElementById(refDomId(referenceKey(state.bookId, state.chapter, context.verse)));
   if (!row) return;
   const word = context.word || {};
+  const interlinearKey = word.interlinear_key || word.interlinearKey || "";
+  const strongCode = word.strong_code || word.strongCode || "";
+  const tokenIndex = word.token_index || word.tokenIndex || "";
   const tokens = [...row.querySelectorAll(".strong-token")];
   const wordElement =
-    (word.interlinearKey && tokens.find((node) => node.dataset.interlinearKey === word.interlinearKey)) ||
-    (word.strongCode &&
-      word.tokenIndex &&
-      tokens.find((node) => node.dataset.strongCode === word.strongCode && node.dataset.tokenIndex === word.tokenIndex)) ||
-    (word.strongCode && tokens.find((node) => node.dataset.strongCode === word.strongCode)) ||
+    (interlinearKey && tokens.find((node) => node.dataset.interlinearKey === interlinearKey)) ||
+    (strongCode &&
+      tokenIndex &&
+      tokens.find((node) => node.dataset.strongCode === strongCode && node.dataset.tokenIndex === String(tokenIndex))) ||
+    (strongCode && tokens.find((node) => node.dataset.strongCode === strongCode)) ||
     null;
   highlightReaderContext({
     verse: context.verse,
@@ -333,7 +349,11 @@ const ctx = {
   readerDatasetCanLoad,
   readerDatasetState,
   referenceContextKey,
-  renderChapter: () => renderer.renderChapter(),
+  renderChapter: () => {
+    const readerContext = state.activeReferenceContext;
+    renderer.renderChapter();
+    if (readerContext?.verse) restoreReaderHighlightFromContext(readerContext);
+  },
   syncChapterButtons,
   syncFavoriteButtons,
   syncToolButtons,
@@ -774,6 +794,7 @@ async function loadBookData(navigationGeneration, route) {
 }
 
 async function navigateToRoute(route, options = {}) {
+  dismissContainedDetailTool("route-change");
   const navigationGeneration = ++state.navigationGeneration;
   if (route.home) {
     resetReaderDatasets();
@@ -862,6 +883,14 @@ async function goToChapter(delta) {
 }
 
 function bindEvents() {
+  bindStudyWorkspaceWidthControls({
+    root: document.documentElement,
+    controls: studyWorkspaceWidthControls,
+    readerRoot: els.content,
+    detailScroller: els.detail,
+    window,
+  });
+
   function disengageDetailFollow() {
     setDetailHoverLocked(false);
     detailViews.clearStrongPin();
@@ -869,6 +898,7 @@ function bindEvents() {
   }
 
   function maybeDisengageLockedDetail(event) {
+    if (event.target.closest?.("#detailToolSurface")) return;
     if (
       !event.target.closest?.(
         "button, a, input, select, textarea, summary, label, [role='button'], .verse-context-tabs, .detail-floating-nav, .strong-token, .language-word-hover, .language-letter-hover, .letter-unit, .morphology-help",
@@ -925,7 +955,12 @@ function bindEvents() {
   els.homeButton?.addEventListener("click", () => void navigateToRoute({ home: true }, { writeUrl: true }));
   // Theme toggle functionality
   function initializeTheme() {
-    const savedTheme = localStorage.getItem("bibleAppTheme");
+    let savedTheme = null;
+    try {
+      savedTheme = localStorage.getItem("bibleAppTheme");
+    } catch {
+      // Browser storage can be disabled; the session theme still follows the OS preference.
+    }
     const prefersDark = window.matchMedia("(prefers-color-scheme: dark)").matches;
 
     if (savedTheme) {
@@ -954,7 +989,11 @@ function bindEvents() {
       (window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
     const newTheme = currentTheme === "dark" ? "light" : "dark";
     document.documentElement.setAttribute("data-theme", newTheme);
-    localStorage.setItem("bibleAppTheme", newTheme);
+    try {
+      localStorage.setItem("bibleAppTheme", newTheme);
+    } catch {
+      // Keep the in-memory theme usable when browser storage is unavailable.
+    }
     updateThemeControl();
   }
 
@@ -1171,10 +1210,6 @@ function bindEvents() {
 
   const handleRouteChange = () => {
     const route = parseReaderRoute();
-    if (route.home) {
-      showHomePage({ writeUrl: false });
-      return;
-    }
     void navigateToRoute(route, { writeUrl: false });
   };
   window.addEventListener("popstate", handleRouteChange);

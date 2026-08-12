@@ -399,6 +399,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
       const meaning = ctx.detailViews.renderWordMeaningControl({
         target: sourceTarget,
         token,
+        presentation: "detail-pane",
         label: tokenLabel,
         loadExactMappedEnglish: () => exactMappedBsbMeaning(token, card.dataset.verse),
         loadLexicon: token.strong_code ? () => fetchLexiconEntry(token.strong_code) : null,

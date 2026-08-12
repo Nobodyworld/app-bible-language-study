@@ -318,6 +318,7 @@ export function createVerseContextTabs(ctx, reference, verse, active, strongsCon
           const meaning = ctx.detailViews.renderWordMeaningControl({
             target: sourceTarget,
             token: wordContext.token,
+            presentation: "detail-pane",
             label: `selected source word in ${reference}`,
             loadExactMappedEnglish: () => exactMappedBsbMeaning(ctx, wordContext.token, verse),
             loadLexicon: wordContext.token.strong_code

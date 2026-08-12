@@ -82,6 +82,13 @@
   border-radius: 8px;
 }
 
+.study-marks-trigger[aria-haspopup="dialog"][aria-expanded="true"] {
+  border-color: var(--accent);
+  background: rgba(37, 99, 95, 0.14);
+  color: var(--accent-dark);
+  box-shadow: 0 0 0 2px rgba(37, 99, 95, 0.2);
+}
+
 .scope-mark-button {
   display: inline-flex;
   align-items: center;
@@ -116,6 +123,12 @@
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
+}
+
+.contained-target-tag-picker {
+  display: grid;
+  gap: 8px;
+  min-width: 0;
 }
 
 /* Author-level display rules must not override the native hidden state. */

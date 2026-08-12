@@ -12,6 +12,7 @@ const READER_BACKGROUND_RESET_SELECTOR = [
   "[role='button']",
   ".verse-context-tabs",
   ".detail-floating-nav",
+  "#detailToolSurface",
   ".strong-token",
   ".language-word-hover",
   ".language-letter-hover",
@@ -293,6 +294,7 @@ function handleReaderFreezePointerDown(event) {
 }
 
 function handleFrozenHighlightKeydown(event) {
+  if (event.key === "Escape" && document.querySelector("#detailToolSurface:not([hidden])")) return;
   if (event.key === "Escape") clearFrozenReaderHighlight();
   else scheduleFrozenReaderHighlightRefresh();
 }

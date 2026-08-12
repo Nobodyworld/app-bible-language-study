@@ -16,6 +16,10 @@ import {
   activateOverlay,
   deactivateOverlay,
 } from "../overlay-coordinator.js?v=pr13-live-qa-20260711e";
+import {
+  closeContainedDetailTool,
+  openContainedDetailTool,
+} from "../detail-tool-surface.js";
 
 function tagIcon(tag) {
   return String(tag?.icon || tag?.label?.slice(0, 1) || "*").slice(0, 3);
@@ -588,11 +592,19 @@ export function createTagsView(ctx) {
       });
     wrap.append(group);
     setDetail("Tags", wrap, options);
+    if (options.focusOnOpen) {
+      queueMicrotask(() => {
+        if (!wrap.isConnected) return;
+        wrap.querySelector(".tag-editor-toggle")?.focus({ preventScroll: true });
+      });
+    }
   }
 
   function createTargetTagPickerPopover(target, options = {}) {
     const wrap = document.createElement("div");
-    wrap.className = "tag-picker-popover target-tag-picker-popover";
+    wrap.className = options.presentation === "detail-pane"
+      ? "contained-target-tag-picker"
+      : "tag-picker-popover target-tag-picker-popover";
     wrap.addEventListener("click", (event) => event.stopPropagation());
 
     const title = document.createElement("div");
@@ -651,11 +663,16 @@ export function createTagsView(ctx) {
     manage.textContent = options.manageLabel || "Manage tags";
     manage.addEventListener("click", (event) => {
       event.stopPropagation();
-      closeTargetTagMenu(manage.closest(".target-tag-picker-menu"));
+      if (options.presentation === "detail-pane") {
+        closeContainedDetailTool({ restoreFocus: false, reason: "manage-tags" });
+      } else {
+        closeTargetTagMenu(manage.closest(".target-tag-picker-menu"));
+      }
       showTargetTagEditor(target, {
         label: options.label,
         preview: options.preview,
         forceHistory: true,
+        focusOnOpen: true,
         lock: true,
         onChange: options.onChange,
       });
@@ -738,18 +755,70 @@ export function createTagsView(ctx) {
       trigger.append(visibleLabel);
     }
     trigger.append(createStudyMarksIcon());
-    const activeCount = getTargetTags(ctx.state, target).length;
-    const favoriteActive = getTargetTags(ctx.state, target).includes("favorite");
-    if (activeCount) {
-      const indicator = document.createElement("span");
-      indicator.className = "study-marks-count";
-      indicator.textContent = activeCount > 9 ? "9+" : String(activeCount);
-      indicator.setAttribute("aria-hidden", "true");
-      trigger.append(indicator);
-    }
-    trigger.setAttribute("aria-label", `Study Marks for ${label}`);
-    trigger.setAttribute("aria-pressed", String(favoriteActive));
+    const syncTriggerState = () => {
+      const activeCount = getTargetTags(ctx.state, target).length;
+      let indicator = trigger.querySelector(".study-marks-count");
+      if (activeCount && !indicator) {
+        indicator = document.createElement("span");
+        indicator.className = "study-marks-count";
+        indicator.setAttribute("aria-hidden", "true");
+        trigger.append(indicator);
+      }
+      if (indicator) {
+        if (activeCount) indicator.textContent = activeCount > 9 ? "9+" : String(activeCount);
+        else indicator.remove();
+      }
+      trigger.setAttribute(
+        "aria-label",
+        options.boundary === "detail-pane"
+          ? `Study Marks for ${label}. ${activeCount ? `${activeCount} selected.` : "None selected."}`
+          : `Study Marks for ${label}`,
+      );
+    };
+    syncTriggerState();
     trigger.title = `Study Marks for ${label}`;
+
+    if (options.boundary === "detail-pane") {
+      const canonicalTargetId = targetId(target);
+      trigger.dataset.studyMarksTargetId = canonicalTargetId;
+      trigger.setAttribute("aria-haspopup", "dialog");
+      trigger.setAttribute("aria-expanded", "false");
+      trigger.setAttribute("aria-controls", "detailToolSurface");
+      trigger.addEventListener("click", (event) => {
+        event.stopPropagation();
+        const focusRegion = trigger.closest("#detailContext") ? "context" : "content";
+        trigger.dataset.studyMarksFocusRegion = focusRegion;
+        const preview = options.preview || targetPreview(ctx, target);
+        const content = createTargetTagPickerPopover(target, {
+          ...options,
+          presentation: "detail-pane",
+          preview,
+          onChange: (assertion) => {
+            syncTriggerState();
+            options.onChange?.(assertion);
+          },
+        });
+        openContainedDetailTool({
+          kind: "study-marks",
+          title: "Study Marks",
+          targetId: canonicalTargetId,
+          content,
+          trigger,
+          initialFocus: ".tag-picker-option, .tag-picker-manage",
+          resolveTrigger: () => {
+            const matches = [...document.querySelectorAll("[data-study-marks-target-id]")]
+              .filter((node) => node.dataset.studyMarksTargetId === canonicalTargetId && node.isConnected);
+            return matches.find((node) => (
+              Boolean(node.closest("#detailContext")) === (focusRegion === "context")
+            )) || matches[0] || null;
+          },
+          focusFallback: () => document.querySelector("#clearDetail"),
+        });
+      });
+      return trigger;
+    }
+
+    trigger.setAttribute("aria-pressed", String(getTargetTags(ctx.state, target).includes("favorite")));
     return renderTargetTagPicker(target, { ...options, trigger, className: "study-marks-menu" });
   }
 

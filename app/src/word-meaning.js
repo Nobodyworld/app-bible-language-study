@@ -9,8 +9,13 @@ import {
   deactivateOverlay,
   isActiveOverlay,
 } from "./overlay-coordinator.js?v=pr13-live-qa-20260711e";
+import {
+  closeContainedDetailTool,
+  openContainedDetailTool,
+} from "./detail-tool-surface.js";
 
 export const CUSTOM_MEANING_MAX_LENGTH = 180;
+let meaningControlSequence = 0;
 
 export function normalizeMeaningValue(value) {
   return String(value || "").trim();
@@ -85,9 +90,11 @@ export function createWordMeaningControl({
   loadLexicon = null,
   label = "source token",
   onChange = null,
+  presentation = "popover",
 } = {}) {
   const sourceTarget = validateSourceTokenMeaningTarget(target);
   if (!state || !sourceTarget) return null;
+  const contained = presentation === "detail-pane";
 
   const root = document.createElement("div");
   root.className = "word-meaning-control";
@@ -101,21 +108,27 @@ export function createWordMeaningControl({
   trigger.setAttribute("aria-haspopup", "dialog");
   trigger.setAttribute("aria-expanded", "false");
   trigger.setAttribute("aria-label", `Choose a personal meaning for ${label}`);
+  trigger.dataset.wordMeaningTargetId = sourceTarget.target_id;
 
   const badgeHost = document.createElement("span");
   badgeHost.className = "word-meaning-badge-host";
 
   const menu = document.createElement("div");
-  const menuId = `word-meaning-${sourceTarget.target_id.replace(/[^a-z0-9_-]+/gi, "-")}`;
-  menu.className = "word-meaning-menu";
-  menu.id = menuId;
-  menu.hidden = true;
-  menu.tabIndex = -1;
-  menu.setAttribute("role", "dialog");
-  menu.setAttribute("aria-label", `Personal meaning for ${label}`);
-  trigger.setAttribute("aria-controls", menuId);
+  const menuId = `word-meaning-${++meaningControlSequence}-${sourceTarget.target_id.replace(/[^a-z0-9_-]+/gi, "-")}`;
+  menu.className = contained ? "word-meaning-contained" : "word-meaning-menu";
+  if (contained) {
+    trigger.setAttribute("aria-controls", "detailToolSurface");
+  } else {
+    menu.id = menuId;
+    menu.hidden = true;
+    menu.tabIndex = -1;
+    menu.setAttribute("role", "dialog");
+    menu.setAttribute("aria-label", `Personal meaning for ${label}`);
+    trigger.setAttribute("aria-controls", menuId);
+  }
 
-  root.append(trigger, badgeHost, menu);
+  root.append(trigger, badgeHost);
+  if (!contained) root.append(menu);
 
   const sources = {
     exactMappedEnglish: normalizeMeaningValue(exactMappedEnglish),
@@ -125,6 +138,7 @@ export function createWordMeaningControl({
   let editingCustom = false;
   let loadingExact = false;
   let loadingLexicon = false;
+  let pendingChoiceFocus = null;
   const overlayOwner = {
     document,
     isConnected: () => root.isConnected && open,
@@ -137,19 +151,24 @@ export function createWordMeaningControl({
     window.removeEventListener("scroll", positionMenu, true);
   };
 
-  const close = ({ restoreFocus = false } = {}) => {
+  const close = ({ restoreFocus = false, fromSurface = false, reason = "meaning-close" } = {}) => {
+    if (contained && open && !fromSurface) {
+      closeContainedDetailTool({ restoreFocus, reason });
+      return;
+    }
     deactivateOverlay(overlayOwner);
     if (!open) return;
     open = false;
     editingCustom = false;
-    menu.hidden = true;
+    pendingChoiceFocus = null;
+    if (!contained) menu.hidden = true;
     menu.replaceChildren();
     menu.style.removeProperty("left");
     menu.style.removeProperty("top");
     menu.style.removeProperty("width");
     trigger.setAttribute("aria-expanded", "false");
     removeGlobalListeners();
-    if (restoreFocus) focusTrigger(trigger);
+    if (!contained && restoreFocus) focusTrigger(trigger);
   };
 
   const notify = (record, action) => {
@@ -166,7 +185,13 @@ export function createWordMeaningControl({
     badge.textContent = saved;
     badge.title = `Edit personal meaning: ${saved}`;
     badge.setAttribute("aria-label", `Edit personal meaning ${saved} for ${label}`);
-    badge.addEventListener("click", () => openPicker());
+    badge.dataset.wordMeaningTargetId = sourceTarget.target_id;
+    if (contained) {
+      badge.setAttribute("aria-haspopup", "dialog");
+      badge.setAttribute("aria-expanded", "false");
+      badge.setAttribute("aria-controls", "detailToolSurface");
+    }
+    badge.addEventListener("click", () => openPicker(badge));
     badgeHost.append(badge);
   };
 
@@ -234,11 +259,25 @@ export function createWordMeaningControl({
     actions.append(saveButton, cancelButton);
     menu.append(title, hint, input, status, actions);
     positionMenu();
-    window.setTimeout(() => input.focus(), 0);
+    window.setTimeout(() => {
+      if (open && input.isConnected) input.focus();
+    }, 0);
   };
 
   const renderPicker = () => {
     if (!open || editingCustom) return;
+    if (menu.contains(document.activeElement)) {
+      const focusedControl = document.activeElement;
+      pendingChoiceFocus = {
+        kind: focusedControl?.classList?.contains("word-meaning-remove")
+          ? "remove"
+          : focusedControl?.classList?.contains("word-meaning-other")
+            ? "other"
+            : "option",
+        source: focusedControl?.dataset?.source || "",
+        value: focusedControl?.textContent || "",
+      };
+    }
     const model = candidateModel(state, sourceTarget, token, sources);
     menu.replaceChildren();
     const title = document.createElement("h5");
@@ -289,6 +328,26 @@ export function createWordMeaningControl({
       menu.append(saved);
     }
     positionMenu();
+    if (pendingChoiceFocus) {
+      const focusIdentity = pendingChoiceFocus;
+      const options = [...menu.querySelectorAll(".word-meaning-option")];
+      const replacement = focusIdentity.kind === "remove"
+        ? menu.querySelector(".word-meaning-remove")
+        : focusIdentity.kind === "other"
+          ? options.find((option) => option.classList.contains("word-meaning-other"))
+          : options.find((option) => (
+            option.dataset.source === focusIdentity.source && option.textContent === focusIdentity.value
+          )) || options.find((option) => option.textContent === focusIdentity.value);
+      if (replacement) {
+        window.setTimeout(() => {
+          if (!open || !replacement.isConnected) return;
+          replacement.focus({ preventScroll: true });
+          if (document.activeElement === replacement && pendingChoiceFocus === focusIdentity) {
+            pendingChoiceFocus = null;
+          }
+        }, 0);
+      }
+    }
   };
 
   function onOutsidePointerDown(event) {
@@ -297,6 +356,7 @@ export function createWordMeaningControl({
   }
 
   function positionMenu() {
+    if (contained) return;
     if (!root.isConnected) {
       close();
       return;
@@ -344,24 +404,47 @@ export function createWordMeaningControl({
     }
   };
 
-  const openPicker = () => {
+  const openPicker = (opener = trigger) => {
     if (open) {
-      close();
+      close({ restoreFocus: contained, reason: "meaning-toggle" });
       return;
     }
     open = true;
     editingCustom = false;
-    activateOverlay(overlayOwner);
     trigger.setAttribute("aria-expanded", "true");
-    menu.hidden = false;
+    if (!contained) menu.hidden = false;
     renderPicker();
-    document.addEventListener("pointerdown", onOutsidePointerDown, true);
-    window.addEventListener("resize", positionMenu);
-    window.addEventListener("scroll", positionMenu, true);
+    if (contained) {
+      const focusRegion = root.closest("#detailContext") ? "context" : "content";
+      const opened = openContainedDetailTool({
+        kind: "meaning",
+        title: "Meaning",
+        targetId: sourceTarget.target_id,
+        content: menu,
+        trigger: opener,
+        initialFocus: ".word-meaning-option, .word-meaning-remove, .word-meaning-custom-input",
+        resolveTrigger: () => {
+          const matches = [...document.querySelectorAll("button[data-word-meaning-target-id]")]
+            .filter((node) => node.dataset.wordMeaningTargetId === sourceTarget.target_id && node.isConnected);
+          return matches.find((node) => Boolean(node.closest("#detailContext")) === (focusRegion === "context")) || matches[0] || null;
+        },
+        focusFallback: () => document.querySelector("#clearDetail"),
+        onClose: () => close({ fromSurface: true }),
+      });
+      if (!opened) {
+        close({ fromSurface: true });
+        return;
+      }
+    } else {
+      activateOverlay(overlayOwner);
+      document.addEventListener("pointerdown", onOutsidePointerDown, true);
+      window.addEventListener("resize", positionMenu);
+      window.addEventListener("scroll", positionMenu, true);
+    }
     loadCandidates();
   };
 
-  trigger.addEventListener("click", openPicker);
+  trigger.addEventListener("click", () => openPicker(trigger));
   root.addEventListener("detail:restore", () => {
     close();
     refreshBadge();

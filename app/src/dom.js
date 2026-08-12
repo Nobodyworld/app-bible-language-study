@@ -1,4 +1,5 @@
 import { PANEL_EVENTS, PANEL_MODES, transitionPanelMode } from "./ui-contracts.js";
+import { dismissContainedDetailTool } from "./detail-tool-surface.js";
 
 export const els = {
   homeButton: document.querySelector("#homeButton"),
@@ -16,6 +17,7 @@ export const els = {
   content: document.querySelector("#chapterContent"),
   detailTitle: document.querySelector("#detailTitle"),
   detailContext: document.querySelector("#detailContext"),
+  detailWorkArea: document.querySelector("#detailWorkArea"),
   detail: document.querySelector("#detailContent"),
   detailPane: document.querySelector(".detail-pane"),
   detailBack: document.querySelector("#detailBack"),
@@ -134,6 +136,7 @@ function notifyDetailRestored(snapshot) {
 }
 
 function restoreDetail(snapshot) {
+  dismissContainedDetailTool("history-restore");
   els.detailTitle.textContent = snapshot.title;
   setDetailContext(null);
   if (els.detailContext) {
@@ -169,7 +172,7 @@ function setDetailContext(node) {
 
 function revealDetailOnMobile(options = {}) {
   if (options.transient || options.history === "replace" || options.reveal === false || !els.detailPane) return;
-  if (window.innerWidth > 960) return;
+  if (!window.matchMedia("(max-width: 768px)").matches) return;
   window.requestAnimationFrame(() => {
     els.detailPane.classList.add("visible");
   });
@@ -198,6 +201,7 @@ function claimDetailMutation(options) {
 export function setDetail(title, node, options = {}) {
   const detailIntent = claimDetailMutation(options);
   if (detailIntent === null) return null;
+  dismissContainedDetailTool("detail-change");
   const historyMode = options.history || "push";
   const sameTitle = els.detailTitle.textContent === title;
   const storedCurrent = currentDetailTransient ? transientBase : canStoreCurrentDetail() ? snapshotDetail() : null;
@@ -248,6 +252,7 @@ export function setDetailMessage(title, message, options = {}) {
 
 export function goBackDetail() {
   beginDetailIntent();
+  dismissContainedDetailTool("history-back");
   const previousDetail = detailHistory.pop();
 
   if (previousDetail) {
@@ -280,6 +285,7 @@ export function goBackDetail() {
 
 export function goForwardDetail() {
   beginDetailIntent();
+  dismissContainedDetailTool("history-forward");
   const nextDetail = detailForwardHistory.pop();
 
   if (nextDetail) {
@@ -312,6 +318,7 @@ export function goForwardDetail() {
 
 function resetDetailContent(title, message) {
   beginDetailIntent();
+  dismissContainedDetailTool("detail-reset");
   detailHistory.length = 0;
   detailForwardHistory.length = 0;
   transientBase = null;
