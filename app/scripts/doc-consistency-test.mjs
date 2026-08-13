@@ -353,8 +353,8 @@ async function checkCurrentDocumentContracts() {
         /generated filename inventory/i,
         /Public descriptions use Language Study/i,
         /My study data counts reflect the seeded Meaning and Study Mark/i,
-        /Light 390×844 Psalm 118:4 state with the compact Verse study panel and Cross References controls open/i,
-        /Dark 390×844 John 1:1 state with the populated My Data summary readable/i,
+        /Light 390×844 Psalm 118:4 state with the full-screen Verse study drawer and Cross References controls open/i,
+        /Dark 390×844 John 1:1 full-screen drawer with the populated My Data summary readable/i,
       ],
       forbidden: [
         /retained historical public-preview captures/i,
