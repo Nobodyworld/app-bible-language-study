@@ -8,6 +8,9 @@ database for normal study sessions.
 - `app/data/manifest.json` is the runtime capability manifest used by the app.
 - `app/data/package-manifest.json` describes bundled feature packs, byte sizes,
   shard counts, and package composition.
+- `app/data/distribution-manifest.json` declares the tracked physical-data mode,
+  complete-offline status, bundled fallback, package identity, and managed-pack
+  candidates.
 - `app/data/source-manifest.json` records source package classification,
   retained notices, and transformation notes.
 
@@ -17,6 +20,46 @@ Data categories include translation verse shards, commentary shards, search
 indexes, cross-references, outlines, lexicons, Strong's mappings, interlinear
 records, BSB footnotes, presentation metadata, semantic seeds, word maps, and
 cross-reference graph analysis.
+
+The tracked public-preview distribution remains `bundled_static_data` and
+complete offline. Search and Commentary remain present in the bundled tree while
+the optional physical-pack reference implementation is developed.
+
+## Logical and Physical Package State
+
+Logical package intent and physical bytes are separate authorities.
+
+The existing portable package store records desired/installed feature-pack IDs,
+disabled capabilities, and operation history. Those records do not prove that a
+Cache Storage entry or another browser-local binary store exists.
+
+Physical-pack operational state belongs in a separate browser-local registry.
+Its records identify immutable pack versions, manifest and aggregate digests,
+staging/active/rollback caches, expected and verified totals, lifecycle state,
+compatibility, timestamps, and sanitized failures. Startup reconciliation must
+compare any registry claim with actual physical storage before reporting a pack
+as active.
+
+Physical registry authority and pack bytes are not part of portable
+`bibleapp:user-data` backups. An imported logical preference may require local
+installation or may continue using bundled fallback; import must never fabricate
+physical installation state.
+
+## Physical Pack Artifacts
+
+Immutable pack artifacts use:
+
+- a catalog;
+- one manifest per pack;
+- canonical relative runtime paths;
+- per-file byte lengths, media types, and SHA-256 digests;
+- deterministic aggregate framing;
+- retained NOTICE and source-manifest references;
+- explicit package/app compatibility.
+
+`app/src/physical-pack-contract.js` and the physical-pack schemas are the current
+pure-data authority. The lifecycle implementation will stage and verify bytes
+before atomic activation and retain a previous valid version for rollback.
 
 ## User Data
 

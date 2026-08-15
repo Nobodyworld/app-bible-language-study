@@ -54,6 +54,36 @@ recovery backups, malformed-import atomicity, and browser-local operation remain
 part of the persistence contract. The app does not add an account, cloud
 backup, external update service, or synchronization network boundary.
 
+## Physical Pack Foundation
+
+The tracked distribution remains a complete offline bundle in
+`bundled_static_data` mode. `app/data/distribution-manifest.json` records that
+current authority and identifies Search and Commentary as the first managed-pack
+candidates without hiding or relocating their bundled files.
+
+`app/src/physical-pack-contract.js` defines the connector-prepared pure contract
+for:
+
+- strict canonical runtime paths;
+- SHA-256 identity;
+- deterministic aggregate framing;
+- distribution, catalog, and immutable pack-manifest normalization;
+- versioned Cache Storage names;
+- physical registry records;
+- verified active-pack identity;
+- separation of bundled package authority from managed physical-pack authority.
+
+The schemas under `app/schemas/` and the focused domain test establish this
+foundation before browser storage and runtime lifecycle work is added. The full
+implementation keeps Cache Storage and IndexedDB ownership below
+`app/src/data-service.js`; individual views must not directly own physical-pack
+storage or transport.
+
+The detailed non-destructive implementation contract is
+`docs/OPTIONAL_PACK_ARCHITECTURE.md`. It does not authorize deleting bundled
+Search or Commentary data, publishing pack artifacts, changing the tracked
+default mode, or adding a required backend.
+
 ## Tests
 
 Repository tests cover static integrity, data-domain behavior, UI contracts,
