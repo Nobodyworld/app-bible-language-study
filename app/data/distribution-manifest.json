@@ -1,0 +1,24 @@
+{
+  "kind": "bibleapp:distribution-manifest",
+  "schema_version": 1,
+  "distribution_id": "full-study-bundled-v1",
+  "physical_data_mode": "bundled_static_data",
+  "complete_offline": true,
+  "bundled_fallback": true,
+  "package_manifest": {
+    "path": "data/package-manifest.json",
+    "schema_version": 1,
+    "package_id": "reader-texts",
+    "content_sha256": "sha256:910de6211e387d2f2179e917031b4fe578ac078be7a870d471b9b3d422d11451"
+  },
+  "bundled_package_ids": [
+    "reader-texts"
+  ],
+  "immutable_base_feature_pack_ids": [],
+  "managed_optional_pack_ids": [
+    "search-verses",
+    "commentary-verse-index"
+  ],
+  "catalog": null,
+  "note": "The tracked public preview remains a complete bundled offline distribution. Managed physical packs are an opt-in reference mode and do not replace bundled data in this branch."
+}

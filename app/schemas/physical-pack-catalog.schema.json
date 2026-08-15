@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "physical-pack-catalog.schema.json",
+  "title": "Bible App physical pack catalog",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_version",
+    "catalog_version",
+    "generated_at",
+    "package_identity",
+    "packs",
+    "full_offline_bundle"
+  ],
+  "properties": {
+    "kind": {
+      "const": "bibleapp:physical-pack-catalog"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "catalog_version": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "generated_at": {
+      "type": "string",
+      "minLength": 1
+    },
+    "package_identity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "schema_version",
+        "package_id",
+        "content_sha256"
+      ],
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "package_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "packs": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/pack"
+      }
+    },
+    "full_offline_bundle": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pack_ids",
+        "complete_offline"
+      ],
+      "properties": {
+        "pack_ids": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "minLength": 1
+          }
+        },
+        "complete_offline": {
+          "const": true
+        }
+      }
+    }
+  },
+  "$defs": {
+    "pack": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "pack_id",
+        "pack_version",
+        "manifest_path",
+        "manifest_sha256",
+        "dependencies",
+        "provided_capabilities",
+        "files",
+        "bytes",
+        "transfer_bytes",
+        "license_note",
+        "notice_path",
+        "source_manifest_path"
+      ],
+      "properties": {
+        "pack_id": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+        },
+        "pack_version": {
+          "type": "string",
+          "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+        },
+        "manifest_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "manifest_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        },
+        "dependencies": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "provided_capabilities": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {
+            "type": "string"
+          }
+        },
+        "files": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "transfer_bytes": {
+          "type": "integer",
+          "minimum": 0
+        },
+        "license_note": {
+          "type": "string",
+          "minLength": 1
+        },
+        "notice_path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "source_manifest_path": {
+          "type": "string",
+          "minLength": 1
+        }
+      }
+    }
+  }
+}

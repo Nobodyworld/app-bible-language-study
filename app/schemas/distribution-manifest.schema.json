@@ -1,0 +1,119 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "distribution-manifest.schema.json",
+  "title": "Bible App distribution manifest",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "kind",
+    "schema_version",
+    "distribution_id",
+    "physical_data_mode",
+    "complete_offline",
+    "bundled_fallback",
+    "package_manifest",
+    "bundled_package_ids",
+    "immutable_base_feature_pack_ids",
+    "managed_optional_pack_ids",
+    "catalog"
+  ],
+  "properties": {
+    "kind": {
+      "const": "bibleapp:distribution-manifest"
+    },
+    "schema_version": {
+      "const": 1
+    },
+    "distribution_id": {
+      "type": "string",
+      "pattern": "^[a-z0-9]+(?:[._-][a-z0-9]+)*$"
+    },
+    "physical_data_mode": {
+      "enum": [
+        "bundled_static_data",
+        "managed_cache_packs"
+      ]
+    },
+    "complete_offline": {
+      "type": "boolean"
+    },
+    "bundled_fallback": {
+      "type": "boolean"
+    },
+    "package_manifest": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "schema_version",
+        "package_id",
+        "content_sha256"
+      ],
+      "properties": {
+        "path": {
+          "const": "data/package-manifest.json"
+        },
+        "schema_version": {
+          "type": "integer",
+          "minimum": 1
+        },
+        "package_id": {
+          "type": "string",
+          "minLength": 1
+        },
+        "content_sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "bundled_package_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "immutable_base_feature_pack_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "managed_optional_pack_ids": {
+      "type": "array",
+      "uniqueItems": true,
+      "items": {
+        "type": "string",
+        "minLength": 1
+      }
+    },
+    "catalog": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "sha256"
+      ],
+      "properties": {
+        "path": {
+          "type": "string",
+          "minLength": 1
+        },
+        "sha256": {
+          "type": "string",
+          "pattern": "^sha256:[0-9a-f]{64}$"
+        }
+      }
+    },
+    "note": {
+      "type": "string"
+    }
+  }
+}
