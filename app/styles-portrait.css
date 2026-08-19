@@ -194,7 +194,9 @@
     grid-area: brand;
     justify-self: start;
     width: max-content;
-    min-width: 0;
+    min-width: max-content;
+    flex-shrink: 0;
+    padding-inline-end: 14px;
   }
 
   .brand h1 {
