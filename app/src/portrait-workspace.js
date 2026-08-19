@@ -53,6 +53,10 @@ function setWorkspaceHidden(hidden, { restoreFocus = true } = {}) {
     showButton.setAttribute("aria-expanded", String(!hidden));
   }
 
+  if (restoreFocus) {
+    (hidden ? showButton : hideButton)?.focus?.({ preventScroll: true });
+  }
+
   window.requestAnimationFrame(() => {
     const result = restoreReaderAnchor(readerAnchor, { readerRoot, window });
     if (!result.restored && (window.scrollX !== pageX || window.scrollY !== pageY)) {
@@ -60,9 +64,6 @@ function setWorkspaceHidden(hidden, { restoreFocus = true } = {}) {
     }
     restoreDetailScrollTop(detailScrollTop);
     updateHeaderBlockSize();
-
-    if (!restoreFocus) return;
-    (hidden ? showButton : hideButton)?.focus?.({ preventScroll: true });
   });
 }
 
@@ -120,6 +121,8 @@ window.addEventListener("resize", updateHeaderBlockSize, { passive: true });
 if (typeof ResizeObserver === "function" && header) {
   new ResizeObserver(updateHeaderBlockSize).observe(header);
 }
-document.fonts?.ready?.then(updateHeaderBlockSize).catch(() => {});
+if (document.fonts?.ready) {
+  document.fonts.ready.then(updateHeaderBlockSize).catch(() => {});
+}
 updateHeaderBlockSize();
 window.requestAnimationFrame(updateHeaderBlockSize);
