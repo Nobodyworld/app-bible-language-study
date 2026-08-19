@@ -18,6 +18,7 @@ const desktopMedia = window.matchMedia("(min-width: 769px)");
 const WORKSPACE_SETTLE_FRAME_COUNT = 3;
 
 let workspaceTransitionGeneration = 0;
+let hiddenStateDetailScrollTop = null;
 let hiddenStateScrollX = null;
 let hiddenStateScrollY = null;
 
@@ -70,10 +71,13 @@ function settleWorkspaceTransition(snapshot) {
 function setWorkspaceHidden(hidden, { restoreFocus = true } = {}) {
   if (hidden && !desktopMedia.matches) return;
 
+  const liveDetailScrollTop = currentDetailScrollTop();
   const snapshot = {
     generation: ++workspaceTransitionGeneration,
     readerAnchor: captureReaderAnchor(readerRoot),
-    detailScrollTop: currentDetailScrollTop(),
+    detailScrollTop: hidden
+      ? liveDetailScrollTop
+      : (hiddenStateDetailScrollTop ?? liveDetailScrollTop),
     pageX: window.scrollX,
     pageY: window.scrollY,
     snapPageX: hidden ? null : (hiddenStateScrollX ?? null),
@@ -81,11 +85,13 @@ function setWorkspaceHidden(hidden, { restoreFocus = true } = {}) {
   };
 
   if (hidden) {
+    hiddenStateDetailScrollTop = liveDetailScrollTop;
     hiddenStateScrollX = window.scrollX;
     hiddenStateScrollY = window.scrollY;
     root.dataset.studyWorkspaceHidden = "true";
     detailPane?.setAttribute("aria-hidden", "true");
   } else {
+    hiddenStateDetailScrollTop = null;
     hiddenStateScrollX = null;
     hiddenStateScrollY = null;
     delete root.dataset.studyWorkspaceHidden;
