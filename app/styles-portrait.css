@@ -181,6 +181,7 @@
 }
 
 @media (max-width: 768px) {
+  .study-workspace-width-controls,
   .study-workspace-hide-button,
   .study-workspace-show-button {
     display: none !important;
