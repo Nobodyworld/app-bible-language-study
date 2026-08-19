@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-08-12
+Reviewed: 2026-08-15
 
 ## Authority
 
@@ -13,7 +13,7 @@ remove, or reclassify a maintained test.
 | Command | Current composition |
 |---|---|
 | `npm run test:static` | Repository integrity and data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
-| `npm run test:domain` | Job, package, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
+| `npm run test:domain` | Job, logical package, physical-pack contract, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
 | `npm run test:browser` | Desktop rendered interaction, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks, and Meaning flows. |
 | `npm run test:browser:mobile` | The maintained interaction journey in mobile mode. |
 | `npm test` | Static, desktop-browser, and mobile-browser suites. |
@@ -38,6 +38,7 @@ composition above:
 | `npm run test:word-meaning-focus` | `app/scripts/word-meaning-focus-test.mjs`. |
 | `npm run test:study-workspace` | `app/scripts/study-workspace-interaction-test.mjs`. |
 | `npm run test:reader-data-loading` | `app/scripts/reader-data-loading-interaction-test.mjs`. |
+| `npm run test:physical-packs` | Distribution, catalog, pack-manifest, path, digest-framing, registry, and logical/physical-state contracts. |
 | `npm run test:ui` | UI, compact panel-context, workspace-width model, and contained-surface source contracts. |
 
 ## Static and Source-Level Tests
@@ -85,6 +86,7 @@ manifest through `app/tools/refresh-package-inventory.mjs --check`.
 | `app/scripts/job-processor-test.mjs` | Declared processors, job execution, persistence, and stale-result handling. |
 | `app/scripts/package-planner-test.mjs` | Current package dependencies, install/removal plans, and summaries. |
 | `app/scripts/package-state-test.mjs` | Bundled/managed package modes, capability toggles, operations, and import/export. |
+| `app/scripts/physical-pack-contract-test.mjs` | Default bundled distribution, catalog/manifest schemas, canonical path rejection, deterministic aggregate framing, immutable cache naming, physical registry activation criteria, and separation of bundled versus managed feature-pack authority. |
 | `app/scripts/poll-response-test.mjs` | Poll identity, updates, aggregates, tombstones, schema behavior, and import/export. |
 | `app/scripts/recovery-scenarios-test.mjs` | IndexedDB fallback/migration, quota visibility, malformed imports, backups, quarantine, and legacy export migration. |
 | `app/scripts/semantic-test.mjs` | Semantic definitions, relations, propositions, and current target types. |
