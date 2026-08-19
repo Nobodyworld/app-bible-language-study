@@ -62,10 +62,17 @@ assert(
 );
 assert(
   /captureReaderAnchor\(readerRoot\)/.test(runtime) &&
-    /restoreReaderAnchor\(readerAnchor/.test(runtime) &&
+    /restoreReaderAnchor\(snapshot\.readerAnchor/.test(runtime) &&
     /detailScrollTop/.test(runtime) &&
     /dataset\.studyWorkspaceHidden/.test(runtime),
   "Hide and restore must preserve the semantic reader anchor and detail scroll position.",
+);
+assert(
+  /let workspaceTransitionGeneration = 0;/.test(runtime) &&
+    /generation: \+\+workspaceTransitionGeneration/.test(runtime) &&
+    /snapshot\.generation !== workspaceTransitionGeneration/.test(runtime) &&
+    /function settleWorkspaceTransition\(snapshot\) \{[\s\S]*?restoreWorkspaceTransition\(snapshot\);[\s\S]*?requestAnimationFrame\(settle\)/.test(runtime),
+  "Workspace transitions must correct the new grid synchronously and discard stale frame corrections.",
 );
 assert(
   /ResizeObserver/.test(runtime) &&
@@ -115,4 +122,4 @@ assert(
   "Meaning must remain visually neutral while closed and highlight only during interaction or expansion.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 20 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 21 }, null, 2));

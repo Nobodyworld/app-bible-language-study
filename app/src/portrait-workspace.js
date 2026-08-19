@@ -15,6 +15,9 @@ const bookPickerPanel = document.querySelector("#bookPickerPanel");
 const chapterPickerButton = document.querySelector("#chapterPickerButton");
 const chapterPickerPanel = document.querySelector("#chapterPickerPanel");
 const desktopMedia = window.matchMedia("(min-width: 769px)");
+const WORKSPACE_SETTLE_FRAME_COUNT = 3;
+
+let workspaceTransitionGeneration = 0;
 
 function updateHeaderBlockSize() {
   const height = Math.ceil(header?.getBoundingClientRect?.().height || 0);
@@ -31,13 +34,44 @@ function restoreDetailScrollTop(value) {
   detailScroller.scrollTop = value;
 }
 
+function restoreWorkspaceTransition(snapshot) {
+  if (!snapshot || snapshot.generation !== workspaceTransitionGeneration) return false;
+  const result = restoreReaderAnchor(snapshot.readerAnchor, { readerRoot, window });
+  if (!result.restored && (window.scrollX !== snapshot.pageX || window.scrollY !== snapshot.pageY)) {
+    window.scrollTo({ left: snapshot.pageX, top: snapshot.pageY, behavior: "auto" });
+  }
+  restoreDetailScrollTop(snapshot.detailScrollTop);
+  updateHeaderBlockSize();
+  return true;
+}
+
+function settleWorkspaceTransition(snapshot) {
+  // A layout read inside restoreReaderAnchor forces the new grid geometry now,
+  // before the opposite control can be activated. Repeating the correction over
+  // subsequent frames absorbs delayed font, scrollbar, and sticky-size reflow.
+  restoreWorkspaceTransition(snapshot);
+  let remainingFrames = WORKSPACE_SETTLE_FRAME_COUNT;
+
+  const settle = () => {
+    if (!restoreWorkspaceTransition(snapshot)) return;
+    if (remainingFrames <= 0) return;
+    remainingFrames -= 1;
+    window.requestAnimationFrame(settle);
+  };
+
+  window.requestAnimationFrame(settle);
+}
+
 function setWorkspaceHidden(hidden, { restoreFocus = true } = {}) {
   if (hidden && !desktopMedia.matches) return;
 
-  const readerAnchor = captureReaderAnchor(readerRoot);
-  const detailScrollTop = currentDetailScrollTop();
-  const pageX = window.scrollX;
-  const pageY = window.scrollY;
+  const snapshot = {
+    generation: ++workspaceTransitionGeneration,
+    readerAnchor: captureReaderAnchor(readerRoot),
+    detailScrollTop: currentDetailScrollTop(),
+    pageX: window.scrollX,
+    pageY: window.scrollY,
+  };
 
   if (hidden) {
     root.dataset.studyWorkspaceHidden = "true";
@@ -57,14 +91,7 @@ function setWorkspaceHidden(hidden, { restoreFocus = true } = {}) {
     (hidden ? showButton : hideButton)?.focus?.({ preventScroll: true });
   }
 
-  window.requestAnimationFrame(() => {
-    const result = restoreReaderAnchor(readerAnchor, { readerRoot, window });
-    if (!result.restored && (window.scrollX !== pageX || window.scrollY !== pageY)) {
-      window.scrollTo({ left: pageX, top: pageY, behavior: "auto" });
-    }
-    restoreDetailScrollTop(detailScrollTop);
-    updateHeaderBlockSize();
-  });
+  settleWorkspaceTransition(snapshot);
 }
 
 function centerActiveOption(panel) {
