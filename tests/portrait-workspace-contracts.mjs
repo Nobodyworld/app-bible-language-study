@@ -3,10 +3,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [index, css, runtime] = await Promise.all([
+const [index, css, runtime, contextTabs] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
   readFile(new URL("../app/styles-portrait.css", import.meta.url), "utf8"),
   readFile(new URL("../app/src/portrait-workspace.js", import.meta.url), "utf8"),
+  readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8"),
 ]);
 
 assert(
@@ -24,14 +25,22 @@ assert(
 
 const widthButtons = index.match(/<button[\s\S]*?data-study-workspace-width-mode="(?:compact|standard|expanded)"[\s\S]*?<\/button>/g) || [];
 assert.equal(widthButtons.length, 3, "The workspace must retain exactly three width controls.");
-for (const [mode, button] of ["compact", "standard", "expanded"].map((mode, index) => [mode, widthButtons[index]])) {
+for (const [mode, button] of ["compact", "standard", "expanded"].map((mode, buttonIndex) => [mode, widthButtons[buttonIndex]])) {
   assert(new RegExp(`aria-label="Use ${mode} study workspace"`).test(button), `${mode} width control needs an accessible name.`);
   assert(new RegExp(`title="${mode[0].toUpperCase()}${mode.slice(1)} study workspace"`).test(button), `${mode} width control needs a tooltip.`);
   assert(/class="study-workspace-width-icon"/.test(button), `${mode} width control must render its compact icon.`);
 }
 assert(
-  /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*28px;[\s\S]*?height:\s*28px;[\s\S]*?font-size:\s*0;/.test(css),
-  "Width controls must be icon-sized rather than text-sized.",
+  /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;[\s\S]*?font-size:\s*0;/.test(css),
+  "Width controls must remain compact icon buttons.",
+);
+assert(
+  /@media\s*\(min-width:\s*769px\)[\s\S]*?\.detail-header\s*{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;[\s\S]*?\.detail-header-main\s*{\s*display:\s*contents;/.test(css),
+  "Desktop detail title, width controls, and utility actions must share one compact header row.",
+);
+assert(
+  /\.detail-header-icon-button\s*{[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;/.test(css),
+  "Clear and Hide must remain compact icon controls.",
 );
 
 for (const [id, label] of [
@@ -76,5 +85,34 @@ assert(
     !/scrollIntoView/.test(runtime),
   "Portrait picker correction must center within the intended scroller without broad scrollIntoView behavior.",
 );
+assert(
+  /@media\s*\(max-width:\s*768px\)[\s\S]*?\.study-workspace-width-controls,[\s\S]*?display:\s*none !important;/.test(css),
+  "Desktop width controls must remain hidden in the established mobile drawer.",
+);
+assert(
+  /button\.dataset\.panelAction = action\.id;/.test(contextTabs),
+  "Every contextual navigation button must expose its semantic action identity.",
+);
 
-console.log(JSON.stringify({ status: "ok", assertions: 14 }, null, 2));
+const wordBranch = contextTabs.match(
+  /if \(scope === "word" && hasWord\) \{[\s\S]*?\n      \} else if \(scope === "verse"\)/,
+)?.[0] || "";
+assert(
+  /marks\.dataset\.panelAction = "study-marks";[\s\S]*?controls\.append\(marks\);[\s\S]*?relatedTools\.forEach\(appendTool\);[\s\S]*?meaning\.dataset\.panelAction = "meaning";[\s\S]*?controls\.append\(meaning\);/.test(wordBranch),
+  "Word controls must render Word, Study Marks, concordance, then Meaning in DOM and keyboard order.",
+);
+
+const verseBranch = contextTabs.match(
+  /else if \(scope === "verse"\) \{[\s\S]*?\n      \} else \{/,
+)?.[0] || "";
+assert(
+  /marks\.dataset\.panelAction = "study-marks";[\s\S]*?controls\.append\(marks\);[\s\S]*?relatedTools\.forEach\(appendTool\);/.test(verseBranch),
+  "Verse Study Marks must sit directly after the Verse scope control before related tools.",
+);
+assert(
+  /\.panel-context-navigation \.word-meaning-trigger\[aria-expanded="false"\]\s*{[\s\S]*?border:\s*0 !important;[\s\S]*?background:\s*transparent !important;[\s\S]*?color:\s*var\(--muted\) !important;/.test(css) &&
+    /\.panel-context-navigation \.word-meaning-trigger\[aria-expanded="true"\][\s\S]*?background:\s*rgba\(37, 99, 95, 0\.12\) !important;/.test(css),
+  "Meaning must remain visually neutral while closed and highlight only during interaction or expansion.",
+);
+
+console.log(JSON.stringify({ status: "ok", assertions: 20 }, null, 2));
