@@ -15,6 +15,10 @@ assert(
   "The portrait header must use the shortened Bible Reader title.",
 );
 assert(
+  /@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]*?\.brand\s*{[\s\S]*?width:\s*max-content;[\s\S]*?min-width:\s*max-content;[\s\S]*?padding-inline-end:\s*14px;/.test(css),
+  "The portrait brand backdrop must size to its title and retain trailing breathing room.",
+);
+assert(
   /grid-template-areas:\s*[\s\S]*?"brand status \. theme"[\s\S]*?"controls controls controls controls"/.test(css),
   "Portrait desktop must place status beside the brand and reader controls on the final header row.",
 );
@@ -63,9 +67,11 @@ assert(
 assert(
   /captureReaderAnchor\(readerRoot\)/.test(runtime) &&
     /restoreReaderAnchor\(snapshot\.readerAnchor/.test(runtime) &&
-    /detailScrollTop/.test(runtime) &&
+    /let hiddenStateDetailScrollTop = null;/.test(runtime) &&
+    /hiddenStateDetailScrollTop = liveDetailScrollTop;/.test(runtime) &&
+    /hiddenStateDetailScrollTop \?\? liveDetailScrollTop/.test(runtime) &&
     /dataset\.studyWorkspaceHidden/.test(runtime),
-  "Hide and restore must preserve the semantic reader anchor and detail scroll position.",
+  "Hide and restore must preserve the semantic reader anchor and exact detail scroll position across display:none.",
 );
 assert(
   /let workspaceTransitionGeneration = 0;/.test(runtime) &&
@@ -122,4 +128,4 @@ assert(
   "Meaning must remain visually neutral while closed and highlight only during interaction or expansion.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 21 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 22 }, null, 2));
