@@ -1,0 +1,202 @@
+:root {
+  --app-header-block-size: 76px;
+}
+
+.study-workspace-width-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 4px;
+  width: auto;
+  max-width: 100%;
+}
+
+.study-workspace-width-label {
+  flex: 0 0 auto;
+  padding-inline-end: 4px;
+}
+
+.study-workspace-width-controls button {
+  display: inline-grid;
+  flex: 0 0 28px;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  font-size: 0;
+  line-height: 1;
+}
+
+.study-workspace-width-icon {
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.8;
+  vector-effect: non-scaling-stroke;
+}
+
+.detail-header-actions {
+  flex: 0 0 auto;
+}
+
+.detail-header-icon-button,
+.study-workspace-show-button {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  min-width: 30px;
+  height: 30px;
+  min-height: 30px;
+  padding: 0;
+  font-size: 0;
+  line-height: 1;
+}
+
+.detail-header-icon-button svg,
+.study-workspace-show-button svg {
+  width: 17px;
+  height: 17px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+  vector-effect: non-scaling-stroke;
+}
+
+.study-workspace-show-button[hidden] {
+  display: none;
+}
+
+@media (min-width: 769px) {
+  .detail-pane {
+    top: calc(var(--app-header-block-size) + 12px);
+    height: calc(100dvh - var(--app-header-block-size) - 24px);
+    max-height: calc(100dvh - var(--app-header-block-size) - 24px);
+  }
+
+  :root[data-study-workspace-hidden="true"] .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :root[data-study-workspace-hidden="true"] .detail-pane {
+    display: none;
+  }
+
+  .study-workspace-show-button {
+    position: fixed;
+    top: calc(var(--app-header-block-size) + 12px);
+    right: 12px;
+    z-index: 6;
+    border-radius: 999px;
+    background: var(--panel);
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1100px) {
+  .app-header {
+    display: grid;
+    grid-template-areas:
+      "brand status . theme"
+      "controls controls controls controls";
+    grid-template-columns: max-content max-content minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px 12px;
+    padding: 10px 22px 12px;
+  }
+
+  .brand {
+    grid-area: brand;
+    justify-self: start;
+    width: max-content;
+    min-width: 0;
+  }
+
+  .brand h1 {
+    font-size: 18px;
+    white-space: nowrap;
+  }
+
+  .header-status {
+    grid-area: status;
+    align-self: center;
+    justify-self: start;
+  }
+
+  .reader-controls {
+    grid-area: controls;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-content: stretch;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .reader-controls label {
+    min-width: 0;
+  }
+
+  .reader-controls select,
+  .reader-picker-button {
+    width: 100%;
+    max-width: none;
+  }
+
+  .theme-toggle-button {
+    grid-area: theme;
+    justify-self: end;
+  }
+
+  .book-picker-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(560px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - var(--app-header-block-size) - 24px);
+    overflow: hidden;
+  }
+
+  .book-picker-column {
+    min-height: 0;
+    max-height: calc(100dvh - var(--app-header-block-size) - 24px);
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+  }
+
+  .book-picker-column:last-child {
+    border-right: 0;
+  }
+
+  .book-picker-list {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+  }
+}
+
+@media (max-width: 768px) {
+  .study-workspace-hide-button,
+  .study-workspace-show-button {
+    display: none !important;
+  }
+}
+
+:root[data-theme="dark"] .study-workspace-width-controls button,
+:root[data-theme="dark"] .detail-header-icon-button,
+:root[data-theme="dark"] .study-workspace-show-button {
+  border-width: 1px !important;
+}
+
+@media (forced-colors: active) {
+  .study-workspace-width-icon,
+  .detail-header-icon-button svg,
+  .study-workspace-show-button svg {
+    stroke: ButtonText;
+  }
+}
