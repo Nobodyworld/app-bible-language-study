@@ -120,7 +120,7 @@ function centerActiveOption(panel) {
 function settlePicker(panel) {
   const pageX = window.scrollX;
   const pageY = window.scrollY;
-  let remainingFrames = 3;
+  let remainingFrames = WORKSPACE_SETTLE_FRAME_COUNT;
 
   const settle = () => {
     if (remainingFrames > 0) {
