@@ -18,6 +18,8 @@ const desktopMedia = window.matchMedia("(min-width: 769px)");
 const WORKSPACE_SETTLE_FRAME_COUNT = 3;
 
 let workspaceTransitionGeneration = 0;
+let hiddenStateScrollX = null;
+let hiddenStateScrollY = null;
 
 function updateHeaderBlockSize() {
   const height = Math.ceil(header?.getBoundingClientRect?.().height || 0);
@@ -39,6 +41,9 @@ function restoreWorkspaceTransition(snapshot) {
   const result = restoreReaderAnchor(snapshot.readerAnchor, { readerRoot, window });
   if (!result.restored && (window.scrollX !== snapshot.pageX || window.scrollY !== snapshot.pageY)) {
     window.scrollTo({ left: snapshot.pageX, top: snapshot.pageY, behavior: "auto" });
+  } else if (result.restored && snapshot.snapPageY !== null &&
+             (window.scrollX !== snapshot.snapPageX || window.scrollY !== snapshot.snapPageY)) {
+    window.scrollTo({ left: snapshot.snapPageX, top: snapshot.snapPageY, behavior: "auto" });
   }
   restoreDetailScrollTop(snapshot.detailScrollTop);
   updateHeaderBlockSize();
@@ -71,12 +76,18 @@ function setWorkspaceHidden(hidden, { restoreFocus = true } = {}) {
     detailScrollTop: currentDetailScrollTop(),
     pageX: window.scrollX,
     pageY: window.scrollY,
+    snapPageX: hidden ? null : (hiddenStateScrollX ?? null),
+    snapPageY: hidden ? null : (hiddenStateScrollY ?? null),
   };
 
   if (hidden) {
+    hiddenStateScrollX = window.scrollX;
+    hiddenStateScrollY = window.scrollY;
     root.dataset.studyWorkspaceHidden = "true";
     detailPane?.setAttribute("aria-hidden", "true");
   } else {
+    hiddenStateScrollX = null;
+    hiddenStateScrollY = null;
     delete root.dataset.studyWorkspaceHidden;
     detailPane?.removeAttribute("aria-hidden");
   }
