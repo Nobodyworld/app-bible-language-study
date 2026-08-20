@@ -29,14 +29,38 @@ assert(
 
 const widthButtons = index.match(/<button[\s\S]*?data-study-workspace-width-mode="(?:compact|standard|expanded)"[\s\S]*?<\/button>/g) || [];
 assert.equal(widthButtons.length, 3, "The workspace must retain exactly three width controls.");
-for (const [mode, button] of ["compact", "standard", "expanded"].map((mode, buttonIndex) => [mode, widthButtons[buttonIndex]])) {
-  assert(new RegExp(`aria-label="Use ${mode} study workspace"`).test(button), `${mode} width control needs an accessible name.`);
-  assert(new RegExp(`title="${mode[0].toUpperCase()}${mode.slice(1)} study workspace"`).test(button), `${mode} width control needs a tooltip.`);
-  assert(/class="study-workspace-width-icon"/.test(button), `${mode} width control must render its compact icon.`);
+const widthExpectations = [
+  { mode: "compact", symbol: "−", title: "Compact study workspace" },
+  { mode: "standard", symbol: "↺", title: "Standard study workspace" },
+  { mode: "expanded", symbol: "+", title: "Expanded study workspace" },
+];
+for (const [buttonIndex, expectation] of widthExpectations.entries()) {
+  const button = widthButtons[buttonIndex];
+  assert(
+    new RegExp(`aria-label="Use ${expectation.mode} study workspace"`).test(button),
+    `${expectation.mode} width control needs an accessible name.`,
+  );
+  assert(
+    button.includes(`title="${expectation.title}"`),
+    `${expectation.mode} width control needs an accurate tooltip.`,
+  );
+  assert(
+    /class="study-workspace-width-symbol(?: [^"]*)?"/.test(button),
+    `${expectation.mode} width control must render its compact symbol.`,
+  );
+  assert(
+    button.includes(`>${expectation.symbol}</span>`),
+    `${expectation.mode} width control renders the wrong symbol.`,
+  );
 }
 assert(
-  /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;[\s\S]*?font-size:\s*0;/.test(css),
-  "Width controls must remain compact icon buttons.",
+  /data-study-workspace-width-mode="compact"[\s\S]*?>−<\/span>[\s\S]*?data-study-workspace-width-mode="standard"[\s\S]*?>↺<\/span>[\s\S]*?data-study-workspace-width-mode="expanded"[\s\S]*?>\+<\/span>/.test(index),
+  "Width presets must read left-to-right as narrower, Standard reset, then wider.",
+);
+assert(
+  /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;[\s\S]*?font-size:\s*0;/.test(css) &&
+    /\.study-workspace-width-symbol\s*{[\s\S]*?font-size:\s*16px;[\s\S]*?font-weight:\s*900;/.test(css),
+  "Width controls must remain compact while their ordered symbols stay legible.",
 );
 assert(
   /@media\s*\(min-width:\s*769px\)[\s\S]*?\.detail-header\s*{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;[\s\S]*?\.detail-header-main\s*{\s*display:\s*contents;/.test(css),
@@ -128,4 +152,4 @@ assert(
   "Meaning must remain visually neutral while closed and highlight only during interaction or expansion.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 22 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 23 }, null, 2));
