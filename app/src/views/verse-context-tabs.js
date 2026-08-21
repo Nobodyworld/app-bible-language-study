@@ -214,6 +214,7 @@ function appendActionButton(ctx, controls, action, reference, verse, wordContext
   button.textContent = action.shortLabel;
   button.dataset.visibleLabel = action.label;
   button.dataset.panelScope = action.scope;
+  button.dataset.panelAction = action.id;
   button.dataset.controlState = control.state;
   button.dataset.unavailable = control.disabled ? "true" : "false";
   const reactivatableCurrent = action.current && action.reactivatableCurrent === true;
@@ -294,10 +295,22 @@ export function createVerseContextTabs(ctx, reference, verse, active, strongsCon
               sources: ctx.state.manifest?.original_language_sources,
             })
           : panelToolsForScope(scope);
-      tools.forEach((tool) => {
-        const button = appendActionButton(ctx, controls, actionForTool(ctx, tool, reference, verse, active, wordContext), reference, verse, wordContext);
-        if (tool.id === "hebrew" || tool.id === "greek") button.dataset.strongSectionControl = tool.id;
-      });
+      const appendTool = (tool) => {
+        const button = appendActionButton(
+          ctx,
+          controls,
+          actionForTool(ctx, tool, reference, verse, active, wordContext),
+          reference,
+          verse,
+          wordContext,
+        );
+        if (tool.id === "hebrew" || tool.id === "greek") {
+          button.dataset.strongSectionControl = tool.id;
+        }
+        return button;
+      };
+      const [scopeTool, ...relatedTools] = tools;
+      if (scopeTool) appendTool(scopeTool);
 
       if (scope === "word" && hasWord) {
         const sourceTarget = createSourceTokenTarget(
@@ -307,14 +320,18 @@ export function createVerseContextTabs(ctx, reference, verse, active, strongsCon
         );
         if (sourceTarget) {
           const marks = ctx.detailViews.renderStudyMarksTrigger(sourceTarget, {
-              align: "right",
-              boundary: "detail-pane",
-              label: `selected source word in ${reference}`,
-              onChange: () => {
-                ctx.renderChapter();
-                ctx.syncFavoriteButtons?.();
-              },
-            });
+            align: "right",
+            boundary: "detail-pane",
+            label: `selected source word in ${reference}`,
+            onChange: () => {
+              ctx.renderChapter();
+              ctx.syncFavoriteButtons?.();
+            },
+          });
+          marks.dataset.panelAction = "study-marks";
+          controls.append(marks);
+          relatedTools.forEach(appendTool);
+
           const meaning = ctx.detailViews.renderWordMeaningControl({
             target: sourceTarget,
             token: wordContext.token,
@@ -325,23 +342,37 @@ export function createVerseContextTabs(ctx, reference, verse, active, strongsCon
               ? () => fetchLexiconEntry(wordContext.token.strong_code)
               : null,
           });
-          controls.append(marks);
-          if (meaning) controls.append(meaning);
+          if (meaning) {
+            meaning.dataset.panelAction = "meaning";
+            controls.append(meaning);
+          }
+        } else {
+          relatedTools.forEach(appendTool);
         }
-      }
-      if (scope === "verse") {
-        const verseTarget = createVerseTarget({ translation_id: ctx.state.translationId, book_id: ctx.state.bookId, chapter: ctx.state.chapter, verse }, ctx.state.translationId);
-        controls.append(
-          ctx.detailViews.renderStudyMarksTrigger(verseTarget, {
-            align: "right",
-            boundary: "detail-pane",
-            label: `verse ${reference}`,
-            onChange: () => {
-              ctx.renderChapter();
-              ctx.syncFavoriteButtons?.();
-            },
-          }),
+      } else if (scope === "verse") {
+        const verseTarget = createVerseTarget(
+          {
+            translation_id: ctx.state.translationId,
+            book_id: ctx.state.bookId,
+            chapter: ctx.state.chapter,
+            verse,
+          },
+          ctx.state.translationId,
         );
+        const marks = ctx.detailViews.renderStudyMarksTrigger(verseTarget, {
+          align: "right",
+          boundary: "detail-pane",
+          label: `verse ${reference}`,
+          onChange: () => {
+            ctx.renderChapter();
+            ctx.syncFavoriteButtons?.();
+          },
+        });
+        marks.dataset.panelAction = "study-marks";
+        controls.append(marks);
+        relatedTools.forEach(appendTool);
+      } else {
+        relatedTools.forEach(appendTool);
       }
 
       groups.append(group);

@@ -13,6 +13,7 @@
     <link rel="stylesheet" href="./styles.css?v=pr13-live-qa-20260711e" />
     <link rel="stylesheet" href="./styles-polish.css?v=pr13-live-qa-20260711e" />
     <link rel="stylesheet" href="./styles-context.css?v=pr13-live-qa-20260711e" />
+    <link rel="stylesheet" href="./styles-portrait.css?v=pr13-live-qa-20260711e" />
   </head>
   <body>
     <svg class="icon-definitions" aria-hidden="true" focusable="false"><symbol id="study-marks-icon" viewBox="0 0 24 24"><path d="M6 3.75h12A2.25 2.25 0 0 1 20.25 6v14.25L16.5 18l-4.5 2.25L7.5 18l-3.75 2.25V6A2.25 2.25 0 0 1 6 3.75Zm0 2.5a.25.25 0 0 0-.25.25v9.34l1.75-1.05 4.5 2.25 4.5-2.25 1.75 1.05V6.5a.25.25 0 0 0-.25-.25H6Z"></path></symbol></svg>
@@ -20,7 +21,7 @@
       <button id="homeButton" class="brand home-button" type="button" title="Open home">
         <span class="brand-mark">BA</span>
         <div>
-          <h1>Bible App Reader</h1>
+          <h1>Bible Reader</h1>
         </div>
       </button>
       <nav class="reader-controls" aria-label="Reader controls">
@@ -117,19 +118,77 @@
         <div id="chapterContent" class="chapter-content"></div>
       </section>
 
-      <aside class="detail-pane" aria-label="Reference details">
+      <button
+        id="showStudyWorkspace"
+        class="study-workspace-show-button"
+        type="button"
+        title="Show study workspace"
+        aria-label="Show study workspace"
+        aria-controls="detailPane"
+        aria-expanded="false"
+        hidden
+      >
+        Show study workspace
+        <svg aria-hidden="true" viewBox="0 0 24 24">
+          <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+          <path d="M14 4v16M10 12h8M15 9l3 3-3 3"></path>
+        </svg>
+      </button>
+
+      <aside id="detailPane" class="detail-pane" aria-label="Reference details">
         <div class="detail-header">
           <div class="detail-header-main">
             <h2 id="detailTitle">Details</h2>
             <div class="detail-header-actions">
-              <button id="clearDetail" type="button">Clear</button>
+              <button
+                id="clearDetail"
+                class="detail-header-icon-button"
+                type="button"
+                title="Clear study workspace"
+                aria-label="Clear study workspace"
+              >
+                Clear
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <path d="M6 6l12 12M18 6L6 18"></path>
+                </svg>
+              </button>
+              <button
+                id="hideStudyWorkspace"
+                class="detail-header-icon-button study-workspace-hide-button"
+                type="button"
+                title="Hide study workspace"
+                aria-label="Hide study workspace"
+                aria-controls="detailPane"
+                aria-expanded="true"
+              >
+                Hide
+                <svg aria-hidden="true" viewBox="0 0 24 24">
+                  <rect x="3" y="4" width="18" height="16" rx="2"></rect>
+                  <path d="M14 4v16M18 12h-8M13 9l-3 3 3 3"></path>
+                </svg>
+              </button>
             </div>
           </div>
           <div id="studyWorkspaceWidthControls" class="study-workspace-width-controls" role="group" aria-label="Study workspace width">
             <span class="study-workspace-width-label">Width</span>
-            <button type="button" data-study-workspace-width-mode="compact" aria-pressed="false">Compact</button>
-            <button type="button" data-study-workspace-width-mode="standard" aria-pressed="true">Standard</button>
-            <button type="button" data-study-workspace-width-mode="expanded" aria-pressed="false">Expanded</button>
+            <button
+              type="button"
+              data-study-workspace-width-mode="compact"
+              aria-label="Use compact study workspace"
+              title="Compact study workspace"
+              aria-pressed="false">Compact<span aria-hidden="true" class="study-workspace-width-symbol">−</span></button>
+            <button
+              type="button"
+              data-study-workspace-width-mode="standard"
+              aria-label="Use standard study workspace"
+              title="Standard study workspace"
+              aria-pressed="true">Standard<span aria-hidden="true" class="study-workspace-width-symbol study-workspace-width-reset-symbol">↺</span></button>
+            <button
+              type="button"
+              data-study-workspace-width-mode="expanded"
+              aria-label="Use expanded study workspace"
+              title="Expanded study workspace"
+              aria-pressed="false">Expanded<span aria-hidden="true" class="study-workspace-width-symbol">+</span></button>
           </div>
         </div>
         <div id="detailWorkspace" class="detail-workspace">
@@ -159,6 +218,7 @@
     </main>
 
     <script type="module" src="./app.js?v=pr13-live-qa-20260711e"></script>
+    <script type="module" src="./src/portrait-workspace.js?v=pr13-live-qa-20260711e"></script>
     <script type="module" src="./src/reader-picker-flow.js?v=pr13-live-qa-20260711e"></script>
     <script type="module" src="./src/original-language-study-flow.js?v=pr13-live-qa-20260711e"></script>
   </body>

@@ -1,0 +1,287 @@
+:root {
+  --app-header-block-size: 76px;
+}
+
+.study-workspace-width-controls {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 3px;
+  width: auto;
+  max-width: 100%;
+}
+
+.study-workspace-width-label {
+  display: none;
+}
+
+.study-workspace-width-controls button {
+  display: inline-grid;
+  flex: 0 0 24px;
+  place-items: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  border-radius: 5px;
+  font-size: 0;
+  line-height: 1;
+}
+
+.study-workspace-width-symbol {
+  display: inline-grid;
+  place-items: center;
+  width: 14px;
+  height: 14px;
+  color: currentColor;
+  font-size: 16px;
+  font-weight: 900;
+  line-height: 1;
+}
+
+.study-workspace-width-reset-symbol {
+  font-size: 14px;
+}
+
+.detail-header-actions {
+  flex: 0 0 auto;
+  gap: 3px;
+}
+
+.detail-header-icon-button {
+  display: inline-grid;
+  place-items: center;
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  min-height: 24px;
+  padding: 0;
+  font-size: 0;
+  line-height: 1;
+}
+
+.study-workspace-show-button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  padding: 0;
+  font-size: 0;
+  line-height: 1;
+}
+
+.detail-header-icon-button svg {
+  width: 14px;
+  height: 14px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+  vector-effect: non-scaling-stroke;
+}
+
+.study-workspace-show-button svg {
+  width: 16px;
+  height: 16px;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.9;
+  vector-effect: non-scaling-stroke;
+}
+
+.study-workspace-show-button[hidden] {
+  display: none;
+}
+
+.panel-context-navigation .word-meaning-trigger {
+  min-height: 28px;
+  padding: 3px 8px;
+  border: 0 !important;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 1.2;
+}
+
+.panel-context-navigation .word-meaning-trigger[aria-expanded="false"] {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--muted) !important;
+  box-shadow: none !important;
+}
+
+.panel-context-navigation .word-meaning-trigger:hover,
+.panel-context-navigation .word-meaning-trigger:focus-visible,
+.panel-context-navigation .word-meaning-trigger[aria-expanded="true"] {
+  border: 0 !important;
+  background: rgba(37, 99, 95, 0.12) !important;
+  color: var(--accent-dark) !important;
+  box-shadow: none !important;
+}
+
+@media (min-width: 769px) {
+  .detail-header {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto auto;
+    align-items: center;
+    gap: 6px;
+    padding: 10px 12px;
+  }
+
+  .detail-header-main {
+    display: contents;
+  }
+
+  .detail-header-main h2 {
+    grid-column: 1;
+    grid-row: 1;
+    min-width: 0;
+    font-size: 20px;
+  }
+
+  .study-workspace-width-controls {
+    grid-column: 2;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .detail-header-actions {
+    grid-column: 3;
+    grid-row: 1;
+    justify-self: end;
+  }
+
+  .detail-pane {
+    top: calc(var(--app-header-block-size) + 12px);
+    height: calc(100dvh - var(--app-header-block-size) - 24px);
+    max-height: calc(100dvh - var(--app-header-block-size) - 24px);
+  }
+
+  :root[data-study-workspace-hidden="true"] .app-shell {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  :root[data-study-workspace-hidden="true"] .detail-pane {
+    display: none;
+  }
+
+  .study-workspace-show-button {
+    position: fixed;
+    top: calc(var(--app-header-block-size) + 12px);
+    right: 12px;
+    z-index: 6;
+    border-radius: 999px;
+    background: var(--panel);
+    box-shadow: var(--shadow-sm);
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1100px) {
+  .app-header {
+    display: grid;
+    grid-template-areas:
+      "brand status . theme"
+      "controls controls controls controls";
+    grid-template-columns: max-content max-content minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px 12px;
+    padding: 10px 22px 12px;
+  }
+
+  .brand {
+    grid-area: brand;
+    justify-self: start;
+    width: max-content;
+    min-width: max-content;
+    flex-shrink: 0;
+    padding-inline-end: 14px;
+  }
+
+  .brand h1 {
+    font-size: 18px;
+    white-space: nowrap;
+  }
+
+  .header-status {
+    grid-area: status;
+    align-self: center;
+    justify-self: start;
+  }
+
+  .reader-controls {
+    grid-area: controls;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    justify-content: stretch;
+    width: 100%;
+    gap: 10px;
+  }
+
+  .reader-controls label {
+    min-width: 0;
+  }
+
+  .reader-controls select,
+  .reader-picker-button {
+    width: 100%;
+    max-width: none;
+  }
+
+  .theme-toggle-button {
+    grid-area: theme;
+    justify-self: end;
+  }
+
+  .book-picker-panel {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: min(560px, calc(100vw - 24px));
+    max-width: calc(100vw - 24px);
+    max-height: calc(100dvh - var(--app-header-block-size) - 24px);
+    overflow: hidden;
+  }
+
+  .book-picker-column {
+    min-height: 0;
+    max-height: calc(100dvh - var(--app-header-block-size) - 24px);
+    border-right: 1px solid var(--line);
+    border-bottom: 0;
+  }
+
+  .book-picker-column:last-child {
+    border-right: 0;
+  }
+
+  .book-picker-list {
+    min-height: 0;
+    overflow-y: auto;
+    overscroll-behavior-y: contain;
+    scrollbar-gutter: stable;
+  }
+}
+
+@media (max-width: 768px) {
+  .study-workspace-width-controls,
+  .study-workspace-hide-button,
+  .study-workspace-show-button {
+    display: none !important;
+  }
+}
+
+:root[data-theme="dark"] .study-workspace-width-controls button,
+:root[data-theme="dark"] .detail-header-icon-button,
+:root[data-theme="dark"] .study-workspace-show-button {
+  border-width: 1px !important;
+}
+
+@media (forced-colors: active) {
+  .detail-header-icon-button svg,
+  .study-workspace-show-button svg {
+    stroke: ButtonText;
+  }
+}
