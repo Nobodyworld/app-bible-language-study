@@ -133,6 +133,11 @@ Startup reconciliation must compare registry claims with the actual physical
 store. Missing caches, missing files, digest drift, interrupted operations, and
 orphan staging areas must not be reported as active.
 
+The current implementation places existing active claims into a safe
+`startup_verifying` state and verifies exact inventory, media type, byte length,
+SHA-256, and totals asynchronously. Managed resolution cannot use those bytes
+until verification completes. Rollback promotion uses the same verifier.
+
 ## Physical modes
 
 ### `bundled_static_data`
@@ -144,10 +149,13 @@ must not hide existing bundled data.
 
 ### `managed_cache_packs`
 
-This opt-in/reference mode resolves capability availability from verified active
-physical pack records plus any explicitly declared immutable base packs. It is
-the architecture used to test missing, installed, corrupt, repaired, removed,
-and updated optional-pack states.
+This opt-in/reference mode applies physical requirements only to the
+distribution manifest's `managed_optional_pack_ids`. Feature packs outside that
+set remain available from the shipped bundle. Managed optional packs prefer a
+verified physical record and use bundled fallback only when the distribution
+sets `bundled_fallback: true`; otherwise they expose structured unavailable
+states. It is the architecture used to test missing, installed, corrupt,
+repaired, removed, and updated optional-pack states.
 
 Switching modes must be explicit, reversible, and protected from stale physical
 registry claims. The branch must not silently make managed mode the public
@@ -210,7 +218,7 @@ the canonical loose-file manifest.
 
 Pack installation sources may include:
 
-- a same-origin or explicitly allowed static catalog URL;
+- a same-origin static catalog URL;
 - a relative catalog shipped with a complete offline directory;
 - user-selected local files or directory handles when the browser supports a
   safe deterministic path.
@@ -218,6 +226,10 @@ Pack installation sources may include:
 No source may bypass the same manifest, path, compatibility, and digest checks.
 Cross-origin installation is out of scope unless CORS, integrity, privacy, and
 failure behavior are deliberately implemented and tested.
+
+The current manager rejects cross-origin, credential-bearing, fragmented,
+malformed, and non-HTTP(S) catalog URLs before fetch. Manifest and artifact URLs
+remain same-origin and preserve canonical relative-path rules.
 
 ## Physical storage and atomicity
 
@@ -230,7 +242,8 @@ Use separate versioned staging and active storage identifiers. A safe install or
 update follows this order:
 
 1. fetch and validate the catalog and pack manifest;
-2. check compatibility, dependencies, estimated storage, and path safety;
+2. check full semantic-version compatibility, dependencies, estimated storage,
+   and path safety;
 3. create a unique staging store;
 4. fetch or read each file into staging;
 5. verify byte length and SHA-256 before accepting each file;
@@ -242,6 +255,9 @@ update follows this order:
 10. remove obsolete staging and, after the rollback boundary, obsolete active
     storage.
 
+A meaningful insufficient quota fails before staging is created. Missing or
+unavailable estimates are disclosed but do not cause a false rejection.
+
 A failed operation must preserve the previous active pack. Cleanup failure must
 be reported separately from install failure and must not erase the only valid
 rollback copy.
@@ -250,8 +266,9 @@ Removal must update the active registry before deleting physical bytes, preserve
 logical dependency rules, and recover deterministically when deletion is
 interrupted.
 
-Repair re-verifies the active manifest and bytes, replaces only invalid or
-missing files in staging, and atomically activates the repaired result.
+Repair produces the same complete dependency/file/raw-byte/transfer plan as an
+install or update, redownloads the target into staging, and atomically activates
+the repaired result.
 
 ## Runtime resolution
 
@@ -269,6 +286,11 @@ Resolution order in the current complete application:
    JSON parse or generic 404 failure;
 4. cache parsed JSON only under a key that includes physical source/version so
    activation or repair cannot return stale parsed data.
+
+Bundled fallback is an identified runtime source, not an implicit error catch.
+When the distribution forbids fallback, `tryFetchJson()` and Search index
+fallback must preserve the managed structured error instead of silently scanning
+bundled data.
 
 The resolver must expose structured failure classifications sufficient for
 capability state and user-visible messaging:

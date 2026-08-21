@@ -106,15 +106,25 @@ function recordIsVerifiedActive(record) {
   );
 }
 
+function distributionOptions(options = {}) {
+  const distribution = options.distributionManifest || {};
+  return {
+    managedOptional: new Set(distribution.managed_optional_pack_ids || ["search-verses", "commentary-verse-index"]),
+    bundledFallback: distribution.bundled_fallback === true,
+  };
+}
+
 function physicalFailure(requiredPacks, options = {}) {
   if (options.physicalDataMode !== "managed_cache_packs") return null;
+  const { managedOptional, bundledFallback } = distributionOptions(options);
+  if (bundledFallback) return null;
   const records = physicalRecordMap(options);
-  const requiredRecords = requiredPacks.map((id) => [id, records.get(id)]);
+  const requiredRecords = requiredPacks.filter((id) => managedOptional.has(id)).map((id) => [id, records.get(id)]);
   const incompatible = requiredRecords.filter(([, record]) => record?.state === "incompatible").map(([id]) => id);
   if (incompatible.length) return { state: CAPABILITY_STATES.incompatibleVersion, packs: incompatible, next_action: "return_to_bundled_or_update" };
   const corrupt = requiredRecords.filter(([, record]) => ["corrupt", "repair_required"].includes(record?.state)).map(([id]) => id);
   if (corrupt.length) return { state: CAPABILITY_STATES.corrupt, packs: corrupt, next_action: "repair" };
-  const failed = requiredRecords.filter(([, record]) => record?.state === "failed").map(([id]) => id);
+  const failed = requiredRecords.filter(([, record]) => ["failed", "startup_verifying"].includes(record?.state)).map(([id]) => id);
   if (failed.length) return { state: CAPABILITY_STATES.loadFailed, packs: failed, next_action: "retry" };
   const missing = requiredRecords.filter(([, record]) => !recordIsVerifiedActive(record)).map(([id]) => id);
   if (missing.length) return { state: CAPABILITY_STATES.notInstalled, packs: missing, next_action: "install" };
@@ -136,9 +146,16 @@ export function resolveCapability(packageManifest, packageStore, capabilityId, o
 
   const featurePacks = new Map((packageManifest?.feature_packs || []).map((pack) => [pack.id, pack]));
   const physicalRecords = physicalRecordMap(options);
-  const installed = options.physicalDataMode === "managed_cache_packs"
-    ? new Set([...physicalRecords].filter(([, record]) => recordIsVerifiedActive(record)).map(([id]) => id))
-    : new Set(getLogicalInstalledFeaturePackIds(packageManifest, packageStore, options));
+  const { managedOptional, bundledFallback } = distributionOptions(options);
+  const installed = new Set(getLogicalInstalledFeaturePackIds(packageManifest, packageStore, {
+    ...options,
+    assumeBundledFullAccess: options.physicalDataMode === "managed_cache_packs" ? true : options.assumeBundledFullAccess,
+  }));
+  if (options.physicalDataMode === "managed_cache_packs") {
+    for (const id of managedOptional) {
+      if (!bundledFallback && !recordIsVerifiedActive(physicalRecords.get(id))) installed.delete(id);
+    }
+  }
   const disabledCapabilities = new Set(packageStore?.disabled_capability_ids || []);
   const disabledPacks = new Set(packageStore?.disabled_feature_pack_ids || []);
   const requiredPacks = capability.required_packs || [];
@@ -218,6 +235,13 @@ export function resolveCapability(packageManifest, packageStore, capabilityId, o
     disabled_packs: [],
     optional_missing_packs: (capability.optional_dependencies || []).filter((id) => !installed.has(id)),
     bundled_included: requiredPacks.every((id) => featurePacks.has(id)),
+    runtime_source: options.physicalDataMode !== "managed_cache_packs"
+      ? "bundled"
+      : requiredPacks.some((id) => managedOptional.has(id))
+      ? requiredPacks.every((id) => !managedOptional.has(id) || recordIsVerifiedActive(physicalRecords.get(id)))
+        ? "managed_pack"
+        : "bundled_fallback"
+      : "bundled",
     next_action: null,
   };
 }

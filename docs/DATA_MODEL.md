@@ -41,6 +41,13 @@ compatibility, timestamps, and sanitized failures. Startup reconciliation must
 compare any registry claim with actual physical storage before reporting a pack
 as active.
 
+`startup_verifying` is a safe transient state: registry metadata may name an
+active cache, but runtime resolution cannot use it until cache existence, exact
+declared inventory, required entries, media types, byte lengths, per-file
+SHA-256, and verified totals all pass. Missing storage becomes
+`repair_required`; content drift becomes `corrupt`. Rollback metadata is not
+promoted until the same verification passes.
+
 Physical registry authority and pack bytes are not part of portable
 `bibleapp:user-data` backups. An imported logical preference may require local
 installation or may continue using bundled fallback; import must never fabricate
@@ -72,6 +79,11 @@ recorded cache-deletion list; missing active storage activates a valid retained
 rollback or becomes `repair_required`. Unreferenced pack caches are reported as
 orphans and removed only by startup staging cleanup or the explicit cleanup
 action.
+
+The validated distribution manifest remains the authority for
+`managed_optional_pack_ids` and `bundled_fallback`. Physical records describe
+actual local state even when a capability remains usable from an identified
+bundled fallback. Physical state never becomes portable user-data authority.
 
 The deterministic production artifact builder writes ignored output under
 `dist/physical-packs/`. Its loose-file layout is

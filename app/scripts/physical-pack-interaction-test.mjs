@@ -132,6 +132,56 @@ async function assertContained(page, label) {
   assert(!result.staleLoading, `${label} retained a stale loading state`);
 }
 
+async function captureReaderContext(page, { prepare = false } = {}) {
+  if (prepare) {
+    await page.evaluate(() => {
+      const detail = document.querySelector("#detailContent");
+      if (detail) detail.scrollTop = Math.min(120, Math.max(0, detail.scrollHeight - detail.clientHeight));
+      const selected = document.querySelector(".reader-context-word, .reader-context-verse");
+      if (selected) {
+        const rect = selected.getBoundingClientRect();
+        window.scrollBy(0, rect.top - 240);
+      }
+    });
+    await page.waitForTimeout(50);
+  }
+  return page.evaluate(() => {
+    const selectedWord = document.querySelector(".reader-context-word");
+    const selectedVerse = selectedWord?.closest(".verse-row") || document.querySelector(".reader-context-verse");
+    return {
+      route: location.hash,
+      chapter: document.querySelector("#chapterSelect")?.value || "",
+      selected_word: selectedWord ? {
+        strong_code: selectedWord.dataset.strongCode || "",
+        token_index: selectedWord.dataset.tokenIndex || "",
+        interlinear_key: selectedWord.dataset.interlinearKey || "",
+        text: selectedWord.textContent.trim(),
+      } : null,
+      selected_verse: selectedVerse?.dataset.verse || "",
+      highlighted_words: [...document.querySelectorAll(".reader-context-word")].map((node) => `${node.dataset.strongCode || ""}:${node.dataset.tokenIndex || ""}`),
+      highlighted_verses: [...document.querySelectorAll(".reader-context-verse")].map((node) => node.dataset.verse || node.id),
+      reader_scroll: window.scrollY,
+      detail_title: document.querySelector("#detailTitle")?.textContent || "",
+      detail_back_disabled: document.querySelector("#detailBack")?.disabled,
+      detail_forward_disabled: document.querySelector("#detailForward")?.disabled,
+      detail_history_length: history.length,
+      panel_mode: document.querySelector(".detail-pane")?.dataset.panelMode || "",
+      hover_locked: document.querySelector(".detail-pane")?.dataset.hoverLocked || "",
+      detail_scroll: document.querySelector("#detailContent")?.scrollTop || 0,
+    };
+  });
+}
+
+async function assertReaderContextPreserved(page, before, label) {
+  const after = await captureReaderContext(page);
+  for (const key of ["route", "chapter", "selected_word", "selected_verse", "highlighted_words", "highlighted_verses", "detail_title", "detail_back_disabled", "detail_forward_disabled", "detail_history_length", "panel_mode", "hover_locked"]) {
+    assert.deepEqual(after[key], before[key], `${label} changed ${key}: ${JSON.stringify({ before: before[key], after: after[key] })}`);
+  }
+  assert(Math.abs(after.reader_scroll - before.reader_scroll) <= 6, `${label} changed reader scroll: ${JSON.stringify({ before: before.reader_scroll, after: after.reader_scroll })}`);
+  assert(Math.abs(after.detail_scroll - before.detail_scroll) <= 4, `${label} changed detail scroll: ${JSON.stringify({ before: before.detail_scroll, after: after.detail_scroll })}`);
+  return after;
+}
+
 const { server, url } = await startServer();
 const browser = await chromium.launch({
   executablePath: edgePath(),
@@ -156,7 +206,8 @@ try {
 
   await page.goto(`${url}?physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json#/read/bsb/genesis/1`, { waitUntil: "load" });
   await waitReady(page);
-  const readerContext = await page.evaluate(() => ({ hash: location.hash, title: document.title, chapter: document.querySelector("#chapterSelect")?.value }));
+  await page.locator(".strong-token[data-strong-code]").first().click();
+  await page.waitForFunction(() => document.querySelector(".detail-pane")?.dataset.panelMode === "locked");
   await openManager(page);
 
   const refresh = page.getByRole("button", { name: "Refresh catalog", exact: true });
@@ -165,27 +216,69 @@ try {
   await page.getByRole("button", { name: "Use managed packs", exact: true }).click();
   await waitCompleted(page, "Managed-pack mode");
 
+  const managedCapabilities = await page.evaluate(async () => {
+    const { resolveCapability } = await import("/src/capabilities.js");
+    const [packageManifest, distributionManifest] = await Promise.all([
+      fetch("./data/package-manifest.json").then((response) => response.json()),
+      fetch("./data/distribution-manifest.json").then((response) => response.json()),
+    ]);
+    return Object.fromEntries(
+      ["crossrefs", "outlines", "strongs-overlay", "lexicon-language-metadata", "interlinear", "graph-word-map-analysis", "search", "commentary"].map((capabilityId) => [
+        capabilityId,
+        resolveCapability(packageManifest, {}, capabilityId, {
+          physicalDataMode: "managed_cache_packs",
+          physicalRecords: [],
+          distributionManifest,
+        }),
+      ]),
+    );
+  });
+  for (const capabilityId of ["crossrefs", "outlines", "strongs-overlay", "lexicon-language-metadata", "interlinear", "graph-word-map-analysis"]) {
+    assert.equal(managedCapabilities[capabilityId].state, "available", `${capabilityId} was disabled by managed mode`);
+    assert.equal(managedCapabilities[capabilityId].runtime_source, "bundled", `${capabilityId} did not remain bundled`);
+  }
+  assert.equal(managedCapabilities.search.runtime_source, "bundled_fallback");
+  assert.equal(managedCapabilities.commentary.runtime_source, "bundled_fallback");
+
   const beforePlan = await registryRecords(page);
   const installTrigger = packCard(page, "search-verses").getByRole("button", { name: "Plan install", exact: true });
+  await installTrigger.scrollIntoViewIfNeeded();
+  let lifecycleReaderContext = await captureReaderContext(page);
   await installTrigger.click();
   const dialog = page.locator(".physical-pack-confirmation:not([hidden])");
   await dialog.waitFor({ state: "visible" });
-  assert((await dialog.textContent()).includes("Opening or cancelling this plan makes no changes."), "plan must disclose no-mutation cancellation");
+  const installPlanText = await dialog.textContent();
+  assert(installPlanText.includes("Storage usage"), "plan must show storage usage");
+  assert(installPlanText.includes("available"), "plan must show available storage");
+  assert(installPlanText.includes("required raw bytes"), "plan must show required raw bytes");
+  assert(installPlanText.includes("Opening or cancelling this plan makes no changes."), "plan must disclose no-mutation cancellation");
   await page.keyboard.press("Escape");
   assert(await installTrigger.evaluate((node) => document.activeElement === node), "Escape must restore focus to the plan trigger");
   assert.deepEqual(await registryRecords(page), beforePlan, "plan cancellation mutated the physical registry");
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "install planning and Escape cancellation");
 
   await page.locator("#showSearch").click();
-  await page.getByRole("heading", { name: "Search unavailable", exact: true }).waitFor();
-  assert((await page.locator(".physical-pack-unavailable").textContent()).includes("Ordinary scripture reading remains available"), "Search unavailable state lacks safe reader guidance");
+  await page.locator(".search-form").waitFor({ state: "visible" });
+  const preinstallSource = await page.evaluate(async () => {
+    const service = await import(`./src/${"data-service.js"}?v=pr13-live-qa-20260711e`);
+    await service.fetchSearchManifest();
+    return service.physicalDataSource("./data/search/manifest.json");
+  });
+  assert.equal(preinstallSource.runtime_source, "bundled_fallback", "managed Search without a pack did not identify bundled fallback");
   await openManager(page);
+  await packCard(page, "search-verses").getByRole("button", { name: "Plan install", exact: true }).scrollIntoViewIfNeeded();
+  lifecycleReaderContext = await captureReaderContext(page);
 
   const installStarted = performance.now();
   await planAndConfirm(page, "search-verses", "Plan install", "Install Search", "Search install");
   timings.install_search_ms = Math.round(performance.now() - installStarted);
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "Search installation");
+  await packCard(page, "commentary-verse-index").getByRole("button", { name: "Plan install", exact: true }).scrollIntoViewIfNeeded();
+  lifecycleReaderContext = await captureReaderContext(page);
   await planAndConfirm(page, "commentary-verse-index", "Plan install", "Install Commentary", "Commentary install");
   assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).match(/State: (active|rollback available)/), "Search did not activate");
   assert((await packCard(page, "commentary-verse-index").locator(".physical-pack-state").textContent()).includes("State: active"), "Commentary did not activate");
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "Commentary installation");
 
   const reloadStarted = performance.now();
   await page.reload({ waitUntil: "load" });
@@ -194,6 +287,7 @@ try {
   await openManager(page);
   assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).match(/State: (active|rollback available)/), "Search activation did not persist across reload");
   assert((await packCard(page, "commentary-verse-index").locator(".physical-pack-state").textContent()).includes("State: active"), "Commentary activation did not persist across reload");
+  lifecycleReaderContext = await captureReaderContext(page, { prepare: true });
 
   await context.setOffline(true);
   const offlineStarted = performance.now();
@@ -201,10 +295,15 @@ try {
     const service = await import(`./src/${"data-service.js"}?v=pr13-live-qa-20260711e`);
     const search = await service.fetchJson("./data/search/manifest.json");
     const commentary = await service.fetchJson("./data/commentaries/verses/genesis.json");
-    return { searchVersion: search?.version, commentaryVersion: commentary?.version };
+    return {
+      searchVersion: search?.version,
+      commentaryVersion: commentary?.version,
+      searchSource: service.physicalDataSource("./data/search/manifest.json")?.runtime_source,
+      commentarySource: service.physicalDataSource("./data/commentaries/verses/genesis.json")?.runtime_source,
+    };
   });
   timings.offline_managed_read_ms = Math.round(performance.now() - offlineStarted);
-  assert.deepEqual(offline, { searchVersion: 1, commentaryVersion: 1 }, "offline managed reads did not resolve both fixtures");
+  assert.deepEqual(offline, { searchVersion: 1, commentaryVersion: 1, searchSource: "managed_pack", commentarySource: "managed_pack" }, "offline managed reads did not resolve both fixtures");
   await context.setOffline(false);
 
   await page.evaluate(async () => {
@@ -221,36 +320,140 @@ try {
     const cache = await caches.open(record.active_cache);
     await cache.delete(new URL("data/search/manifest.json", document.baseURI).href);
   });
-  await packCard(page, "search-verses").getByRole("button", { name: "Verify", exact: true }).click();
-  const verifyDialog = page.locator(".physical-pack-confirmation:not([hidden])");
-  await verifyDialog.waitFor({ state: "visible" });
-  await verifyDialog.getByRole("button", { name: "Verify Search", exact: true }).click();
-  await page.locator(".physical-pack-live-status").filter({ hasText: "Search verify failed:" }).waitFor({ state: "visible", timeout: 30000 });
-  await page.waitForFunction(() => document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent.includes("State: corrupt"));
+  await page.reload({ waitUntil: "load" });
+  await waitReady(page);
+  await openManager(page);
+  await page.waitForFunction(() => document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent.includes("State: repair required"));
+  const beforeRepairPlan = await registryRecords(page);
+  const repairTrigger = packCard(page, "search-verses").getByRole("button", { name: "Plan repair", exact: true });
+  await repairTrigger.scrollIntoViewIfNeeded();
+  lifecycleReaderContext = await captureReaderContext(page);
+  await repairTrigger.click();
+  const repairDialog = page.locator(".physical-pack-confirmation:not([hidden])");
+  await repairDialog.waitFor({ state: "visible" });
+  const repairText = await repairDialog.textContent();
+  for (const expected of ["raw", "transferred", "Current version: fixture-v1", "Target version: fixture-v1", "Storage usage", "required raw bytes"]) {
+    assert(repairText.includes(expected), `repair plan omitted ${expected}`);
+  }
+  await page.keyboard.press("Escape");
+  assert(await repairTrigger.evaluate((node) => document.activeElement === node), "repair Escape must restore focus");
+  assert.deepEqual(await registryRecords(page), beforeRepairPlan, "repair planning mutated the registry");
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "repair planning and Escape cancellation");
   await planAndConfirm(page, "search-verses", "Plan repair", "Repair Search", "Search repair");
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "missing-file repair");
+
+  const mutateActiveSearch = async (mode) => page.evaluate(async (mutationMode) => {
+    const record = await new Promise((resolveRecord, reject) => {
+      const request = indexedDB.open("bibleapp-physical-packs", 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const tx = request.result.transaction("pack_records", "readonly");
+        const get = tx.objectStore("pack_records").get("search-verses");
+        get.onerror = () => reject(get.error);
+        get.onsuccess = () => resolveRecord(get.result);
+      };
+    });
+    const cache = await caches.open(record.active_cache);
+    const key = new URL("data/search/manifest.json", document.baseURI).href;
+    const original = new Uint8Array(await (await cache.match(key)).arrayBuffer());
+    const bytes = mutationMode === "length"
+      ? new TextEncoder().encode("{}")
+      : (() => { const copy = new Uint8Array(original); copy[0] = copy[0] === 123 ? 91 : 123; return copy; })();
+    await cache.put(key, new Response(bytes, { headers: { "content-type": "application/json" } }));
+  }, mode);
+
+  for (const corruptionKind of ["digest", "length"]) {
+    await mutateActiveSearch(corruptionKind);
+    await page.reload({ waitUntil: "load" });
+    await waitReady(page);
+    await openManager(page);
+    await page.waitForFunction(() => document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent.includes("State: corrupt"));
+    await packCard(page, "search-verses").getByRole("button", { name: "Plan repair", exact: true }).scrollIntoViewIfNeeded();
+    lifecycleReaderContext = await captureReaderContext(page);
+    await planAndConfirm(page, "search-verses", "Plan repair", "Repair Search", "Search repair");
+    await assertReaderContextPreserved(page, lifecycleReaderContext, `${corruptionKind} corruption repair`);
+  }
 
   const catalogInput = page.locator(".physical-pack-catalog-controls input");
   await catalogInput.fill("data/physical-pack-fixtures/catalog-v2.json");
   await page.getByRole("button", { name: "Refresh catalog", exact: true }).click();
   await waitCompleted(page, "Catalog refresh");
   assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).includes("State: update available"), "fixture update was not detected");
+  await packCard(page, "search-verses").getByRole("button", { name: "Plan update", exact: true }).scrollIntoViewIfNeeded();
+  lifecycleReaderContext = await captureReaderContext(page);
   const updateStarted = performance.now();
   await planAndConfirm(page, "search-verses", "Plan update", "Update Search", "Search update");
   timings.update_search_ms = Math.round(performance.now() - updateStarted);
   assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).includes("State: rollback available"), "updated Search did not retain rollback");
-  await planAndConfirm(page, "search-verses", "Plan rollback", "Rollback Search", "Search rollback");
-  assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).includes("fixture-v1"), "rollback did not restore fixture-v1");
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "Search update");
 
+  await page.evaluate(async () => {
+    const record = await new Promise((resolveRecord, reject) => {
+      const request = indexedDB.open("bibleapp-physical-packs", 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const get = request.result.transaction("pack_records", "readonly").objectStore("pack_records").get("search-verses");
+        get.onerror = () => reject(get.error);
+        get.onsuccess = () => resolveRecord(get.result);
+      };
+    });
+    await caches.delete(record.active_cache);
+  });
+  await page.reload({ waitUntil: "load" });
+  await waitReady(page);
+  await openManager(page);
+  await page.waitForFunction(() => {
+    const text = document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent || "";
+    return text.includes("fixture-v1") && text.includes("update available");
+  });
+  await packCard(page, "search-verses").getByRole("button", { name: "Plan update", exact: true }).scrollIntoViewIfNeeded();
+  lifecycleReaderContext = await captureReaderContext(page);
+  await planAndConfirm(page, "search-verses", "Plan update", "Update Search", "Search update");
+  assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).includes("fixture-v2"), "valid rollback recovery could not update back to fixture-v2");
+
+  await page.evaluate(async () => {
+    const record = await new Promise((resolveRecord, reject) => {
+      const request = indexedDB.open("bibleapp-physical-packs", 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => {
+        const get = request.result.transaction("pack_records", "readonly").objectStore("pack_records").get("search-verses");
+        get.onerror = () => reject(get.error);
+        get.onsuccess = () => resolveRecord(get.result);
+      };
+    });
+    const cache = await caches.open(record.rollback.cache);
+    await cache.delete(new URL("data/search/manifest.json", document.baseURI).href);
+  });
+  const rollbackTrigger = packCard(page, "search-verses").getByRole("button", { name: "Plan rollback", exact: true });
+  await rollbackTrigger.scrollIntoViewIfNeeded();
+  lifecycleReaderContext = await captureReaderContext(page);
+  await rollbackTrigger.click();
+  const rollbackDialog = page.locator(".physical-pack-confirmation:not([hidden])");
+  await rollbackDialog.getByRole("button", { name: "Rollback Search", exact: true }).click();
+  await page.locator(".physical-pack-live-status").filter({ hasText: "Search rollback failed:" }).waitFor({ state: "visible", timeout: 30000 });
+  assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).includes("fixture-v2"), "invalid rollback changed the active pointer");
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "invalid rollback rejection");
+
+  await packCard(page, "commentary-verse-index").getByRole("button", { name: "Plan removal", exact: true }).scrollIntoViewIfNeeded();
+  lifecycleReaderContext = await captureReaderContext(page);
   await planAndConfirm(page, "commentary-verse-index", "Plan removal", "Remove Commentary", "Commentary remove");
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "Commentary removal");
+  await packCard(page, "search-verses").getByRole("button", { name: "Plan removal", exact: true }).scrollIntoViewIfNeeded();
+  lifecycleReaderContext = await captureReaderContext(page);
   await planAndConfirm(page, "search-verses", "Plan removal", "Remove Search", "Search remove");
   assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).includes("not installed"), "Search removal did not clear active state");
-  await page.getByRole("button", { name: "Use bundled data", exact: true }).click();
-  await waitCompleted(page, "Bundled-data mode");
+  assert((await packCard(page, "search-verses").locator(".physical-pack-runtime-source").textContent()).includes("bundled fallback"), "Search removal did not expose bundled fallback in managed mode");
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "Search removal");
   await page.locator("#showSearch").click();
   await page.locator(".search-form").waitFor({ state: "visible" });
-
-  const finalReaderContext = await page.evaluate(() => ({ hash: location.hash, title: document.title, chapter: document.querySelector("#chapterSelect")?.value }));
-  assert.deepEqual(finalReaderContext, readerContext, "physical-pack operations changed the reader route or chapter context");
+  const removedSource = await page.evaluate(async () => {
+    const service = await import(`./src/${"data-service.js"}?v=pr13-live-qa-20260711e`);
+    await service.fetchSearchManifest();
+    return service.physicalDataSource("./data/search/manifest.json");
+  });
+  assert.equal(removedSource.runtime_source, "bundled_fallback", "removed Search did not resolve bundled fallback");
+  assert.equal(await page.locator("#chapterSelect").inputValue(), "1", "physical lifecycle changed the reader chapter");
+  assert.equal(new URL(page.url()).hash, "#/read/bsb/genesis/1", "physical lifecycle changed the reader route");
   await openManager(page);
 
   const initialTheme = await page.locator("html").getAttribute("data-theme");
@@ -259,6 +462,50 @@ try {
   assert(toggledTheme !== initialTheme, "theme toggle did not change the manager theme");
   await page.locator("#themeToggle").click();
   await page.emulateMedia({ reducedMotion: "reduce" });
+
+  const strictCapabilityStates = await page.evaluate(async () => {
+    const { resolveCapability } = await import("/src/capabilities.js");
+    const [packageManifest, distributionManifest] = await Promise.all([
+      fetch("./data/package-manifest.json").then((response) => response.json()),
+      fetch("./data/distribution-manifest.json").then((response) => response.json()),
+    ]);
+    const strict = { ...distributionManifest, bundled_fallback: false };
+    const baseRecord = {
+      pack_id: "search-verses",
+      state: "active",
+      active_cache: "test-cache",
+      expected_files: 1,
+      verified_files: 1,
+      expected_bytes: 1,
+      verified_bytes: 1,
+      active_manifest: { dependencies: [] },
+    };
+    const resolve = (capabilityId, physicalRecords = [], packageStore = {}) => resolveCapability(packageManifest, packageStore, capabilityId, {
+      physicalDataMode: "managed_cache_packs",
+      physicalRecords,
+      distributionManifest: strict,
+    }).state;
+    return {
+      not_installed: resolve("search"),
+      disabled: resolve("search", [], { disabled_capability_ids: ["search"] }),
+      incompatible_version: resolve("search", [{ ...baseRecord, state: "incompatible" }]),
+      corrupt: resolve("search", [{ ...baseRecord, state: "corrupt" }]),
+      load_failed: resolve("search", [{ ...baseRecord, state: "failed" }]),
+      dependency_missing: resolve("commentary", [{
+        ...baseRecord,
+        pack_id: "commentary-verse-index",
+        active_manifest: { dependencies: ["search-verses"] },
+      }]),
+    };
+  });
+  assert.deepEqual(strictCapabilityStates, {
+    not_installed: "not_installed",
+    disabled: "disabled",
+    incompatible_version: "incompatible_version",
+    corrupt: "corrupt",
+    load_failed: "load_failed",
+    dependency_missing: "dependency_missing",
+  });
 
   const viewports = [
     [1280, 720, "desktop"],
@@ -273,6 +520,53 @@ try {
     await openManager(page);
     await assertContained(page, label);
   }
+
+  const quotaContext = await browser.newContext({ viewport: { width: 900, height: 900 } });
+  await quotaContext.addInitScript(() => {
+    Object.defineProperty(navigator.storage, "estimate", { configurable: true, value: async () => ({ usage: 999, quota: 1000 }) });
+  });
+  const quotaPage = await quotaContext.newPage();
+  quotaPage.on("console", (message) => { if (message.type() === "error") consoleErrors.push(`quota: ${message.text()}`); });
+  quotaPage.on("pageerror", (error) => pageErrors.push(`quota: ${error.message}`));
+  quotaPage.on("requestfailed", (request) => failedRequests.push(`quota: ${request.method()} ${request.url()} ${request.failure()?.errorText || "failed"}`));
+  quotaPage.on("response", (response) => { if (response.status() >= 400) httpErrors.push(`quota: ${response.status()} ${response.url()}`); });
+  await quotaPage.goto(`${url}?physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json`, { waitUntil: "load" });
+  await waitReady(quotaPage);
+  await openManager(quotaPage);
+  await quotaPage.getByRole("button", { name: "Refresh catalog", exact: true }).click();
+  await waitCompleted(quotaPage, "Catalog refresh");
+  const quotaRecordsBefore = await registryRecords(quotaPage);
+  const quotaCachesBefore = await quotaPage.evaluate(() => caches.keys());
+  await packCard(quotaPage, "search-verses").getByRole("button", { name: "Plan install", exact: true }).click();
+  const quotaDialog = quotaPage.locator(".physical-pack-confirmation:not([hidden])");
+  assert((await quotaDialog.textContent()).includes("approximately 1 B available"), "quota plan did not disclose available storage");
+  await quotaDialog.getByRole("button", { name: "Install Search", exact: true }).click();
+  await quotaPage.locator(".physical-pack-live-status").filter({ hasText: "Search install failed:" }).waitFor({ state: "visible", timeout: 30000 });
+  assert((await quotaPage.locator(".physical-pack-live-status").textContent()).includes("requires"), "quota failure was not structured and visible");
+  assert.deepEqual(await registryRecords(quotaPage), quotaRecordsBefore, "insufficient quota mutated registry state");
+  assert.deepEqual(await quotaPage.evaluate(() => caches.keys()), quotaCachesBefore, "insufficient quota created staging cache storage");
+  await quotaContext.close();
+
+  const unknownStorageContext = await browser.newContext({ viewport: { width: 900, height: 900 } });
+  await unknownStorageContext.addInitScript(() => {
+    Object.defineProperty(navigator.storage, "estimate", { configurable: true, value: async () => { throw new Error("estimate unavailable"); } });
+  });
+  const unknownStoragePage = await unknownStorageContext.newPage();
+  unknownStoragePage.on("console", (message) => { if (message.type() === "error") consoleErrors.push(`unknown-storage: ${message.text()}`); });
+  unknownStoragePage.on("pageerror", (error) => pageErrors.push(`unknown-storage: ${error.message}`));
+  unknownStoragePage.on("requestfailed", (request) => failedRequests.push(`unknown-storage: ${request.method()} ${request.url()} ${request.failure()?.errorText || "failed"}`));
+  unknownStoragePage.on("response", (response) => { if (response.status() >= 400) httpErrors.push(`unknown-storage: ${response.status()} ${response.url()}`); });
+  await unknownStoragePage.goto(`${url}?physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json`, { waitUntil: "load" });
+  await waitReady(unknownStoragePage);
+  await openManager(unknownStoragePage);
+  await unknownStoragePage.getByRole("button", { name: "Refresh catalog", exact: true }).click();
+  await waitCompleted(unknownStoragePage, "Catalog refresh");
+  await packCard(unknownStoragePage, "search-verses").getByRole("button", { name: "Plan install", exact: true }).click();
+  const unknownDialog = unknownStoragePage.locator(".physical-pack-confirmation:not([hidden])");
+  assert((await unknownDialog.textContent()).includes("Storage estimate unavailable"), "unknown storage estimate was not disclosed");
+  await unknownDialog.getByRole("button", { name: "Install Search", exact: true }).click();
+  await waitCompleted(unknownStoragePage, "Search install");
+  await unknownStorageContext.close();
 
   const mobileContext = await browser.newContext({
     viewport: { width: 390, height: 844 },
@@ -301,7 +595,10 @@ try {
   console.log(JSON.stringify({
     browser: `Microsoft Edge ${browserVersion}`,
     fixtures: ["Search fixture-v1/v2", "Commentary fixture-v1"],
-    lifecycle: ["plan-cancel", "install", "activation", "reload", "offline-read", "corruption", "repair", "update", "rollback", "remove", "bundled-fallback"],
+    lifecycle: ["plan-cancel", "install", "activation", "reload", "offline-read", "missing-file-reconcile", "digest-reconcile", "byte-length-reconcile", "repair", "update", "valid-rollback-recovery", "invalid-rollback-rejection", "remove", "bundled-fallback"],
+    distribution: ["unrelated-bundled-capabilities", "managed-override", "strict-structured-states"],
+    storage: ["visible-plan-estimate", "insufficient-before-staging", "unavailable-estimate-safe"],
+    reader_context: ["route", "chapter", "selected-word-or-verse", "highlight", "reader-scroll", "detail-history", "detail-lock-follow", "detail-scroll"],
     accessibility: ["Escape focus restoration", "progress status", "light/dark", "reduced motion"],
     viewports: viewports.map(([width, height, label]) => ({ label, width, height })).concat([{ label: "mobile-device", width: 390, height: 844 }]),
     timings,

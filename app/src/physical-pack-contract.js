@@ -7,6 +7,7 @@ export const PHYSICAL_PACK_STATES = Object.freeze([
   "discovered",
   "staging",
   "verifying",
+  "startup_verifying",
   "active",
   "update_available",
   "incompatible",
@@ -25,6 +26,7 @@ export const PHYSICAL_PACK_KINDS = Object.freeze({
 
 const IDENTIFIER_PATTERN = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
+const SEMANTIC_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const textEncoder = new TextEncoder();
 
 function fail(message) {
@@ -136,14 +138,54 @@ function compatibility(value, label = "compatibility") {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail(`${label} must be an object.`);
   const minimum = requiredString(value.minimum_app_version, `${label}.minimum_app_version`);
   const maximum = requiredString(value.maximum_app_version_exclusive, `${label}.maximum_app_version_exclusive`);
-  const versionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
-  if (!versionPattern.test(minimum) || !versionPattern.test(maximum)) {
+  if (!SEMANTIC_VERSION_PATTERN.test(minimum) || !SEMANTIC_VERSION_PATTERN.test(maximum)) {
     fail(`${label} versions must be semantic versions.`);
   }
   return Object.freeze({
     minimum_app_version: minimum,
     maximum_app_version_exclusive: maximum,
   });
+}
+
+function parseSemanticVersion(value, label = "version") {
+  const normalized = requiredString(value, label);
+  const match = normalized.match(SEMANTIC_VERSION_PATTERN);
+  if (!match) fail(`${label} must be a semantic version.`);
+  return {
+    core: match.slice(1, 4).map(Number),
+    prerelease: match[4] ? match[4].split(".") : [],
+  };
+}
+
+export function compareSemanticVersions(left, right) {
+  const a = parseSemanticVersion(left, "left version");
+  const b = parseSemanticVersion(right, "right version");
+  for (let index = 0; index < 3; index += 1) {
+    if (a.core[index] !== b.core[index]) return a.core[index] < b.core[index] ? -1 : 1;
+  }
+  if (!a.prerelease.length && !b.prerelease.length) return 0;
+  if (!a.prerelease.length) return 1;
+  if (!b.prerelease.length) return -1;
+  const length = Math.max(a.prerelease.length, b.prerelease.length);
+  for (let index = 0; index < length; index += 1) {
+    const aValue = a.prerelease[index];
+    const bValue = b.prerelease[index];
+    if (aValue == null) return -1;
+    if (bValue == null) return 1;
+    if (aValue === bValue) continue;
+    const aNumeric = /^\d+$/.test(aValue);
+    const bNumeric = /^\d+$/.test(bValue);
+    if (aNumeric && bNumeric) return Number(aValue) < Number(bValue) ? -1 : 1;
+    if (aNumeric !== bNumeric) return aNumeric ? -1 : 1;
+    return aValue < bValue ? -1 : 1;
+  }
+  return 0;
+}
+
+export function appVersionIsCompatible(compatibilityValue, appVersion) {
+  if (!compatibilityValue) return true;
+  return compareSemanticVersions(appVersion, compatibilityValue.minimum_app_version) >= 0 &&
+    compareSemanticVersions(appVersion, compatibilityValue.maximum_app_version_exclusive) < 0;
 }
 
 export function validateDistributionManifest(value) {
@@ -312,7 +354,7 @@ export function verifiedActivePhysicalPackIds(records = []) {
   if (!Array.isArray(records)) fail("records must be an array.");
   return Object.freeze(
     [...new Set(records
-      .filter((record) => record?.state === "active")
+      .filter((record) => ["active", "update_available", "rollback_available"].includes(record?.state))
       .filter((record) => record.active_cache)
       .filter((record) => record.verified_files === record.expected_files)
       .filter((record) => record.verified_bytes === record.expected_bytes)
@@ -333,8 +375,15 @@ export function resolvePhysicalFeaturePackIds({ distribution, packageManifest, r
     });
     return Object.freeze([...resolved].sort());
   }
-  const resolved = new Set(normalizedDistribution.immutable_base_feature_pack_ids);
+  const managedOptional = new Set(normalizedDistribution.managed_optional_pack_ids);
+  const resolved = new Set([
+    ...normalizedDistribution.immutable_base_feature_pack_ids,
+    ...[...featurePackIds].filter((id) => !managedOptional.has(id)),
+  ]);
   verifiedActivePhysicalPackIds(registryRecords).forEach((id) => resolved.add(id));
+  if (normalizedDistribution.bundled_fallback) {
+    normalizedDistribution.managed_optional_pack_ids.forEach((id) => resolved.add(id));
+  }
   const unknown = [...resolved].filter((id) => !featurePackIds.has(id));
   if (unknown.length) fail(`physical state references unknown feature packs: ${unknown.join(", ")}.`);
   return Object.freeze([...resolved].sort());

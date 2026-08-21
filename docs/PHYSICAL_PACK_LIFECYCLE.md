@@ -46,8 +46,14 @@ and is not exported with personal data.
 
 Catalog refresh validates the catalog kind/schema, package identity, app
 compatibility, immutable manifest paths/digests, dependencies, totals, notices,
-and provenance references. Planning computes dependency order, totals, and
-storage estimates without mutation.
+and provenance references. Catalog, manifest, and artifact URLs are rejected
+before fetch unless they use the application origin, HTTP(S), no credentials,
+and no fragment. Compatibility uses full semantic-version precedence,
+including prerelease ordering and an exclusive maximum. Planning computes
+dependency order, required pack IDs, files, raw/transfer bytes, current/target
+versions, and storage estimates without mutation. A meaningful insufficient
+quota fails before staging storage is created; an unavailable estimate is
+disclosed without a false rejection.
 
 Install, update, and repair:
 
@@ -60,31 +66,42 @@ Install, update, and repair:
 7. retain the previous active manifest/cache as rollback.
 
 Failure or cancellation deletes only unactivated operation caches and preserves
-the previous active and rollback copies. Verification never deletes a corrupt
-copy; it classifies it for repair. Rollback swaps two already verified cache
-pointers. Removal records pending deletion before deleting cache bytes and
+the previous active and rollback copies. One stored-pack verifier checks cache
+existence, exact inventory, required entries, media types, byte lengths,
+per-file SHA-256, and verified totals. Missing storage is `repair_required`;
+content drift is `corrupt`. Explicit rollback verifies its target before any
+pointer change and retains the current active copy as the next rollback only
+when its bytes also verify. Removal records pending deletion before deleting cache bytes and
 blocks removal while an active dependent pack still requires the target.
 
 Startup reconciliation clears unreferenced staging caches, restores the prior
-active record after an interrupted install/update, completes interrupted
-removal, activates a valid retained rollback when the active cache disappeared,
-or classifies the pack `repair_required`. Explicit cleanup handles remaining
-unreferenced pack caches.
+active record after an interrupted install/update, and completes interrupted
+removal. Active claims enter `startup_verifying`, so managed resolution cannot
+use unverified bytes while full verification completes asynchronously. A
+verified rollback may recover an invalid active copy; an invalid rollback is
+never activated. Explicit cleanup handles remaining unreferenced pack caches.
 
 ## Runtime behavior
 
-`app/src/data-service.js` is the single physical resolution boundary. Managed
-Search and Commentary paths are served only from verified active caches. Parsed
-and pending JSON cache identity includes the physical pack version and manifest
-digest, and lifecycle changes invalidate affected data without resetting the
-reader route or chapter.
+`app/src/data-service.js` is the single physical resolution boundary. Only the
+distribution manifest's `managed_optional_pack_ids` participate in physical
+resolution. Search and Commentary prefer verified active caches. When none is
+valid and `bundled_fallback` is true, they resolve the tracked static file with
+runtime source `bundled_fallback`; removal exposes that fallback without a mode
+switch. With fallback false, managed errors remain structured and
+`tryFetchJson()` cannot erase them. All other bundled capabilities remain
+available in managed mode. Parsed and pending JSON cache identity includes the
+physical source/version, and lifecycle changes invalidate affected data without
+resetting the reader.
 
 Structured capability states are `not_installed`, `disabled`,
 `dependency_missing`, `incompatible_version`, `corrupt`, and `load_failed`.
 Search and Commentary keep their existing capability IDs. Messages identify
 the required action and explicitly preserve ordinary scripture reading.
 
-Returning to bundled mode is immediate and uses the tracked complete data tree.
+The current complete distribution sets `bundled_fallback: true`. Managed mode
+is an opt-in reference implementation; returning to bundled mode remains
+immediate and uses the tracked complete data tree.
 
 ## My Data management UI
 
@@ -96,8 +113,11 @@ history, failure, notice, and provenance.
 Every mutation starts with a plan dialog. Escape and Cancel are data-neutral and
 restore focus. Install/update/repair expose live progress and cancellation.
 Remove and rollback require confirmation. Operations restore focus by stable
-action identity, retain the reader route, and use existing light/dark and
-responsive visual tokens.
+action identity and preserve the exact reader route/chapter, selected word or
+verse, highlight, reader scroll, detail history, lock/follow state, and detail
+scroll without rerendering the reader. Plans disclose usage, quota, approximate
+available storage, and required raw bytes. The surface uses existing light/dark
+and responsive visual tokens.
 
 ## Test fixtures and coverage
 
@@ -108,6 +128,7 @@ exercise dependency planning without hashing or copying the production corpus.
 `npm run test:physical-packs` covers contracts and the complete in-memory
 lifecycle. `npm run test:physical-packs:edge` uses Microsoft Edge and real
 IndexedDB/Cache Storage to cover plan/cancel, install, reload, offline reads,
-corruption, repair, update, retained rollback, rollback, removal, bundled
-fallback, reader context, focus, themes, reduced motion, responsive/mobile
-containment, and browser/request health.
+missing and modified byte reconciliation, repair, update, valid and invalid
+rollback recovery, removal, distribution-aware bundled fallback, strict
+unavailable states, storage/quota behavior, full reader context, focus, themes,
+reduced motion, responsive/mobile containment, and browser/request health.

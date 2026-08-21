@@ -12,6 +12,7 @@ import {
   invalidatePhysicalPackData,
 } from "./src/data-service.js?v=pr13-live-qa-20260711e";
 import { createPhysicalPackManager } from "./src/physical-pack-manager.js";
+import { validateDistributionManifest } from "./src/physical-pack-contract.js";
 import { createDetailViews } from "./src/detail-views.js?v=pr13-live-qa-20260711e";
 import {
   beginDetailIntent,
@@ -151,6 +152,7 @@ function canUseCapability(capabilityId) {
     assumeBundledFullAccess: state.physicalDataMode !== "managed_cache_packs",
     physicalDataMode: state.physicalDataMode,
     physicalRecords: state.physicalPackRecords,
+    distributionManifest: state.distributionManifest,
   });
 }
 
@@ -159,6 +161,7 @@ function getCapabilityState(capabilityId) {
     assumeBundledFullAccess: state.physicalDataMode !== "managed_cache_packs",
     physicalDataMode: state.physicalDataMode,
     physicalRecords: state.physicalPackRecords,
+    distributionManifest: state.distributionManifest,
   });
 }
 
@@ -1242,12 +1245,13 @@ async function init() {
       }),
       fetch("./data/distribution-manifest.json").then((response) => {
         if (!response.ok) throw new Error("Distribution manifest could not be loaded.");
-        return response.json();
+        return response.json().then(validateDistributionManifest);
       }),
     ]);
     try {
       state.physicalPackManager = createPhysicalPackManager({
         packageManifest: state.packageManifest,
+        distributionManifest: state.distributionManifest,
         appVersion: "1.0.0",
         baseUrl: new URL("./", document.baseURI),
       });
@@ -1259,8 +1263,8 @@ async function init() {
         state.commentary = null;
         syncToolButtons();
       };
-      applyPhysicalSnapshot(state.physicalPackManager.snapshot());
       state.physicalPackManager.subscribe(applyPhysicalSnapshot);
+      applyPhysicalSnapshot(state.physicalPackManager.snapshot());
       configurePhysicalPackResolver((path) => state.physicalPackManager.resolve(path));
     } catch (physicalError) {
       state.physicalPackInitializationError = physicalError instanceof Error

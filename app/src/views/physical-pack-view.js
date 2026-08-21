@@ -13,11 +13,49 @@ function packLabel(packId) {
   return packId;
 }
 
+function describeStorage(plan) {
+  const storage = plan.storage;
+  if (!storage?.known) {
+    return `Storage estimate unavailable; required raw bytes: ${formatBytes(plan.bytes || 0)}.`;
+  }
+  return `Storage usage ${formatBytes(storage.usage)} of ${formatBytes(storage.quota)}; approximately ${formatBytes(storage.available)} available; required raw bytes ${formatBytes(plan.bytes || 0)}.`;
+}
+
 function focusable(dialog) {
   return [...dialog.querySelectorAll("button:not([disabled]), input:not([disabled])")];
 }
 
-function createPlanDialog({ title, description, confirmLabel, onConfirm }) {
+function captureReaderSelection() {
+  const word = document.querySelector(".reader-context-word");
+  const verse = word?.closest(".verse-row, .source-bearing-segment") || document.querySelector(".reader-context-verse");
+  return {
+    word: word ? {
+      strongCode: word.dataset.strongCode || "",
+      tokenIndex: word.dataset.tokenIndex || "",
+      interlinearKey: word.dataset.interlinearKey || "",
+    } : null,
+    verse: verse?.dataset.verse || "",
+  };
+}
+
+function restoreReaderSelection(selection) {
+  if (!selection) return;
+  if (selection.word) {
+    const word = [...document.querySelectorAll(".strong-token")].find((node) =>
+      (node.dataset.strongCode || "") === selection.word.strongCode &&
+      (node.dataset.tokenIndex || "") === selection.word.tokenIndex &&
+      (node.dataset.interlinearKey || "") === selection.word.interlinearKey
+    );
+    word?.classList.add("reader-context-word");
+    word?.closest(".verse-row, .source-bearing-segment")?.classList.add("reader-context-verse");
+    return;
+  }
+  if (selection.verse) {
+    document.querySelector(`.verse-row[data-verse="${CSS.escape(selection.verse)}"]`)?.classList.add("reader-context-verse");
+  }
+}
+
+function createPlanDialog({ title, description, confirmLabel, onConfirm, onClose }) {
   const dialog = document.createElement("div");
   dialog.className = "physical-pack-confirmation";
   dialog.hidden = true;
@@ -41,12 +79,17 @@ function createPlanDialog({ title, description, confirmLabel, onConfirm }) {
   dialog.append(heading, text, actions);
 
   let returnFocus = null;
+  let returnScrollTop = null;
   const close = () => {
     dialog.hidden = true;
     document.removeEventListener("keydown", onKeydown, true);
     const target = returnFocus;
     returnFocus = null;
-    target?.focus();
+    target?.focus({ preventScroll: true });
+    const scroller = target?.closest?.("#detailContent");
+    if (scroller && returnScrollTop != null) scroller.scrollTop = returnScrollTop;
+    returnScrollTop = null;
+    onClose?.();
   };
   const onKeydown = (event) => {
     if (dialog.hidden) return;
@@ -68,15 +111,20 @@ function createPlanDialog({ title, description, confirmLabel, onConfirm }) {
   cancel.addEventListener("click", close);
   confirm.addEventListener("click", async () => {
     const target = returnFocus;
+    const scroller = target?.closest?.("#detailContent");
+    const scrollTop = returnScrollTop;
     dialog.hidden = true;
     document.removeEventListener("keydown", onKeydown, true);
     returnFocus = null;
+    returnScrollTop = null;
+    if (scroller && scrollTop != null) scroller.scrollTop = scrollTop;
     await onConfirm(target);
   });
   return {
     node: dialog,
     open(trigger) {
       returnFocus = trigger;
+      returnScrollTop = trigger.closest?.("#detailContent")?.scrollTop ?? null;
       dialog.hidden = false;
       document.addEventListener("keydown", onKeydown, true);
       cancel.focus();
@@ -102,7 +150,7 @@ export function renderPhysicalPackManager(ctx) {
   const heading = document.createElement("h4");
   heading.textContent = "Physical study packs";
   const intro = document.createElement("p");
-  intro.textContent = "Install and verify browser-local Search and Commentary copies. The complete bundled app remains available, and pack bytes are not included in portable backups.";
+  intro.textContent = "Install and verify browser-local Search and Commentary copies. The distribution manifest controls bundled fallback; physical state remains visible independently and pack bytes are not included in portable backups.";
   const content = document.createElement("div");
   const live = document.createElement("p");
   live.className = "physical-pack-live-status";
@@ -120,6 +168,7 @@ export function renderPhysicalPackManager(ctx) {
 
   let busy = false;
   let activeAbort = null;
+  const preservedReaderSelection = captureReaderSelection();
 
   const run = async (label, action, focusKey = null) => {
     if (busy) return;
@@ -146,7 +195,7 @@ export function renderPhysicalPackManager(ctx) {
       busy = false;
       activeAbort = null;
       render(focusKey);
-      ctx.renderChapter?.();
+      restoreReaderSelection(preservedReaderSelection);
     }
   };
 
@@ -159,12 +208,18 @@ export function renderPhysicalPackManager(ctx) {
         trigger.focus();
         return;
       }
-      const size = plan.bytes == null ? "the currently active local copy" : `${plan.files} file(s), ${formatBytes(plan.bytes)}`;
-      const description = `${packLabel(packId)} ${action} plan: ${size}. Dependencies: ${(plan.dependency_order || []).join(" → ") || "none"}. Opening or cancelling this plan makes no changes.`;
+      const size = plan.bytes == null
+        ? "the currently active local copy"
+        : `${plan.files} file(s), ${formatBytes(plan.bytes)} raw, approximately ${formatBytes(plan.transfer_bytes)} transferred`;
+      const versions = plan.target_version
+        ? ` Current version: ${plan.current_version || "not installed"}. Target version: ${plan.target_version}.`
+        : "";
+      const description = `${packLabel(packId)} ${action} plan: ${size}. Required packs: ${(plan.required_pack_ids || []).join(", ") || "none"}. Dependencies: ${(plan.dependency_order || []).join(" → ") || "none"}.${versions} ${describeStorage(plan)} Opening or cancelling this plan makes no changes.`;
       const dialog = createPlanDialog({
         title: `${action[0].toUpperCase()}${action.slice(1)} ${packLabel(packId)}?`,
         description,
         confirmLabel: `${action[0].toUpperCase()}${action.slice(1)} ${packLabel(packId)}`,
+        onClose: () => restoreReaderSelection(preservedReaderSelection),
         onConfirm: () => run(`${packLabel(packId)} ${action}`, (signal, onProgress) => {
           if (action === "install") return manager.install(packId, { signal, onProgress });
           if (action === "update") return manager.update(packId, { signal, onProgress });
@@ -183,6 +238,8 @@ export function renderPhysicalPackManager(ctx) {
   };
 
   const render = (restoreFocusKey = null) => {
+    const detailScroller = section.closest("#detailContent");
+    const detailScrollTop = detailScroller?.scrollTop ?? null;
     const snapshot = manager.snapshot();
     const wrap = document.createDocumentFragment();
 
@@ -247,6 +304,17 @@ export function renderPhysicalPackManager(ctx) {
       state.textContent = record
         ? `State: ${record.state.replaceAll("_", " ")}; active ${record.pack_version}; verified ${record.verified_files}/${record.expected_files} files.`
         : `State: not installed${available ? `; available ${available.pack_version}, ${formatBytes(available.bytes)}` : "; no catalog entry"}.`;
+      const runtime = document.createElement("p");
+      runtime.className = "physical-pack-runtime-source";
+      const verifiedManaged = record && ["active", "update_available", "rollback_available"].includes(record.state) &&
+        record.active_cache && record.verified_files === record.expected_files && record.verified_bytes === record.expected_bytes;
+      runtime.textContent = snapshot.mode === PHYSICAL_DATA_MODES.managed
+        ? verifiedManaged
+          ? "Runtime source: verified managed pack."
+          : snapshot.distribution?.bundled_fallback
+            ? "Runtime source: bundled fallback; physical actions below still reflect the browser-local copy."
+            : "Runtime source: unavailable until a verified managed pack is active."
+        : "Runtime source: complete bundled data.";
       const actions = document.createElement("div");
       actions.className = "user-data-actions physical-pack-actions";
       const addPlanAction = (label, action, danger = false) => {
@@ -254,7 +322,7 @@ export function renderPhysicalPackManager(ctx) {
         button.disabled = busy || !available && ["install", "update", "repair"].includes(action);
         actions.append(button);
       };
-      if (!record || ["failed", "repair_required"].includes(record.state)) addPlanAction(record ? "Retry install" : "Plan install", "install");
+      if (!record || record.state === "failed") addPlanAction(record ? "Retry install" : "Plan install", "install");
       if (record?.state === "update_available") addPlanAction("Plan update", "update");
       if (["corrupt", "repair_required"].includes(record?.state)) addPlanAction("Plan repair", "repair");
       if (record?.active_cache) {
@@ -262,7 +330,7 @@ export function renderPhysicalPackManager(ctx) {
         if (record.rollback_cache) addPlanAction("Plan rollback", "rollback");
         addPlanAction("Plan removal", "remove", true);
       }
-      card.append(title, state, actions);
+      card.append(title, state, runtime, actions);
       if (record?.last_failure) {
         const failure = document.createElement("p");
         failure.className = "physical-pack-failure";
@@ -309,7 +377,9 @@ export function renderPhysicalPackManager(ctx) {
     }
 
     content.replaceChildren(wrap);
-    if (restoreFocusKey) content.querySelector(`[data-focus-key="${CSS.escape(restoreFocusKey)}"]`)?.focus();
+    if (restoreFocusKey) content.querySelector(`[data-focus-key="${CSS.escape(restoreFocusKey)}"]`)?.focus({ preventScroll: true });
+    if (detailScroller && detailScrollTop != null) detailScroller.scrollTop = detailScrollTop;
+    restoreReaderSelection(preservedReaderSelection);
   };
 
   render();

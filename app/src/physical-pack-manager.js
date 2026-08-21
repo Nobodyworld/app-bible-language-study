@@ -1,10 +1,12 @@
 import {
   PHYSICAL_DATA_MODES,
+  appVersionIsCompatible,
   canonicalAggregateFrame,
   canonicalPackPath,
   createPhysicalRegistryRecord,
   normalizeSha256,
   physicalPackCacheName,
+  validateDistributionManifest,
   validatePhysicalPackCatalog,
   validatePhysicalPackManifest,
 } from "./physical-pack-contract.js";
@@ -69,25 +71,23 @@ function samePackageIdentity(left, right) {
   );
 }
 
-function appMajor(version) {
-  const match = String(version || "").match(/^(\d+)\./);
-  return match ? Number(match[1]) : null;
-}
-
-function compatibleWithApp(compatibility, appVersion) {
-  if (!compatibility) return true;
-  const current = appMajor(appVersion);
-  const minimum = appMajor(compatibility.minimum_app_version);
-  const maximum = appMajor(compatibility.maximum_app_version_exclusive);
-  return current != null && minimum != null && maximum != null && current >= minimum && current < maximum;
-}
-
 function ensureNotAborted(signal) {
   if (signal?.aborted) throw new DOMException("Physical-pack operation was cancelled.", "AbortError");
 }
 
 function pathPackId(path) {
   return OPTIONAL_PATH_PACKS.find(([prefix]) => path.startsWith(prefix))?.[1] || null;
+}
+
+function recordIsVerifiedActive(record) {
+  return Boolean(
+    record &&
+    ["active", "update_available", "rollback_available"].includes(record.state) &&
+    record.active_cache &&
+    record.active_manifest &&
+    record.verified_files === record.expected_files &&
+    record.verified_bytes === record.expected_bytes
+  );
 }
 
 export class PhysicalPackError extends Error {
@@ -109,6 +109,13 @@ export class PhysicalPackManager {
     this.clock = options.clock || Date.now;
     this.baseUrl = new URL(options.baseUrl || globalThis.document?.baseURI || globalThis.location?.href || "http://localhost/");
     this.packageManifest = options.packageManifest || null;
+    this.distributionManifest = options.distributionManifest
+      ? validateDistributionManifest(options.distributionManifest)
+      : null;
+    this.managedOptionalPackIds = new Set(
+      this.distributionManifest?.managed_optional_pack_ids || OPTIONAL_PATH_PACKS.map(([, packId]) => packId),
+    );
+    this.bundledFallback = this.distributionManifest?.bundled_fallback === true;
     this.appVersion = options.appVersion || "1.0.0";
     this.mode = PHYSICAL_DATA_MODES.bundled;
     this.catalog = null;
@@ -117,6 +124,7 @@ export class PhysicalPackManager {
     this.history = [];
     this.orphanCaches = [];
     this.listeners = new Set();
+    this.startupReconciliation = Promise.resolve();
   }
 
   async initialize() {
@@ -130,7 +138,13 @@ export class PhysicalPackManager {
     this.catalogUrl = await this.registry.getMeta("catalog_url", null);
     await this.reconcileStartup();
     await this.refreshSnapshot();
+    this.startupReconciliation = this.completeStartupReconciliation();
     return this;
+  }
+
+  async whenStartupReconciled() {
+    await this.startupReconciliation;
+    return this.snapshot();
   }
 
   subscribe(listener) {
@@ -152,6 +166,7 @@ export class PhysicalPackManager {
       history: clone(this.history),
       orphan_caches: [...this.orphanCaches],
       storage_supported: Boolean(this.cacheStorage && this.registry),
+      distribution: clone(this.distributionManifest),
     });
   }
 
@@ -186,14 +201,36 @@ export class PhysicalPackManager {
     if (!samePackageIdentity(value.package_identity, this.packageIdentity())) {
       throw new PhysicalPackError("incompatible_version", `${label} targets a different package inventory.`);
     }
-    if (!compatibleWithApp(value.compatibility, this.appVersion)) {
+    if (!appVersionIsCompatible(value.compatibility, this.appVersion)) {
       throw new PhysicalPackError("incompatible_version", `${label} is incompatible with app version ${this.appVersion}.`);
     }
   }
 
+  sameOriginUrl(value, base, label, { allowFragment = false } = {}) {
+    let resolved;
+    try {
+      resolved = new URL(String(value || ""), base);
+    } catch {
+      throw new PhysicalPackError("source_policy", `${label} is not a valid URL.`);
+    }
+    if (!/^https?:$/.test(resolved.protocol)) {
+      throw new PhysicalPackError("source_policy", `${label} must use HTTP or HTTPS.`);
+    }
+    if (resolved.username || resolved.password) {
+      throw new PhysicalPackError("source_policy", `${label} must not contain credentials.`);
+    }
+    if (resolved.origin !== this.baseUrl.origin) {
+      throw new PhysicalPackError("source_policy", `${label} must use the application origin.`);
+    }
+    if (resolved.hash && !allowFragment) {
+      throw new PhysicalPackError("source_policy", `${label} must not contain a fragment.`);
+    }
+    return resolved;
+  }
+
   async refreshCatalog(url = this.catalogUrl, options = {}) {
     if (!url) throw new PhysicalPackError("load_failed", "Enter a physical-pack catalog URL before refreshing.");
-    const catalogUrl = new URL(url, this.baseUrl);
+    const catalogUrl = this.sameOriginUrl(url, this.baseUrl, "Physical-pack catalog URL");
     const response = await this.fetchImpl(catalogUrl, { cache: "no-store", signal: options.signal });
     assertResponse(response, "Physical-pack catalog");
     const bytes = await response.arrayBuffer();
@@ -252,16 +289,24 @@ export class PhysicalPackManager {
   async storageEstimate() {
     try {
       const estimate = await this.storage?.estimate?.();
-      return estimate ? { usage: Number(estimate.usage || 0), quota: Number(estimate.quota || 0) } : null;
+      const usage = Number(estimate?.usage);
+      const quota = Number(estimate?.quota);
+      const known = Number.isFinite(usage) && usage >= 0 && Number.isFinite(quota) && quota > 0;
+      return {
+        known,
+        usage: known ? usage : null,
+        quota: known ? quota : null,
+        available: known ? Math.max(0, quota - usage) : null,
+      };
     } catch {
-      return null;
+      return { known: false, usage: null, quota: null, available: null };
     }
   }
 
   async plan(packId, action = "install") {
     const records = await this.registry.listRecords();
     const current = records.find((record) => record.pack_id === packId) || null;
-    if (action === "remove" || action === "verify" || action === "repair" || action === "rollback") {
+    if (action === "remove" || action === "verify" || action === "rollback") {
       const blockedBy = action === "remove"
         ? records.filter((record) => record.pack_id !== packId && record.active_cache && record.active_manifest?.dependencies?.includes(packId)).map((record) => record.pack_id)
         : [];
@@ -276,8 +321,9 @@ export class PhysicalPackManager {
       });
     }
     const order = this.installationOrder(packId);
-    const active = new Set(records.filter((record) => ["active", "update_available", "rollback_available"].includes(record.state)).map((record) => record.pack_id));
+    const active = new Set(records.filter(recordIsVerifiedActive).map((record) => record.pack_id));
     const required = order.filter((entry) => !active.has(entry.pack_id) || entry.pack_id === packId);
+    const storage = await this.storageEstimate();
     return Object.freeze({
       action,
       pack_id: packId,
@@ -287,12 +333,29 @@ export class PhysicalPackManager {
       files: required.reduce((sum, entry) => sum + entry.files, 0),
       bytes: required.reduce((sum, entry) => sum + entry.bytes, 0),
       transfer_bytes: required.reduce((sum, entry) => sum + entry.transfer_bytes, 0),
-      storage: await this.storageEstimate(),
+      current_version: current?.pack_version || null,
+      target_version: this.catalogEntry(packId).pack_version,
+      storage,
     });
   }
 
+  assertStorageCapacity(plan) {
+    if (plan?.storage?.known && plan.storage.available < plan.bytes) {
+      throw new PhysicalPackError(
+        "insufficient_storage",
+        `Physical-pack ${plan.action} requires ${plan.bytes} bytes but only approximately ${plan.storage.available} bytes are available.`,
+        {
+          usage: plan.storage.usage,
+          quota: plan.storage.quota,
+          available: plan.storage.available,
+          required_bytes: plan.bytes,
+        },
+      );
+    }
+  }
+
   async loadManifest(entry, signal) {
-    const manifestUrl = new URL(entry.manifest_path, this.catalogUrl);
+    const manifestUrl = this.sameOriginUrl(entry.manifest_path, this.catalogUrl, `Manifest URL for ${entry.pack_id}`);
     const response = await this.fetchImpl(manifestUrl, { cache: "no-store", signal });
     assertResponse(response, `Manifest for ${entry.pack_id}`);
     const bytes = await response.arrayBuffer();
@@ -315,6 +378,7 @@ export class PhysicalPackManager {
   async install(packId, options = {}) {
     const plan = await this.plan(packId, options.action || "install");
     ensureNotAborted(options.signal);
+    this.assertStorageCapacity(plan);
     for (const entry of this.installationOrder(packId)) {
       const current = await this.registry.getRecord(entry.pack_id);
       const isTarget = entry.pack_id === packId;
@@ -378,7 +442,7 @@ export class PhysicalPackManager {
       let verifiedFiles = 0;
       for (const file of manifest.files) {
         ensureNotAborted(signal);
-        const artifactUrl = new URL(`files/${file.path}`, manifestUrl);
+        const artifactUrl = this.sameOriginUrl(`files/${file.path}`, manifestUrl, `Artifact URL for ${file.path}`);
         const response = await this.fetchImpl(artifactUrl, { cache: "no-store", signal });
         assertResponse(response, file.path);
         const bytes = await response.arrayBuffer();
@@ -413,8 +477,20 @@ export class PhysicalPackManager {
         await activeCache.put(request, response.clone());
       }
       const activatedAt = isoNow(this.clock);
-      const previousActiveIsValid = previous?.active_cache && !["corrupt", "repair_required", "failed"].includes(previous.state);
-      const rollback = previousActiveIsValid
+      let previousActiveIsValid = false;
+      if (previous?.active_cache && previous?.active_manifest && !["corrupt", "repair_required", "failed", "startup_verifying"].includes(previous.state)) {
+        try {
+          await this.verifyStoredPack({
+            cacheName: previous.active_cache,
+            manifest: previous.active_manifest,
+            label: `Previous active ${entry.pack_id} pack`,
+          });
+          previousActiveIsValid = true;
+        } catch {
+          previousActiveIsValid = false;
+        }
+      }
+      let rollback = previousActiveIsValid
         ? {
           pack_version: previous.pack_version,
           manifest_sha256: previous.manifest_sha256,
@@ -425,9 +501,19 @@ export class PhysicalPackManager {
           verified_bytes: previous.verified_bytes,
           activated_at: previous.activated_at,
         }
-        : previous?.rollback?.cache
-          ? clone(previous.rollback)
-          : null;
+        : null;
+      if (!rollback && previous?.rollback?.cache && previous?.rollback?.manifest) {
+        try {
+          await this.verifyStoredPack({
+            cacheName: previous.rollback.cache,
+            manifest: previous.rollback.manifest,
+            label: `Retained rollback ${entry.pack_id} pack`,
+          });
+          rollback = clone(previous.rollback);
+        } catch {
+          rollback = null;
+        }
+      }
       const activeRecord = {
         ...createPhysicalRegistryRecord({
           pack_id: entry.pack_id,
@@ -508,50 +594,90 @@ export class PhysicalPackManager {
     options.onProgress?.(Object.freeze({ ...progress }));
   }
 
+  async verifyStoredPack({ cacheName, manifest, label = "Stored physical pack" }) {
+    if (!cacheName || !manifest?.files) {
+      throw new PhysicalPackError("repair_required", `${label} has no complete cache or manifest claim.`);
+    }
+    const cacheNames = await this.cacheStorage.keys();
+    if (!cacheNames.includes(cacheName)) {
+      throw new PhysicalPackError("repair_required", `${label} cache is missing.`);
+    }
+    const cache = await this.cacheStorage.open(cacheName);
+    const expectedUrls = new Map(
+      manifest.files.map((file) => [new URL(file.path, this.baseUrl).href, file]),
+    );
+    const actualUrls = new Set((await cache.keys()).map((request) => request.url));
+    const missing = [...expectedUrls.keys()].filter((url) => !actualUrls.has(url));
+    if (missing.length) {
+      const file = expectedUrls.get(missing[0]);
+      throw new PhysicalPackError("repair_required", `${file.path} is missing from ${label.toLowerCase()}.`);
+    }
+    const extra = [...actualUrls].filter((url) => !expectedUrls.has(url));
+    if (extra.length || actualUrls.size !== manifest.totals.files) {
+      throw new PhysicalPackError("corrupt", `${label} file inventory does not match its manifest.`);
+    }
+    let bytes = 0;
+    for (const [url, file] of expectedUrls) {
+      const response = await cache.match(url);
+      if (!response) throw new PhysicalPackError("repair_required", `${file.path} is missing from ${label.toLowerCase()}.`);
+      const mediaType = responseMediaType(response);
+      if (mediaType !== file.media_type) {
+        throw new PhysicalPackError("corrupt", `${file.path} has unexpected stored media type ${mediaType}.`);
+      }
+      const body = await response.arrayBuffer();
+      if (body.byteLength !== file.bytes) {
+        throw new PhysicalPackError("corrupt", `${file.path} has an invalid stored byte length.`);
+      }
+      if (await sha256Bytes(body, this.cryptoImpl) !== file.sha256) {
+        throw new PhysicalPackError("corrupt", `${file.path} failed stored SHA-256 verification.`);
+      }
+      bytes += body.byteLength;
+    }
+    if (bytes !== manifest.totals.bytes) {
+      throw new PhysicalPackError("corrupt", `${label} verified byte total does not match its manifest.`);
+    }
+    return Object.freeze({ files: expectedUrls.size, bytes });
+  }
+
   async verify(packId) {
     const record = await this.registry.getRecord(packId);
     if (!record?.active_cache || !record.active_manifest) {
       throw new PhysicalPackError("not_installed", `${packId} has no active physical copy to verify.`);
     }
     try {
-      const cache = await this.cacheStorage.open(record.active_cache);
-      let bytes = 0;
-      for (const file of record.active_manifest.files) {
-        const response = await cache.match(new URL(file.path, this.baseUrl).href);
-        if (!response) throw new PhysicalPackError("corrupt", `${file.path} is missing from the active cache.`);
-        const body = await response.arrayBuffer();
-        if (body.byteLength !== file.bytes || await sha256Bytes(body, this.cryptoImpl) !== file.sha256) {
-          throw new PhysicalPackError("corrupt", `${file.path} failed active-cache verification.`);
-        }
-        bytes += body.byteLength;
-      }
+      const verified = await this.verifyStoredPack({
+        cacheName: record.active_cache,
+        manifest: record.active_manifest,
+        label: `Active ${packId} pack`,
+      });
       const now = isoNow(this.clock);
       const next = {
         ...record,
-        state: record.rollback_cache ? "rollback_available" : "active",
-        verified_files: record.active_manifest.files.length,
-        verified_bytes: bytes,
+        state: record.state === "update_available" ? "update_available" : record.rollback_cache ? "rollback_available" : "active",
+        verified_files: verified.files,
+        verified_bytes: verified.bytes,
         last_verified_at: now,
         updated_at: now,
         last_failure: null,
       };
       await this.registry.putRecord(next);
-      await this.appendHistory("verify", "completed", { pack_id: packId, files: next.verified_files, bytes });
+      await this.appendHistory("verify", "completed", { pack_id: packId, files: next.verified_files, bytes: verified.bytes });
       await this.refreshSnapshot();
       return next;
     } catch (error) {
-      await this.markCorrupt(packId, error);
+      await this.markInvalid(packId, error);
       throw error;
     }
   }
 
-  async markCorrupt(packId, error = "Physical pack is corrupt.") {
+  async markInvalid(packId, error = "Physical pack is corrupt.") {
     const record = await this.registry.getRecord(packId);
     if (!record) return null;
+    const code = error?.code === "repair_required" ? "repair_required" : "corrupt";
     const next = {
       ...record,
-      state: "corrupt",
-      last_failure: { code: "corrupt", message: sanitizeMessage(error), at: isoNow(this.clock) },
+      state: code,
+      last_failure: { code, message: sanitizeMessage(error), at: isoNow(this.clock) },
       updated_at: isoNow(this.clock),
     };
     await this.registry.putRecord(next);
@@ -577,34 +703,57 @@ export class PhysicalPackManager {
     if (!record?.active_cache || !rollback?.cache || !rollback.manifest) {
       throw new PhysicalPackError("not_installed", `${packId} has no retained rollback copy.`);
     }
-    if (!(await this.cacheStorage.has?.(rollback.cache)) && !(await this.cacheStorage.keys()).includes(rollback.cache)) {
-      throw new PhysicalPackError("corrupt", `The retained rollback cache for ${packId} is missing.`);
+    try {
+      await this.verifyStoredPack({
+        cacheName: rollback.cache,
+        manifest: rollback.manifest,
+        label: `Rollback ${packId} pack`,
+      });
+    } catch (error) {
+      await this.registry.putRecord({
+        ...record,
+        last_failure: { code: error.code || "corrupt", message: sanitizeMessage(error), at: isoNow(this.clock) },
+        updated_at: isoNow(this.clock),
+      });
+      await this.appendHistory("rollback", "failed", { pack_id: packId, message: sanitizeMessage(error) });
+      await this.refreshSnapshot();
+      throw error;
     }
     const now = isoNow(this.clock);
-    const nextRollback = {
-      pack_version: record.pack_version,
-      manifest_sha256: record.manifest_sha256,
-      aggregate_sha256: record.aggregate_sha256,
-      cache: record.active_cache,
-      manifest: clone(record.active_manifest),
-      verified_files: record.verified_files,
-      verified_bytes: record.verified_bytes,
-      activated_at: record.activated_at,
-    };
+    let nextRollback = null;
+    try {
+      const verifiedActive = await this.verifyStoredPack({
+        cacheName: record.active_cache,
+        manifest: record.active_manifest,
+        label: `Active ${packId} pack`,
+      });
+      nextRollback = {
+        pack_version: record.pack_version,
+        manifest_sha256: record.manifest_sha256,
+        aggregate_sha256: record.aggregate_sha256,
+        cache: record.active_cache,
+        manifest: clone(record.active_manifest),
+        verified_files: verifiedActive.files,
+        verified_bytes: verifiedActive.bytes,
+        activated_at: record.activated_at,
+      };
+    } catch {
+      nextRollback = null;
+    }
     const next = {
       ...record,
       pack_version: rollback.pack_version,
       manifest_sha256: rollback.manifest_sha256,
       aggregate_sha256: rollback.aggregate_sha256,
       active_cache: rollback.cache,
-      rollback_cache: nextRollback.cache,
+      rollback_cache: nextRollback?.cache || null,
       active_manifest: clone(rollback.manifest),
       rollback: nextRollback,
       expected_files: rollback.manifest.totals.files,
       expected_bytes: rollback.manifest.totals.bytes,
       verified_files: rollback.verified_files,
       verified_bytes: rollback.verified_bytes,
-      state: "rollback_available",
+      state: nextRollback ? "rollback_available" : "active",
       activated_at: now,
       updated_at: now,
       last_failure: null,
@@ -658,14 +807,19 @@ export class PhysicalPackManager {
   async reconcileStartup() {
     const cacheNames = new Set(await this.cacheStorage.keys());
     for (const record of await this.registry.listRecords()) {
-      if (["staging", "verifying"].includes(record.state)) {
+      if (["staging", "verifying"].includes(record.state) && record.staging_cache) {
         if (record.staging_cache) await this.cacheStorage.delete(record.staging_cache).catch(() => false);
         if (record.previous_active?.active_cache && cacheNames.has(record.previous_active.active_cache)) {
-          await this.registry.putRecord({ ...record.previous_active, last_failure: {
-            code: "interrupted",
-            message: "An interrupted operation was recovered; the previous active copy was preserved.",
-            at: isoNow(this.clock),
-          } });
+          await this.registry.putRecord({
+            ...record.previous_active,
+            state: "startup_verifying",
+            startup_previous_state: record.previous_active.state,
+            last_failure: {
+              code: "interrupted",
+              message: "An interrupted operation was recovered; the previous active copy is being reverified.",
+              at: isoNow(this.clock),
+            },
+          });
         } else {
           await this.registry.putRecord({ ...record, state: "failed", staging_cache: null, previous_active: null, last_failure: {
             code: "interrupted",
@@ -682,32 +836,15 @@ export class PhysicalPackManager {
         await this.appendHistory("startup-reconcile", "completed", { pack_id: record.pack_id, removal_completed: true });
         continue;
       }
-      if (record.active_cache && !cacheNames.has(record.active_cache)) {
-        if (record.rollback?.cache && cacheNames.has(record.rollback.cache)) {
-          const rollback = record.rollback;
-          await this.registry.putRecord({
-            ...record,
-            pack_version: rollback.pack_version,
-            manifest_sha256: rollback.manifest_sha256,
-            aggregate_sha256: rollback.aggregate_sha256,
-            active_cache: rollback.cache,
-            active_manifest: rollback.manifest,
-            rollback_cache: null,
-            rollback: null,
-            expected_files: rollback.manifest.totals.files,
-            expected_bytes: rollback.manifest.totals.bytes,
-            verified_files: rollback.verified_files,
-            verified_bytes: rollback.verified_bytes,
-            state: "active",
-            last_failure: { code: "active_cache_missing", message: "The retained rollback copy was activated during startup recovery.", at: isoNow(this.clock) },
-          });
-        } else {
-          await this.registry.putRecord({ ...record, state: "repair_required", last_failure: {
-            code: "active_cache_missing",
-            message: "The active cache is missing and must be reinstalled or repaired.",
-            at: isoNow(this.clock),
-          } });
-        }
+      if (record.active_cache || record.active_manifest) {
+        await this.registry.putRecord({
+          ...record,
+          state: "startup_verifying",
+          startup_previous_state: record.state === "startup_verifying"
+            ? record.startup_previous_state || "active"
+            : record.state,
+          updated_at: isoNow(this.clock),
+        });
       }
     }
     const referenced = await this.registry.listRecords();
@@ -719,6 +856,119 @@ export class PhysicalPackManager {
       ) {
         await this.cacheStorage.delete(name).catch(() => false);
       }
+    }
+  }
+
+  async completeStartupReconciliation() {
+    try {
+      const records = await this.registry.listRecords();
+      for (const record of records.filter((item) => item.state === "startup_verifying")) {
+        try {
+          const verified = await this.verifyStoredPack({
+            cacheName: record.active_cache,
+            manifest: record.active_manifest,
+            label: `Active ${record.pack_id} pack`,
+          });
+          const previousState = record.startup_previous_state;
+          const catalogUpdateAvailable = this.catalog?.packs?.some((entry) => entry.pack_id === record.pack_id && entry.pack_version !== record.pack_version);
+          await this.registry.putRecord({
+            ...record,
+            state: previousState === "update_available" || catalogUpdateAvailable
+              ? "update_available"
+              : record.rollback?.cache ? "rollback_available" : "active",
+            startup_previous_state: null,
+            verified_files: verified.files,
+            verified_bytes: verified.bytes,
+            last_verified_at: isoNow(this.clock),
+            updated_at: isoNow(this.clock),
+            last_failure: record.last_failure?.code === "interrupted" ? record.last_failure : null,
+          });
+          await this.appendHistory("startup-reconcile", "completed", {
+            pack_id: record.pack_id,
+            verified_files: verified.files,
+            verified_bytes: verified.bytes,
+          });
+        } catch (activeError) {
+          let recovered = false;
+          if (record.rollback?.cache && record.rollback?.manifest) {
+            try {
+              const rollbackVerified = await this.verifyStoredPack({
+                cacheName: record.rollback.cache,
+                manifest: record.rollback.manifest,
+                label: `Rollback ${record.pack_id} pack`,
+              });
+              const rollback = record.rollback;
+              const catalogUpdateAvailable = this.catalog?.packs?.some((entry) => entry.pack_id === record.pack_id && entry.pack_version !== rollback.pack_version);
+              await this.registry.putRecord({
+                ...record,
+                pack_version: rollback.pack_version,
+                manifest_sha256: rollback.manifest_sha256,
+                aggregate_sha256: rollback.aggregate_sha256,
+                active_cache: rollback.cache,
+                active_manifest: clone(rollback.manifest),
+                rollback_cache: null,
+                rollback: null,
+                expected_files: rollback.manifest.totals.files,
+                expected_bytes: rollback.manifest.totals.bytes,
+                verified_files: rollbackVerified.files,
+                verified_bytes: rollbackVerified.bytes,
+                state: catalogUpdateAvailable ? "update_available" : "active",
+                startup_previous_state: null,
+                last_verified_at: isoNow(this.clock),
+                updated_at: isoNow(this.clock),
+                last_failure: {
+                  code: activeError.code || "corrupt",
+                  message: `The active copy failed verification; a verified rollback copy was activated. ${sanitizeMessage(activeError)}`,
+                  at: isoNow(this.clock),
+                },
+              });
+              await this.appendHistory("startup-reconcile", "completed", {
+                pack_id: record.pack_id,
+                rollback_recovered: true,
+                active_failure: activeError.code || "corrupt",
+              });
+              recovered = true;
+            } catch (rollbackError) {
+              const code = activeError.code === "repair_required" ? "repair_required" : "corrupt";
+              await this.registry.putRecord({
+                ...record,
+                state: code,
+                startup_previous_state: null,
+                rollback_cache: null,
+                rollback: null,
+                last_failure: {
+                  code,
+                  message: `${sanitizeMessage(activeError)} Retained rollback was not activated: ${sanitizeMessage(rollbackError)}`,
+                  at: isoNow(this.clock),
+                },
+                updated_at: isoNow(this.clock),
+              });
+              await this.appendHistory("startup-reconcile", "failed", {
+                pack_id: record.pack_id,
+                active_failure: activeError.code || "corrupt",
+                rollback_failure: rollbackError.code || "corrupt",
+              });
+              recovered = true;
+            }
+          }
+          if (!recovered) {
+            const code = activeError.code === "repair_required" ? "repair_required" : "corrupt";
+            await this.registry.putRecord({
+              ...record,
+              state: code,
+              startup_previous_state: null,
+              last_failure: { code, message: sanitizeMessage(activeError), at: isoNow(this.clock) },
+              updated_at: isoNow(this.clock),
+            });
+            await this.appendHistory("startup-reconcile", "failed", {
+              pack_id: record.pack_id,
+              active_failure: code,
+            });
+          }
+        }
+      }
+    } finally {
+      await this.refreshSnapshot();
     }
   }
 
@@ -761,24 +1011,49 @@ export class PhysicalPackManager {
     const canonical = canonicalPackPath(relativePath, "runtime path");
     if (this.mode !== PHYSICAL_DATA_MODES.managed) return null;
     const packId = pathPackId(canonical);
-    if (!packId) return null;
+    if (!packId || !this.managedOptionalPackIds.has(packId)) return null;
     const record = await this.registry.getRecord(packId);
-    if (!record) throw new PhysicalPackError("not_installed", `${packId} is not installed.`, { pack_id: packId });
-    if (record.state === "incompatible") throw new PhysicalPackError("incompatible_version", `${packId} is incompatible.`, { pack_id: packId });
-    if (["corrupt", "repair_required"].includes(record.state)) throw new PhysicalPackError("corrupt", `${packId} must be repaired.`, { pack_id: packId });
-    if (record.state === "failed") throw new PhysicalPackError("load_failed", `${packId} failed to load.`, { pack_id: packId });
-    if (!record.active_cache || !record.active_manifest) throw new PhysicalPackError("not_installed", `${packId} has no active copy.`, { pack_id: packId });
+    const fallback = () => ({
+      response: null,
+      source_key: `bundled_fallback:${packId}`,
+      runtime_source: "bundled_fallback",
+      pack_id: packId,
+    });
+    const unavailable = (code, message) => {
+      if (this.bundledFallback) return fallback();
+      throw new PhysicalPackError(code, message, {
+        pack_id: packId,
+        managed_fallback_forbidden: true,
+        runtime_source: "managed_unavailable",
+      });
+    };
+    if (!record) return unavailable("not_installed", `${packId} is not installed.`);
+    if (record.state === "incompatible") return unavailable("incompatible_version", `${packId} is incompatible.`);
+    if (record.state === "repair_required") return unavailable("corrupt", `${packId} must be repaired.`);
+    if (record.state === "corrupt") return unavailable("corrupt", `${packId} is corrupt.`);
+    if (["failed", "startup_verifying"].includes(record.state)) {
+      return unavailable("load_failed", `${packId} does not have a verified active copy.`);
+    }
+    if (!recordIsVerifiedActive(record)) return unavailable("not_installed", `${packId} has no verified active copy.`);
+    for (const dependency of record.active_manifest.dependencies || []) {
+      const dependencyRecord = await this.registry.getRecord(dependency);
+      if (!recordIsVerifiedActive(dependencyRecord)) {
+        return unavailable("dependency_missing", `${packId} requires verified pack ${dependency}.`);
+      }
+    }
     const declared = record.active_manifest.files.some((file) => file.path === canonical);
-    if (!declared) throw new PhysicalPackError("load_failed", `${canonical} is not declared by ${packId}.`, { pack_id: packId });
+    if (!declared) return unavailable("load_failed", `${canonical} is not declared by ${packId}.`);
     const cache = await this.cacheStorage.open(record.active_cache);
     const response = await cache.match(new URL(canonical, this.baseUrl).href);
     if (!response) {
-      await this.markCorrupt(packId, `${canonical} is missing from the active cache.`);
-      throw new PhysicalPackError("corrupt", `${packId} is missing a required file.`, { pack_id: packId });
+      const error = new PhysicalPackError("repair_required", `${canonical} is missing from the active cache.`);
+      await this.markInvalid(packId, error);
+      return unavailable("corrupt", `${packId} is missing a required file.`);
     }
     return {
       response: response.clone(),
       source_key: `${packId}@${record.pack_version}:${record.manifest_sha256}`,
+      runtime_source: "managed_pack",
       pack_id: packId,
     };
   }

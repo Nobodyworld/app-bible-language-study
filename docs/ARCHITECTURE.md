@@ -80,10 +80,16 @@ update, repair, retained rollback, removal, cleanup, startup reconciliation,
 and orphan-cache classification. Staging, active, and rollback data use
 separate immutable Cache Storage names.
 
+The validated distribution manifest scopes physical requirements to
+`managed_optional_pack_ids`. Other shipped feature packs remain bundled in
+managed mode. Search and Commentary prefer verified managed bytes and follow
+the manifest's explicit bundled-fallback flag. Full semantic-version checks and
+same-origin source policy run before artifact fetch.
+
 `app/src/data-service.js` is the single pack-aware runtime JSON boundary. It
 uses verified managed responses when managed mode is explicit, keys parsed data
-by physical source/version, and otherwise preserves the complete bundled
-fallback. Search, Commentary, and other views do not acquire Cache Storage or
+by physical source/version, identifies permitted bundled fallback, and preserves
+structured errors when fallback is forbidden. Search, Commentary, and other views do not acquire Cache Storage or
 physical-registry logic.
 
 My Data → Advanced diagnostics renders the management surface. It exposes

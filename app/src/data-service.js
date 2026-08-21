@@ -3,6 +3,7 @@ import { DATA_ROOT } from "./config.js";
 const cache = new Map();
 const pendingCache = new Map();
 const languageMetadataCache = new Map();
+const sourceByPath = new Map();
 const LANGUAGE_METADATA_VERSION = "clean-app-v1-sofit4";
 const STUDY_DATA_VERSION = "clean-app-v1-strongs-restore1";
 let physicalResolver = null;
@@ -19,11 +20,13 @@ export function configurePhysicalPackResolver(resolver = null) {
   physicalResolver = resolver;
   physicalResolverEpoch += 1;
   pendingCache.clear();
+  sourceByPath.clear();
 }
 
 export function invalidatePhysicalPackData(packIds = []) {
   physicalResolverEpoch += 1;
   pendingCache.clear();
+  sourceByPath.clear();
   const ids = new Set(packIds || []);
   for (const key of cache.keys()) {
     if (!ids.size || [...ids].some((id) => key.startsWith(`${id}@`))) cache.delete(key);
@@ -36,6 +39,11 @@ export async function fetchJson(path) {
   const pending = (async () => {
     const managed = physicalResolver ? await physicalResolver(path) : null;
     const sourceKey = managed?.source_key || "bundled_static_data";
+    sourceByPath.set(path, Object.freeze({
+      source_key: sourceKey,
+      runtime_source: managed?.runtime_source || "bundled_static_data",
+      pack_id: managed?.pack_id || null,
+    }));
     const cacheKey = `${sourceKey}|${path}`;
     if (cache.has(cacheKey)) return cache.get(cacheKey);
     const response = managed?.response || await fetch(path);
@@ -51,9 +59,14 @@ export async function fetchJson(path) {
 export async function tryFetchJson(path) {
   try {
     return await fetchJson(path);
-  } catch {
+  } catch (error) {
+    if (error?.detail?.managed_fallback_forbidden) throw error;
     return null;
   }
+}
+
+export function physicalDataSource(path) {
+  return sourceByPath.get(path) || null;
 }
 
 export function loadManifest() {

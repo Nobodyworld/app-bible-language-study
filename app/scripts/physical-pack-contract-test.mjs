@@ -9,8 +9,10 @@ import { assertValidJsonSchema } from "./schema-validation.mjs";
 import {
   PHYSICAL_DATA_MODES,
   PHYSICAL_PACK_KINDS,
+  appVersionIsCompatible,
   canonicalAggregateFrame,
   canonicalPackPath,
+  compareSemanticVersions,
   createPhysicalRegistryRecord,
   physicalPackCacheName,
   resolvePhysicalFeaturePackIds,
@@ -208,8 +210,7 @@ const activeRecord = createPhysicalRegistryRecord({
   verified_bytes: physicalManifest.totals.bytes,
 });
 assert.deepEqual(verifiedActivePhysicalPackIds([activeRecord]), ["search-verses"]);
-assert.deepEqual(
-  resolvePhysicalFeaturePackIds({
+const managedPackIds = resolvePhysicalFeaturePackIds({
     distribution: {
       ...distribution,
       distribution_id: "managed-reference-v1",
@@ -225,11 +226,30 @@ assert.deepEqual(
     },
     packageManifest,
     registryRecords: [activeRecord],
-  }),
-  ["search-verses", "translation-bsb"],
-);
+  });
+assert(managedPackIds.includes("search-verses"));
+assert(!managedPackIds.includes("commentary-verse-index"));
+assert(managedPackIds.includes("crossrefs-basic"));
+assert(managedPackIds.includes("outlines"));
+assert(managedPackIds.includes("hebrew-lexicon"));
+assert(managedPackIds.includes("analysis-word-map"));
+assert.equal(managedPackIds.length, packageManifest.feature_packs.length - 1);
 const incompleteRecord = { ...activeRecord, verified_files: 1 };
 assert.deepEqual(verifiedActivePhysicalPackIds([incompleteRecord]), []);
+
+const compatibility = (minimum, maximum) => ({
+  minimum_app_version: minimum,
+  maximum_app_version_exclusive: maximum,
+});
+assert(appVersionIsCompatible(compatibility("1.2.3", "2.0.0"), "1.2.3"), "equal minimum must pass");
+assert(!appVersionIsCompatible(compatibility("1.2.3", "2.0.0"), "1.2.2"), "below same-major minimum must fail");
+assert(appVersionIsCompatible(compatibility("1.2.3", "2.0.0"), "1.9.9"), "above same-major minimum must pass");
+assert(!appVersionIsCompatible(compatibility("1.0.0", "1.9.0"), "1.9.0"), "equal exclusive maximum must fail");
+assert(!appVersionIsCompatible(compatibility("1.0.0", "1.9.0"), "1.9.1"), "above exclusive maximum must fail");
+assert(appVersionIsCompatible(compatibility("1.9.9", "3.0.0"), "2.0.0"), "cross-major interior must pass");
+assert(compareSemanticVersions("1.2.3-alpha.2", "1.2.3-alpha.10") < 0);
+assert(compareSemanticVersions("1.2.3-beta", "1.2.3") < 0);
+assert(compareSemanticVersions("1.2.3-rc.1", "1.2.3-rc.1") === 0);
 
 console.log(JSON.stringify({
   distribution: normalizedDistribution.distribution_id,
