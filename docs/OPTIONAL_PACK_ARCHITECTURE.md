@@ -1,8 +1,8 @@
 # Optional Physical Pack Architecture
 
-Status: implementation contract for issue #46  
-Prepared baseline: `ac361ebdccd9bbeff4515cdcd94ccd48aae3f4cc`  
-Prepared branch: `feat/physical-pack-foundation`
+Status: implemented lifecycle contract for issue #63
+Implementation baseline: `afdd22a57d8c8cca874947b97ac021e588867e68`
+Implementation branch: `feat/physical-pack-lifecycle`
 
 ## Purpose
 
@@ -18,6 +18,24 @@ o-account, offline, provenance, or user-data contracts.
 The implementation must remain useful in the current full checkout while also
 providing the reference path needed for a future owner-approved lean
 distribution.
+
+## Delivered implementation
+
+The issue #63 slice implements this contract in:
+
+- `app/tools/build-physical-packs.mjs` for reproducible production Search and
+  Commentary manifests, catalog, loose files, optional complete-offline
+  assembly, and scenario checks;
+- `app/src/physical-pack-registry.js` for independent IndexedDB authority;
+- `app/src/physical-pack-manager.js` for catalog, lifecycle, recovery, cache,
+  history, provenance, and runtime resolution;
+- `app/src/data-service.js` for the sole pack-aware JSON boundary;
+- `app/src/views/physical-pack-view.js` for My Data → Advanced diagnostics;
+- deterministic fixtures under `app/data/physical-pack-fixtures/`; and
+- focused domain and maintained Edge lifecycle tests.
+
+The tracked distribution remains unchanged in `bundled_static_data` mode and
+continues shipping Search and Commentary.
 
 ## Current measured boundary
 
@@ -386,10 +404,10 @@ checks; browser lifecycle tests use representative deterministic fixtures.
 
 ## Completion and future decision
 
-This branch may close issue #46 when it delivers the architecture, measured
-scenarios, artifact builder, verified lifecycle reference implementation,
-pack-aware resolver, explicit unavailable states, recovery behavior, tests, and
-documentation while preserving the complete package.
+Issue #63 delivers the architecture, measured scenarios, artifact builder,
+verified lifecycle implementation, pack-aware resolver, explicit unavailable
+states, recovery behavior, tests, and documentation while preserving the
+complete package.
 
 Any later step that removes Search or Commentary from the default tracked or
 published package requires a separate exact owner decision and a focused

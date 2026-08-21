@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-08-15
+Reviewed: 2026-08-21
 
 ## Authority
 
@@ -13,8 +13,8 @@ remove, or reclassify a maintained test.
 | Command | Current composition |
 |---|---|
 | `npm run test:static` | Repository integrity and data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
-| `npm run test:domain` | Job, logical package, physical-pack contract, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
-| `npm run test:browser` | Desktop rendered interaction, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks, and Meaning flows. |
+| `npm run test:domain` | Job, logical package, physical-pack contract and lifecycle, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
+| `npm run test:browser` | Desktop rendered interaction, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks/Meaning, and physical-pack Edge lifecycle flows. |
 | `npm run test:browser:mobile` | The maintained interaction journey in mobile mode. |
 | `npm test` | Static, desktop-browser, and mobile-browser suites. |
 | `npm run audit` | Public package/file audit through `app/tools/publish-audit.mjs`. |
@@ -38,7 +38,10 @@ composition above:
 | `npm run test:word-meaning-focus` | `app/scripts/word-meaning-focus-test.mjs`. |
 | `npm run test:study-workspace` | `app/scripts/study-workspace-interaction-test.mjs`. |
 | `npm run test:reader-data-loading` | `app/scripts/reader-data-loading-interaction-test.mjs`. |
-| `npm run test:physical-packs` | Distribution, catalog, pack-manifest, path, digest-framing, registry, and logical/physical-state contracts. |
+| `npm run test:physical-packs` | Distribution, catalog, compatibility, pack-manifest, path, digest-framing, independent registry, complete lifecycle/recovery, resolver, capabilities, and logical/physical separation. |
+| `npm run test:physical-packs:edge` | Real Edge/IndexedDB/Cache Storage lifecycle, offline resolver, UI, focus, theme, responsive, and browser-health acceptance. |
+| `npm run physical-packs:check` | Deterministic fixture check plus two independent production Search/Commentary inventory builds with byte-for-byte catalog/manifest comparison and digest validation. |
+| `npm run physical-packs:scenarios:check` | Maintained five-scenario file/raw/transfer measurement reconciliation. |
 | `npm run test:ui` | UI, compact panel-context, workspace-width model, and contained-surface source contracts. |
 
 ## Static and Source-Level Tests
@@ -87,6 +90,7 @@ manifest through `app/tools/refresh-package-inventory.mjs --check`.
 | `app/scripts/package-planner-test.mjs` | Current package dependencies, install/removal plans, and summaries. |
 | `app/scripts/package-state-test.mjs` | Bundled/managed package modes, capability toggles, operations, and import/export. |
 | `app/scripts/physical-pack-contract-test.mjs` | Default bundled distribution, catalog/manifest schemas, canonical path rejection, deterministic aggregate framing, immutable cache naming, physical registry activation criteria, and separation of bundled versus managed feature-pack authority. |
+| `app/scripts/physical-pack-lifecycle-test.mjs` | Independent registry, no-mutation planning, dependency install/removal rules, staging/activation, managed reads, corruption, repair, update, failure preservation, retained rollback, rollback, interrupted startup recovery, orphan cleanup, removal, bundled fallback, and structured capability states. |
 | `app/scripts/poll-response-test.mjs` | Poll identity, updates, aggregates, tombstones, schema behavior, and import/export. |
 | `app/scripts/recovery-scenarios-test.mjs` | IndexedDB fallback/migration, quota visibility, malformed imports, backups, quarantine, and legacy export migration. |
 | `app/scripts/semantic-test.mjs` | Semantic definitions, relations, propositions, and current target types. |
@@ -109,6 +113,7 @@ entry.
 | `app/scripts/panel-context-interaction-test.mjs` | Desktop, narrow, and mobile; light/dark | Compact context, scope inheritance, explicit contained Study Marks, stable underlay, focus restoration, responsive layout, and browser-error checks. |
 | `app/scripts/word-meaning-focus-test.mjs` | Desktop and mobile | Contained Meaning and Study Marks overlay coordination, exact-target save/remove, data-neutral dismissal, lifecycle cleanup, and focus restoration. |
 | `app/scripts/study-workspace-interaction-test.mjs` | Desktop, intermediate, mobile, light/dark, and reduced motion | Width switching/persistence/storage failure, semantic reader anchors, independent scroll ownership, contained tools, lifecycle/history/selection preservation, responsive bounds, and browser-error/overflow checks. |
+| `app/scripts/physical-pack-interaction-test.mjs` | Edge desktop, portrait, narrow, mobile-width, mobile-device, light/dark, and reduced motion | Plan/cancel with registry equality and focus restoration; Search/Commentary dependency install and activation; reload persistence; offline managed reads; corruption/repair; update/retained rollback/rollback; removal; bundled fallback; reader-context preservation; progress; containment; and zero console/page/request/HTTP errors. |
 
 ## Historical July 1 Promotion and Retirement Record
 

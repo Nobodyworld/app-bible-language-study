@@ -105,6 +105,10 @@ const physicalManifest = {
     package_id: "reader-texts",
     content_sha256: packageManifest.packages[0].sha256,
   },
+  compatibility: {
+    minimum_app_version: "1.0.0",
+    maximum_app_version_exclusive: "2.0.0",
+  },
   dependencies: [],
   provided_capabilities: ["search"],
   inventory_sha256: digest("inventory"),
@@ -154,6 +158,7 @@ const catalog = {
   catalog_version: "v1",
   generated_at: "2026-08-15T00:00:00.000Z",
   package_identity: physicalManifest.package_identity,
+  compatibility: physicalManifest.compatibility,
   packs: [
     {
       pack_id: physicalManifest.pack_id,
@@ -168,6 +173,7 @@ const catalog = {
       license_note: physicalManifest.provenance.license_note,
       notice_path: physicalManifest.provenance.notice_path,
       source_manifest_path: physicalManifest.provenance.source_manifest_path,
+      source_refs: physicalManifest.provenance.source_refs,
     },
   ],
   full_offline_bundle: {

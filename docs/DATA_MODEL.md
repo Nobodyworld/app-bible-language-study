@@ -22,8 +22,8 @@ records, BSB footnotes, presentation metadata, semantic seeds, word maps, and
 cross-reference graph analysis.
 
 The tracked public-preview distribution remains `bundled_static_data` and
-complete offline. Search and Commentary remain present in the bundled tree while
-the optional physical-pack reference implementation is developed.
+complete offline. Search and Commentary remain present in the bundled tree;
+managed copies are opt-in browser-local operational state.
 
 ## Logical and Physical Package State
 
@@ -33,7 +33,8 @@ The existing portable package store records desired/installed feature-pack IDs,
 disabled capabilities, and operation history. Those records do not prove that a
 Cache Storage entry or another browser-local binary store exists.
 
-Physical-pack operational state belongs in a separate browser-local registry.
+Physical-pack operational state belongs in the separate
+`bibleapp-physical-packs` IndexedDB database, store `pack_records`.
 Its records identify immutable pack versions, manifest and aggregate digests,
 staging/active/rollback caches, expected and verified totals, lifecycle state,
 compatibility, timestamps, and sanitized failures. Startup reconciliation must
@@ -57,9 +58,26 @@ Immutable pack artifacts use:
 - retained NOTICE and source-manifest references;
 - explicit package/app compatibility.
 
-`app/src/physical-pack-contract.js` and the physical-pack schemas are the current
-pure-data authority. The lifecycle implementation will stage and verify bytes
-before atomic activation and retain a previous valid version for rollback.
+`app/src/physical-pack-contract.js` and the physical-pack schemas are the
+pure-data authority. `app/src/physical-pack-manager.js` stages and verifies
+bytes before one-record atomic activation, retains the previous active cache
+and manifest for rollback, and never treats a portable logical preference as
+physical proof.
+
+Registry metadata stores the explicit physical mode, last validated catalog,
+catalog URL, and operation history. Pack records retain the active manifest so
+runtime paths can be checked against the immutable file inventory. Interrupted
+staging restores the previous active record; interrupted removal completes its
+recorded cache-deletion list; missing active storage activates a valid retained
+rollback or becomes `repair_required`. Unreferenced pack caches are reported as
+orphans and removed only by startup staging cleanup or the explicit cleanup
+action.
+
+The deterministic production artifact builder writes ignored output under
+`dist/physical-packs/`. Its loose-file layout is
+`packs/<pack>/<version>/files/<runtime-path>` with a sibling immutable
+`manifest.json`; catalog entries carry the exact manifest SHA-256. The
+maintained scenario source is `app/data/physical-pack-scenarios.json`.
 
 ## User Data
 
