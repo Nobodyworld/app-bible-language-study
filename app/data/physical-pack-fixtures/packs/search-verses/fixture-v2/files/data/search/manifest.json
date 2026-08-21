@@ -1,0 +1,7 @@
+{
+  "fixture": "search",
+  "version": 2,
+  "shards": [
+    "search/verses/bsb/genesis.json"
+  ]
+}

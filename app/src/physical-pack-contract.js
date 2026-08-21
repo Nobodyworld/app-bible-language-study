@@ -132,6 +132,20 @@ function packageIdentity(value, label = "package_identity") {
   });
 }
 
+function compatibility(value, label = "compatibility") {
+  if (!value || typeof value !== "object" || Array.isArray(value)) fail(`${label} must be an object.`);
+  const minimum = requiredString(value.minimum_app_version, `${label}.minimum_app_version`);
+  const maximum = requiredString(value.maximum_app_version_exclusive, `${label}.maximum_app_version_exclusive`);
+  const versionPattern = /^\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?$/;
+  if (!versionPattern.test(minimum) || !versionPattern.test(maximum)) {
+    fail(`${label} versions must be semantic versions.`);
+  }
+  return Object.freeze({
+    minimum_app_version: minimum,
+    maximum_app_version_exclusive: maximum,
+  });
+}
+
 export function validateDistributionManifest(value) {
   if (!value || typeof value !== "object" || Array.isArray(value)) fail("distribution manifest must be an object.");
   if (value.kind !== PHYSICAL_PACK_KINDS.distribution) fail("distribution manifest kind is invalid.");
@@ -204,6 +218,7 @@ export function validatePhysicalPackManifest(value) {
     label: requiredString(value.label, "label"),
     description: requiredString(value.description, "description"),
     package_identity: packageIdentity(value.package_identity),
+    compatibility: compatibility(value.compatibility),
     dependencies: Object.freeze(uniqueStrings(value.dependencies, "dependencies").map((id) => normalizePackIdentifier(id))),
     provided_capabilities: Object.freeze(uniqueStrings(value.provided_capabilities, "provided_capabilities").map((id) => normalizePackIdentifier(id))),
     inventory_sha256: normalizeSha256(value.inventory_sha256, "inventory_sha256"),
@@ -244,6 +259,7 @@ export function validatePhysicalPackCatalog(value) {
       license_note: requiredString(pack.license_note, `packs[${index}].license_note`),
       notice_path: canonicalPackPath(pack.notice_path, `packs[${index}].notice_path`),
       source_manifest_path: canonicalPackPath(pack.source_manifest_path, `packs[${index}].source_manifest_path`),
+      source_refs: Object.freeze(uniqueStrings(pack.source_refs, `packs[${index}].source_refs`)),
     });
   });
   const ids = packs.map(({ pack_id }) => pack_id);
@@ -257,6 +273,7 @@ export function validatePhysicalPackCatalog(value) {
     catalog_version: normalizePackIdentifier(value.catalog_version, "catalog_version"),
     generated_at: requiredString(value.generated_at, "generated_at"),
     package_identity: packageIdentity(value.package_identity),
+    compatibility: compatibility(value.compatibility),
     packs: Object.freeze(packs),
     full_offline_bundle: Object.freeze({
       pack_ids: Object.freeze(bundlePackIds),

@@ -3,7 +3,7 @@ import {
   fetchVerseBook,
   fetchWordMapBook,
   loadLanguageMetadata,
-} from "../data-service.js";
+} from "../data-service.js?v=pr13-live-qa-20260711e";
 import { isDetailHoverLocked, setDetail, textNode } from "../dom.js?v=pr13-live-qa-20260711e";
 import { capabilityMessage } from "../capabilities.js";
 import {

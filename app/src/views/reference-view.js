@@ -1,4 +1,4 @@
-import { fetchVerseBook, resolvePassageText } from "../data-service.js";
+import { fetchVerseBook, resolvePassageText } from "../data-service.js?v=pr13-live-qa-20260711e";
 import { createDetailList, setDetail, setDetailMessage } from "../dom.js?v=pr13-live-qa-20260711e";
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
 

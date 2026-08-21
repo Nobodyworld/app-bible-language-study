@@ -1,0 +1,12 @@
+{
+  "fixture": "commentary",
+  "version": 1,
+  "verses": {
+    "1:1": [
+      {
+        "source_id": "fixture",
+        "commentary_html": "<p>A deterministic beginning.</p>"
+      }
+    ]
+  }
+}

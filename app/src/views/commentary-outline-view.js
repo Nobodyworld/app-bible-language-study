@@ -1,4 +1,4 @@
-import { fetchCommentaryAggregate, fetchCommentarySource } from "../data-service.js";
+import { fetchCommentaryAggregate, fetchCommentarySource } from "../data-service.js?v=pr13-live-qa-20260711e";
 import { createDetailList, setDetail, setDetailMessage } from "../dom.js?v=pr13-live-qa-20260711e";
 import { capabilityMessage } from "../capabilities.js";
 import { makeInternalLinksNavigable } from "../references.js";

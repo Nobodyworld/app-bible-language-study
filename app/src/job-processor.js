@@ -1,5 +1,5 @@
 import { JOB_TYPES } from "./config.js?v=pr13-live-qa-20260711e";
-import { fetchWordMapBook } from "./data-service.js";
+import { fetchWordMapBook } from "./data-service.js?v=pr13-live-qa-20260711e";
 import { parseReferenceKey, referenceKeyFromTarget, targetId } from "./semantic-targets.js?v=pr13-live-qa-20260711e";
 
 const PROCESSOR_VERSIONS = {

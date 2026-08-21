@@ -1,0 +1,55 @@
+{
+  "kind": "bibleapp:physical-pack-manifest",
+  "schema_version": 1,
+  "pack_id": "search-verses",
+  "pack_version": "fixture-v1",
+  "label": "Search fixture",
+  "description": "Small deterministic Search lifecycle fixture.",
+  "package_identity": {
+    "schema_version": 1,
+    "package_id": "reader-texts",
+    "content_sha256": "sha256:910de6211e387d2f2179e917031b4fe578ac078be7a870d471b9b3d422d11451"
+  },
+  "compatibility": {
+    "minimum_app_version": "1.0.0",
+    "maximum_app_version_exclusive": "2.0.0"
+  },
+  "dependencies": [],
+  "provided_capabilities": [
+    "search"
+  ],
+  "inventory_sha256": "sha256:8efa8cc358e122d984224a1d3bb198153b589ccb836acf13f5d1d2508db8e918",
+  "aggregate_sha256": "sha256:d7e954e11c734f153f7f8bd72b2d26a27770f84f3815557cae3b0ed3ece05e9e",
+  "files": [
+    {
+      "path": "data/search/manifest.json",
+      "bytes": 98,
+      "media_type": "application/json",
+      "sha256": "sha256:a0844b4c4fc275ee0bfd8857c17f23c512ed83592d84ae58ce387781b24aca47"
+    },
+    {
+      "path": "data/search/verses/bsb/genesis.json",
+      "bytes": 181,
+      "media_type": "application/json",
+      "sha256": "sha256:a8cfb8fe39b89a90cc73553c8de00fcda31ee5c9372412e0b2095b7bf094f482"
+    }
+  ],
+  "totals": {
+    "files": 2,
+    "bytes": 279,
+    "transfer_bytes": 279
+  },
+  "provenance": {
+    "license_note": "Deterministic lifecycle fixture only; production source rights remain governed by NOTICE.md.",
+    "notice_path": "NOTICE.md",
+    "source_manifest_path": "data/source-manifest.json",
+    "source_refs": [
+      "source_package"
+    ]
+  },
+  "generator": {
+    "name": "build-physical-pack-fixtures.mjs",
+    "version": "1",
+    "candidate_sha": "afdd22a57d8c8cca874947b97ac021e588867e68"
+  }
+}

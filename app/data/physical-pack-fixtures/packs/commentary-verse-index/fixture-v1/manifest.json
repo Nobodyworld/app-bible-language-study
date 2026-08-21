@@ -1,0 +1,51 @@
+{
+  "kind": "bibleapp:physical-pack-manifest",
+  "schema_version": 1,
+  "pack_id": "commentary-verse-index",
+  "pack_version": "fixture-v1",
+  "label": "Commentary fixture",
+  "description": "Small deterministic Commentary lifecycle fixture.",
+  "package_identity": {
+    "schema_version": 1,
+    "package_id": "reader-texts",
+    "content_sha256": "sha256:910de6211e387d2f2179e917031b4fe578ac078be7a870d471b9b3d422d11451"
+  },
+  "compatibility": {
+    "minimum_app_version": "1.0.0",
+    "maximum_app_version_exclusive": "2.0.0"
+  },
+  "dependencies": [
+    "search-verses"
+  ],
+  "provided_capabilities": [
+    "commentary"
+  ],
+  "inventory_sha256": "sha256:450a3bf5f1ae61554df04180936d4619395c47f589c8e79792aa266055c4adf4",
+  "aggregate_sha256": "sha256:748c0447e7e8b779021338712cdc55df395916523acf285e0f5cd7cb03a2d5aa",
+  "files": [
+    {
+      "path": "data/commentaries/verses/genesis.json",
+      "bytes": 195,
+      "media_type": "application/json",
+      "sha256": "sha256:ad435a8e60271ae4b841d515dbf82c28ce9ddca5e448ceec751fc3ee2af05ba5"
+    }
+  ],
+  "totals": {
+    "files": 1,
+    "bytes": 195,
+    "transfer_bytes": 195
+  },
+  "provenance": {
+    "license_note": "Deterministic lifecycle fixture only; production source rights remain governed by NOTICE.md.",
+    "notice_path": "NOTICE.md",
+    "source_manifest_path": "data/source-manifest.json",
+    "source_refs": [
+      "source_package"
+    ]
+  },
+  "generator": {
+    "name": "build-physical-pack-fixtures.mjs",
+    "version": "1",
+    "candidate_sha": "afdd22a57d8c8cca874947b97ac021e588867e68"
+  }
+}

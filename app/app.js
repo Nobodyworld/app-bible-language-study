@@ -8,7 +8,10 @@ import {
   loadManifest,
   loadReaderCoreBookData,
   translationCanLoadBook,
+  configurePhysicalPackResolver,
+  invalidatePhysicalPackData,
 } from "./src/data-service.js?v=pr13-live-qa-20260711e";
+import { createPhysicalPackManager } from "./src/physical-pack-manager.js";
 import { createDetailViews } from "./src/detail-views.js?v=pr13-live-qa-20260711e";
 import {
   beginDetailIntent,
@@ -73,6 +76,10 @@ const state = {
     outline: { status: "idle", error: null, promise: null },
     interlinear: { status: "idle", error: null, promise: null },
   },
+  physicalPackManager: null,
+  physicalPackRecords: [],
+  physicalDataMode: "bundled_static_data",
+  physicalPackInitializationError: null,
 };
 
 const READER_DATASETS = {
@@ -141,13 +148,17 @@ function createReferenceButton(label, location) {
 function canUseCapability(capabilityId) {
   if (!state.manifest?.package_manifest && !state.packageManifest) return true;
   return capabilityAvailable(state.packageManifest || state.manifest.package_manifest, state.packageStore, capabilityId, {
-    assumeBundledFullAccess: true,
+    assumeBundledFullAccess: state.physicalDataMode !== "managed_cache_packs",
+    physicalDataMode: state.physicalDataMode,
+    physicalRecords: state.physicalPackRecords,
   });
 }
 
 function getCapabilityState(capabilityId) {
   return resolveCapability(state.packageManifest || state.manifest?.package_manifest, state.packageStore, capabilityId, {
-    assumeBundledFullAccess: true,
+    assumeBundledFullAccess: state.physicalDataMode !== "managed_cache_packs",
+    physicalDataMode: state.physicalDataMode,
+    physicalRecords: state.physicalPackRecords,
   });
 }
 
@@ -690,7 +701,7 @@ function syncToolButtons() {
       capabilityAvailable: canUseCapability(key),
       dataAvailable,
     });
-    button.disabled = control.disabled;
+    button.disabled = control.disabled && key !== "search";
     button.setAttribute("aria-busy", dataset?.status === "loading" ? "true" : "false");
     if (control.state === CONTROL_STATES.capabilityUnavailable) {
       button.title = studyUnavailableLabel(key);
@@ -1224,10 +1235,39 @@ async function init() {
   bindEvents();
   try {
     state.manifest = await loadManifest();
-    state.packageManifest = await fetch("./data/package-manifest.json").then((response) => {
-      if (!response.ok) throw new Error("Package manifest could not be loaded.");
-      return response.json();
-    });
+    [state.packageManifest, state.distributionManifest] = await Promise.all([
+      fetch("./data/package-manifest.json").then((response) => {
+        if (!response.ok) throw new Error("Package manifest could not be loaded.");
+        return response.json();
+      }),
+      fetch("./data/distribution-manifest.json").then((response) => {
+        if (!response.ok) throw new Error("Distribution manifest could not be loaded.");
+        return response.json();
+      }),
+    ]);
+    try {
+      state.physicalPackManager = createPhysicalPackManager({
+        packageManifest: state.packageManifest,
+        appVersion: "1.0.0",
+        baseUrl: new URL("./", document.baseURI),
+      });
+      await state.physicalPackManager.initialize();
+      const applyPhysicalSnapshot = (snapshot) => {
+        state.physicalDataMode = snapshot.mode;
+        state.physicalPackRecords = snapshot.records;
+        invalidatePhysicalPackData(snapshot.records.map((record) => record.pack_id));
+        state.commentary = null;
+        syncToolButtons();
+      };
+      applyPhysicalSnapshot(state.physicalPackManager.snapshot());
+      state.physicalPackManager.subscribe(applyPhysicalSnapshot);
+      configurePhysicalPackResolver((path) => state.physicalPackManager.resolve(path));
+    } catch (physicalError) {
+      state.physicalPackInitializationError = physicalError instanceof Error
+        ? physicalError.message
+        : "Physical-pack storage is unavailable.";
+      configurePhysicalPackResolver(null);
+    }
     await navigateToRoute(parseReaderRoute(), {
       replace: !window.location.hash,
       writeUrl: true,

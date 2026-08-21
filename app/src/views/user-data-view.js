@@ -12,6 +12,7 @@ import { resolveCapabilities } from "../capabilities.js";
 import { canRunJob, runJob } from "../job-processor.js?v=pr13-live-qa-20260711e";
 import { setCapabilityDisabled } from "../package-state.js";
 import { renderJobsDiagnostics } from "./jobs-view.js?v=pr13-live-qa-20260711e";
+import { renderPhysicalPackManager } from "./physical-pack-view.js";
 
 function renderSummaryGrid(rows) {
   const grid = document.createElement("div");
@@ -117,7 +118,9 @@ function renderCapabilityManager(ctx, refresh) {
   const list = document.createElement("div");
   list.className = "tag-manager-list";
   const capabilities = resolveCapabilities(packageManifest, ctx.state.packageStore, {
-    assumeBundledFullAccess: true,
+    assumeBundledFullAccess: ctx.state.physicalDataMode !== "managed_cache_packs",
+    physicalDataMode: ctx.state.physicalDataMode,
+    physicalRecords: ctx.state.physicalPackRecords,
   });
 
   Object.values(capabilities).forEach((capability) => {
@@ -431,6 +434,7 @@ export function createUserDataView(ctx, options = {}) {
       jobsTitle.textContent = "Local job console";
       diagnosticsSlot.replaceChildren(
         renderTechnicalSummary(summary),
+        renderPhysicalPackManager(ctx),
         renderCapabilityManager(ctx, refreshDiagnostics),
         jobsTitle,
         renderJobsDiagnostics(ctx, refreshDiagnostics),

@@ -10,7 +10,7 @@ import {
 import { resolveInterlinearVerseTokens } from "../strongs.js?v=pr13-live-qa-20260711e";
 import { createSourceTokenTarget, createVerseTarget } from "../semantic-targets.js?v=pr13-live-qa-20260711e";
 import { strongSectionControlState } from "../strong-section-lifecycle.js?v=pr13-live-qa-20260711e";
-import { fetchLexiconEntry, fetchVerseBook, fetchWordMapBook } from "../data-service.js";
+import { fetchLexiconEntry, fetchVerseBook, fetchWordMapBook } from "../data-service.js?v=pr13-live-qa-20260711e";
 
 function getVerseText(ctx, verse) {
   return ctx.state.verseBook?.chapters?.[ctx.state.chapter]?.[verse] || "";
