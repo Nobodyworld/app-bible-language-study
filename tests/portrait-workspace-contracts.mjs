@@ -59,8 +59,10 @@ assert(
 );
 assert(
   /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;[\s\S]*?font-size:\s*0;/.test(css) &&
-    /\.study-workspace-width-symbol\s*{[\s\S]*?font-size:\s*16px;[\s\S]*?font-weight:\s*900;/.test(css),
-  "Width controls must remain compact while their ordered symbols stay legible.",
+    /button\[data-study-workspace-width-mode="compact"\][\s\S]*?\.study-workspace-width-symbol::before,[\s\S]*?button\[data-study-workspace-width-mode="expanded"\][\s\S]*?\.study-workspace-width-symbol::after\s*{[\s\S]*?grid-area:\s*1 \/ 1;[\s\S]*?width:\s*10px;[\s\S]*?height:\s*2px;/.test(css) &&
+    /button\[data-study-workspace-width-mode="expanded"\][\s\S]*?\.study-workspace-width-symbol::after\s*{[\s\S]*?width:\s*2px;[\s\S]*?height:\s*10px;/.test(css) &&
+    /\.study-workspace-width-reset-symbol\s*{[\s\S]*?font-size:\s*14px;/.test(css),
+  "Width controls must retain 24px targets with geometrically centered Compact and Expanded strokes and an unchanged Standard reset glyph.",
 );
 assert(
   /@media\s*\(min-width:\s*769px\)[\s\S]*?\.detail-header\s*{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;[\s\S]*?\.detail-header-main\s*{\s*display:\s*contents;/.test(css),

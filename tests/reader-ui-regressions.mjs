@@ -4,9 +4,10 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolveReferencePreviewPlacement } from "../app/src/reference-preview-placement.js";
 
-const [index, css, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, jobsView, languageStudyTooltipTest] = await Promise.all([
+const [index, css, portraitCss, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, jobsView, languageStudyTooltipTest] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
   readFile(new URL("../app/styles.css", import.meta.url), "utf8"),
+  readFile(new URL("../app/styles-portrait.css", import.meta.url), "utf8"),
   readFile(new URL("../app/styles-context.css", import.meta.url), "utf8"),
   readFile(new URL("../app/styles-polish.css", import.meta.url), "utf8"),
   readFile(new URL("../app/app.js", import.meta.url), "utf8"),
@@ -25,6 +26,20 @@ const [index, css, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tag
 assert.equal((index.match(/id="study-marks-icon"/g) || []).length, 1, "Study Marks must have one official icon definition.");
 assert.equal((tagsView.match(/#study-marks-icon/g) || []).length, 1, "Study Marks triggers must reference the shared icon.");
 assert(!`${css}\n${contextCss}\n${stylesPolish}`.includes("color-mix("), "App stylesheets must not use color-mix().");
+assert(
+  /\.hebrew-rtl-note\s*{[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;[\s\S]*?font-size:\s*0;/.test(css) &&
+    /\.hebrew-rtl-note::before\s*{[\s\S]*?content:\s*"!";[\s\S]*?place-items:\s*center;[\s\S]*?width:\s*18px;[\s\S]*?height:\s*18px;/.test(css),
+  "Hebrew direction help must retain its 24px target with an optically compact centered badge.",
+);
+assert(
+  /:root\[data-theme="dark"\] \.strong-source-word,[\s\S]*?html\[data-theme="light"\] \.strong-source-word \.language-letter-hover\s*{[\s\S]*?color:\s*var\(--accent-dark\)\s*!important;/.test(css) &&
+    /@media\s*\(forced-colors:\s*active\)[\s\S]*?:root\[data-theme\] \.strong-source-word,[\s\S]*?color:\s*LinkText\s*!important;[\s\S]*?forced-color-adjust:\s*none;/.test(css),
+  "Strong's source words and their hydrated language spans must retain the narrow accent and forced-colors treatment.",
+);
+assert(
+  /button\[data-study-workspace-width-mode="compact"\][\s\S]*?\.study-workspace-width-symbol::before,[\s\S]*?button\[data-study-workspace-width-mode="expanded"\][\s\S]*?\.study-workspace-width-symbol::after/.test(portraitCss),
+  "Compact and Expanded workspace controls must use CSS-drawn centered strokes.",
+);
 
 const chapterTools = index.match(/<div class="chapter-actions"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/)?.[0] || "";
 const sideTools = index.match(/<nav class="detail-tool-nav"[\s\S]*?<\/nav>/)?.[0] || "";
@@ -362,4 +377,4 @@ assert(
   "Browser-visible app and stylesheet entry points must use the current cache-buster key.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 66 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 69 }, null, 2));
