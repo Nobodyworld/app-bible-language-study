@@ -5,6 +5,7 @@
 /.tmp*/
 /.vscode/
 /node_modules/
+/dist/physical-packs/
 
 /app/server.err.log
 /app/server.out.log
@@ -20,6 +21,9 @@
 !/app/scripts/language-study-tooltip-interaction-test.mjs
 !/app/scripts/package-planner-test.mjs
 !/app/scripts/package-state-test.mjs
+!/app/scripts/physical-pack-contract-test.mjs
+!/app/scripts/physical-pack-lifecycle-test.mjs
+!/app/scripts/physical-pack-interaction-test.mjs
 !/app/scripts/poll-response-test.mjs
 !/app/scripts/reference-preview-interaction-test.mjs
 !/app/scripts/reader-data-loading-interaction-test.mjs

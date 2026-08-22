@@ -1,0 +1,17 @@
+{
+  "translation_id": "bsb",
+  "book_id": "genesis",
+  "fixture_version": 2,
+  "entries": [
+    {
+      "chapter": 1,
+      "verse": 1,
+      "text": "In the beginning"
+    },
+    {
+      "chapter": 1,
+      "verse": 3,
+      "text": "Let there be light"
+    }
+  ]
+}

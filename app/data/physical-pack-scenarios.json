@@ -1,0 +1,73 @@
+{
+  "kind": "bibleapp:physical-pack-scenario-report",
+  "schema_version": 1,
+  "measured_from_package_sha256": "sha256:910de6211e387d2f2179e917031b4fe578ac078be7a870d471b9b3d422d11451",
+  "generated_at": "2026-07-10T20:19:10.395Z",
+  "scenarios": [
+    {
+      "id": "complete-bundled-app",
+      "files": 2804,
+      "bytes": 954311610,
+      "transfer_bytes": 180460807,
+      "build_install_update": "Ship and open the existing complete static app; no managed-pack mutation is required.",
+      "first_use": "Bundled network/file read; hardware timing is recorded by the maintained Edge suite, not frozen into source.",
+      "warm_use": "Parsed-data cache and browser HTTP cache; hardware timing is recorded by the maintained Edge suite.",
+      "offline_behavior": "Complete reader, Search, and Commentary remain bundled offline.",
+      "unavailable_behavior": "Only deliberate logical disablement makes a capability unavailable.",
+      "integrity": "Per-file SHA-256 plus canonical aggregate SHA-256 and immutable manifest digest.",
+      "notice_and_provenance": "NOTICE.md and data/source-manifest.json are retained by explicit artifact references."
+    },
+    {
+      "id": "base-without-search-commentary",
+      "files": 1480,
+      "bytes": 383278203,
+      "transfer_bytes": 80277580,
+      "build_install_update": "Reference measurement only; no smaller public application is produced by this branch.",
+      "first_use": "Reader base remains immediately available; optional tools expose structured not-installed states in managed mode.",
+      "warm_use": "Reader caches remain independent of optional-pack installation.",
+      "offline_behavior": "Scripture reading remains offline; managed Search and Commentary require verified local packs.",
+      "unavailable_behavior": "Search and Commentary identify the required pack and offer install or bundled-mode recovery.",
+      "integrity": "Per-file SHA-256 plus canonical aggregate SHA-256 and immutable manifest digest.",
+      "notice_and_provenance": "NOTICE.md and data/source-manifest.json are retained by explicit artifact references."
+    },
+    {
+      "id": "base-plus-search",
+      "files": 2473,
+      "bytes": 740947909,
+      "transfer_bytes": 124059148,
+      "build_install_update": "Install the immutable Search manifest and loose files into staging, verify, then activate atomically.",
+      "first_use": "First managed Search read resolves from the verified active Cache Storage version.",
+      "warm_use": "Parsed JSON is keyed by physical pack version and reused until activation invalidates it.",
+      "offline_behavior": "Search reads remain available from Cache Storage without an application request.",
+      "unavailable_behavior": "Commentary remains explicitly not installed while ordinary reading and Search continue.",
+      "integrity": "Per-file SHA-256 plus canonical aggregate SHA-256 and immutable manifest digest.",
+      "notice_and_provenance": "NOTICE.md and data/source-manifest.json are retained by explicit artifact references."
+    },
+    {
+      "id": "base-plus-commentary",
+      "files": 1811,
+      "bytes": 596641904,
+      "transfer_bytes": 136679239,
+      "build_install_update": "Install the immutable Commentary manifest and loose files into staging, verify, then activate atomically.",
+      "first_use": "First managed Commentary read resolves from the verified active Cache Storage version.",
+      "warm_use": "Parsed JSON is keyed by physical pack version and reused until activation invalidates it.",
+      "offline_behavior": "Commentary reads remain available from Cache Storage without an application request.",
+      "unavailable_behavior": "Search remains explicitly not installed while ordinary reading and Commentary continue.",
+      "integrity": "Per-file SHA-256 plus canonical aggregate SHA-256 and immutable manifest digest.",
+      "notice_and_provenance": "NOTICE.md and data/source-manifest.json are retained by explicit artifact references."
+    },
+    {
+      "id": "reconstructed-complete-offline-bundle",
+      "files": 2804,
+      "bytes": 954311610,
+      "transfer_bytes": 180460807,
+      "build_install_update": "Run physical-packs:build -- --assemble-offline to overlay verified Search and Commentary artifacts onto the unchanged base tree.",
+      "first_use": "Equivalent data boundary to the complete bundled app; Edge fixture timing validates resolver activation separately.",
+      "warm_use": "Equivalent data boundary to the complete bundled app with version-keyed parsed caches.",
+      "offline_behavior": "The reconstructed directory contains the complete offline data inventory.",
+      "unavailable_behavior": "No optional capability is missing after complete reconstruction.",
+      "integrity": "Per-file SHA-256 plus canonical aggregate SHA-256 and immutable manifest digest.",
+      "notice_and_provenance": "NOTICE.md and data/source-manifest.json are retained by explicit artifact references."
+    }
+  ]
+}

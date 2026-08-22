@@ -1,5 +1,5 @@
 import { els, isDetailHoverLocked, setDetail, setStatus, sortedNumericKeys, textNode } from "./dom.js?v=pr13-live-qa-20260711e";
-import { resolvePassageText } from "./data-service.js";
+import { resolvePassageText } from "./data-service.js?v=pr13-live-qa-20260711e";
 import { referenceKey, refDomId, parseLocationFromHref } from "./references.js";
 import {
   addRedLetterRange,

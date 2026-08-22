@@ -1,0 +1,64 @@
+{
+  "kind": "bibleapp:physical-pack-catalog",
+  "schema_version": 1,
+  "catalog_version": "fixture-v1",
+  "generated_at": "2026-08-21T00:00:00.000Z",
+  "package_identity": {
+    "schema_version": 1,
+    "package_id": "reader-texts",
+    "content_sha256": "sha256:910de6211e387d2f2179e917031b4fe578ac078be7a870d471b9b3d422d11451"
+  },
+  "compatibility": {
+    "minimum_app_version": "1.0.0",
+    "maximum_app_version_exclusive": "2.0.0"
+  },
+  "packs": [
+    {
+      "pack_id": "search-verses",
+      "pack_version": "fixture-v1",
+      "manifest_path": "packs/search-verses/fixture-v1/manifest.json",
+      "manifest_sha256": "sha256:cc50f49026cc860c495c6dc6b5ddb1281f282b3d93b0a2456df44e449322c5ef",
+      "dependencies": [],
+      "provided_capabilities": [
+        "search"
+      ],
+      "files": 2,
+      "bytes": 279,
+      "transfer_bytes": 279,
+      "license_note": "Deterministic lifecycle fixture only; production source rights remain governed by NOTICE.md.",
+      "notice_path": "NOTICE.md",
+      "source_manifest_path": "data/source-manifest.json",
+      "source_refs": [
+        "source_package"
+      ]
+    },
+    {
+      "pack_id": "commentary-verse-index",
+      "pack_version": "fixture-v1",
+      "manifest_path": "packs/commentary-verse-index/fixture-v1/manifest.json",
+      "manifest_sha256": "sha256:858ac039249a2d56ac8f5e2c2f46fc1195b0f9995651ff11f02b5519ec0e7f51",
+      "dependencies": [
+        "search-verses"
+      ],
+      "provided_capabilities": [
+        "commentary"
+      ],
+      "files": 1,
+      "bytes": 195,
+      "transfer_bytes": 195,
+      "license_note": "Deterministic lifecycle fixture only; production source rights remain governed by NOTICE.md.",
+      "notice_path": "NOTICE.md",
+      "source_manifest_path": "data/source-manifest.json",
+      "source_refs": [
+        "source_package"
+      ]
+    }
+  ],
+  "full_offline_bundle": {
+    "pack_ids": [
+      "search-verses",
+      "commentary-verse-index"
+    ],
+    "complete_offline": true
+  }
+}

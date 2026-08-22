@@ -1,0 +1,12 @@
+{
+  "translation_id": "bsb",
+  "book_id": "genesis",
+  "fixture_version": 1,
+  "entries": [
+    {
+      "chapter": 1,
+      "verse": 1,
+      "text": "In the beginning"
+    }
+  ]
+}

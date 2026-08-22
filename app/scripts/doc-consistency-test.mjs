@@ -63,6 +63,11 @@ const DOCUMENT_MODEL = Object.freeze([
     roles: ["technical", "data-model"],
   },
   {
+    path: "docs/PHYSICAL_PACK_LIFECYCLE.md",
+    classification: "maintained",
+    roles: ["current-product", "runtime-facing", "technical", "data-model", "ui-contract"],
+  },
+  {
     path: "docs/SECURITY_POSTURE.md",
     classification: "maintained",
     roles: ["current-policy", "current-status", "security"],

@@ -54,14 +54,14 @@ recovery backups, malformed-import atomicity, and browser-local operation remain
 part of the persistence contract. The app does not add an account, cloud
 backup, external update service, or synchronization network boundary.
 
-## Physical Pack Foundation
+## Physical Pack Lifecycle
 
 The tracked distribution remains a complete offline bundle in
 `bundled_static_data` mode. `app/data/distribution-manifest.json` records that
 current authority and identifies Search and Commentary as the first managed-pack
 candidates without hiding or relocating their bundled files.
 
-`app/src/physical-pack-contract.js` defines the connector-prepared pure contract
+`app/src/physical-pack-contract.js` defines the pure contract
 for:
 
 - strict canonical runtime paths;
@@ -73,14 +73,47 @@ for:
 - verified active-pack identity;
 - separation of bundled package authority from managed physical-pack authority.
 
-The schemas under `app/schemas/` and the focused domain test establish this
-foundation before browser storage and runtime lifecycle work is added. The full
-implementation keeps Cache Storage and IndexedDB ownership below
-`app/src/data-service.js`; individual views must not directly own physical-pack
-storage or transport.
+`app/src/physical-pack-registry.js` owns the independent
+`bibleapp-physical-packs` IndexedDB database. `app/src/physical-pack-manager.js`
+owns catalog refresh, dependency planning, verified staging, atomic activation,
+update, repair, retained rollback, removal, cleanup, startup reconciliation,
+and orphan-cache classification. Staging, active, and rollback data use
+separate immutable Cache Storage names. Active and rollback claims are verified
+independently; invalid rollback metadata is removed without invalidating a
+verified active copy. Persisted catalogs and manifests are revalidated against
+the current schema, package identity, semantic app range, source policy,
+canonical inventory, aggregate framing, and cache bytes before authority is
+restored. Incompatible authority is distinct from corrupt storage and is never
+used for managed reads.
+
+The validated distribution manifest scopes physical requirements to
+`managed_optional_pack_ids`. Other shipped feature packs remain bundled in
+managed mode. Search and Commentary prefer verified managed bytes and follow
+the manifest's explicit bundled-fallback flag. Full semantic-version checks and
+same-origin source policy run before artifact fetch.
+The same checks run against restored IndexedDB metadata without fetching a
+rejected stored source. Bundled fallback remains identified when permitted;
+strict distributions preserve `incompatible_version`.
+
+`app/src/data-service.js` is the single pack-aware runtime JSON boundary. It
+uses verified managed responses when managed mode is explicit, keys parsed data
+by physical source/version, identifies permitted bundled fallback, and preserves
+structured errors when fallback is forbidden. Search, Commentary, and other views do not acquire Cache Storage or
+physical-registry logic.
+
+My Data → Advanced diagnostics renders the management surface. It exposes
+mode, catalog, immutable version, expected/verified totals, provenance,
+operation history, progress, plan/confirmation, focus restoration, repair,
+rollback, removal, and cleanup without creating a new primary destination.
+Application snapshot events are dispatched only to currently mounted manager
+nodes, allowing asynchronous verification to update the open surface without a
+global view subscription or reader rerender.
+`update_available` has UI/state precedence over `rollback_available` when both
+facts are true; the retained rollback pointer remains an independent action.
 
 The detailed non-destructive implementation contract is
-`docs/OPTIONAL_PACK_ARCHITECTURE.md`. It does not authorize deleting bundled
+`docs/OPTIONAL_PACK_ARCHITECTURE.md`; operational and UI behavior is summarized
+in `docs/PHYSICAL_PACK_LIFECYCLE.md`. This implementation does not authorize deleting bundled
 Search or Commentary data, publishing pack artifacts, changing the tracked
 default mode, or adding a required backend.
 

@@ -22,8 +22,8 @@ records, BSB footnotes, presentation metadata, semantic seeds, word maps, and
 cross-reference graph analysis.
 
 The tracked public-preview distribution remains `bundled_static_data` and
-complete offline. Search and Commentary remain present in the bundled tree while
-the optional physical-pack reference implementation is developed.
+complete offline. Search and Commentary remain present in the bundled tree;
+managed copies are opt-in browser-local operational state.
 
 ## Logical and Physical Package State
 
@@ -33,12 +33,32 @@ The existing portable package store records desired/installed feature-pack IDs,
 disabled capabilities, and operation history. Those records do not prove that a
 Cache Storage entry or another browser-local binary store exists.
 
-Physical-pack operational state belongs in a separate browser-local registry.
+Physical-pack operational state belongs in the separate
+`bibleapp-physical-packs` IndexedDB database, store `pack_records`.
 Its records identify immutable pack versions, manifest and aggregate digests,
 staging/active/rollback caches, expected and verified totals, lifecycle state,
 compatibility, timestamps, and sanitized failures. Startup reconciliation must
 compare any registry claim with actual physical storage before reporting a pack
 as active.
+
+`startup_verifying` is a safe transient state: registry metadata may name an
+active cache, but runtime resolution cannot use it until cache existence, exact
+declared inventory, required entries, media types, byte lengths, per-file
+SHA-256, and verified totals all pass. Missing storage becomes
+`repair_required`; content drift becomes `corrupt`. Rollback metadata is not
+promoted until the same verification passes. Active and rollback records are
+independent claims: a valid active cache remains authoritative if rollback
+verification fails. Invalid rollback pointers are cleared, sanitized
+`rollback_lost` evidence is retained, and state becomes `active` or remains
+`update_available` as appropriate.
+
+Startup revalidates every persisted active and rollback manifest through the
+current schema, immutable pack identity, package identity, full semantic-version
+range, canonical paths, inventory/aggregate digests, totals, provenance, and
+source references before cache hashing. A compatible manifest with invalid
+bytes is corrupt or repair-required; valid cached bytes with an incompatible
+package identity or app-version range are `incompatible`, remain preserved as
+non-authoritative local data, and cannot satisfy managed resolution.
 
 Physical registry authority and pack bytes are not part of portable
 `bibleapp:user-data` backups. An imported logical preference may require local
@@ -57,9 +77,46 @@ Immutable pack artifacts use:
 - retained NOTICE and source-manifest references;
 - explicit package/app compatibility.
 
-`app/src/physical-pack-contract.js` and the physical-pack schemas are the current
-pure-data authority. The lifecycle implementation will stage and verify bytes
-before atomic activation and retain a previous valid version for rollback.
+`app/src/physical-pack-contract.js` and the physical-pack schemas are the
+pure-data authority. `app/src/physical-pack-manager.js` stages and verifies
+bytes before one-record atomic activation, retains the previous active cache
+and manifest for rollback, and never treats a portable logical preference as
+physical proof.
+
+Registry metadata stores the explicit physical mode, last validated catalog,
+catalog URL, and operation history. Pack records retain the active manifest so
+runtime paths can be checked against the immutable file inventory. Interrupted
+staging restores the previous active record; interrupted removal completes its
+recorded cache-deletion list; missing active storage activates a valid retained
+rollback or becomes `repair_required`. Unreferenced pack caches are reported as
+orphans and removed only by startup staging cleanup or the explicit cleanup
+action.
+
+Persisted catalog metadata is not trusted merely because IndexedDB returned it.
+The catalog and URL are revalidated for schema/kind, package/app compatibility,
+same-origin HTTP(S), no credentials, and no fragment before use. Rejection
+clears catalog authority, records sanitized history, and returns to bundled
+mode without fetching the invalid source or changing portable user data.
+
+Lifecycle state and rollback presence are separate fields. When a newer
+catalog version exists beside a compatible rollback, state is
+`update_available` and rollback metadata remains present; therefore update has
+display precedence while both update and rollback operations remain available.
+
+The mounted diagnostics view is a projection of manager snapshots, not another
+authority. Scoped events update only connected manager nodes after asynchronous
+reconciliation; removed nodes own no global listener.
+
+The validated distribution manifest remains the authority for
+`managed_optional_pack_ids` and `bundled_fallback`. Physical records describe
+actual local state even when a capability remains usable from an identified
+bundled fallback. Physical state never becomes portable user-data authority.
+
+The deterministic production artifact builder writes ignored output under
+`dist/physical-packs/`. Its loose-file layout is
+`packs/<pack>/<version>/files/<runtime-path>` with a sibling immutable
+`manifest.json`; catalog entries carry the exact manifest SHA-256. The
+maintained scenario source is `app/data/physical-pack-scenarios.json`.
 
 ## User Data
 

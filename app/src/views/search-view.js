@@ -4,8 +4,9 @@ import {
   fetchSearchManifest,
   fetchSearchShard,
   fetchVerseBook,
-} from "../data-service.js";
+} from "../data-service.js?v=pr13-live-qa-20260711e";
 import { createDetailList, setDetail, textNode } from "../dom.js?v=pr13-live-qa-20260711e";
+import { capabilityMessage } from "../capabilities.js";
 
 const SEARCH_STOP_WORDS = new Set([
   "a",
@@ -378,6 +379,19 @@ function renderSearchResults(ctx, showStrong, container, results, query, collect
 
 export function createSearchView(ctx, { showStrong }) {
   return function showSearch() {
+    if (!ctx.canUseCapability?.("search")) {
+      const unavailable = document.createElement("section");
+      unavailable.className = "study-empty-state physical-pack-unavailable";
+      const heading = document.createElement("h3");
+      heading.tabIndex = -1;
+      heading.textContent = "Search unavailable";
+      const message = document.createElement("p");
+      message.textContent = capabilityMessage(ctx.getCapabilityState?.("search"));
+      unavailable.append(heading, message);
+      setDetail("Search", unavailable);
+      heading.focus();
+      return;
+    }
     const wrap = document.createElement("div");
     wrap.className = "search-panel";
     const heading = document.createElement("h3");

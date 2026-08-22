@@ -1,8 +1,8 @@
 # Optional Physical Pack Architecture
 
-Status: implementation contract for issue #46  
-Prepared baseline: `ac361ebdccd9bbeff4515cdcd94ccd48aae3f4cc`  
-Prepared branch: `feat/physical-pack-foundation`
+Status: implemented lifecycle contract for issue #63
+Implementation baseline: `afdd22a57d8c8cca874947b97ac021e588867e68`
+Implementation branch: `feat/physical-pack-lifecycle`
 
 ## Purpose
 
@@ -18,6 +18,24 @@ o-account, offline, provenance, or user-data contracts.
 The implementation must remain useful in the current full checkout while also
 providing the reference path needed for a future owner-approved lean
 distribution.
+
+## Delivered implementation
+
+The issue #63 slice implements this contract in:
+
+- `app/tools/build-physical-packs.mjs` for reproducible production Search and
+  Commentary manifests, catalog, loose files, optional complete-offline
+  assembly, and scenario checks;
+- `app/src/physical-pack-registry.js` for independent IndexedDB authority;
+- `app/src/physical-pack-manager.js` for catalog, lifecycle, recovery, cache,
+  history, provenance, and runtime resolution;
+- `app/src/data-service.js` for the sole pack-aware JSON boundary;
+- `app/src/views/physical-pack-view.js` for My Data → Advanced diagnostics;
+- deterministic fixtures under `app/data/physical-pack-fixtures/`; and
+- focused domain and maintained Edge lifecycle tests.
+
+The tracked distribution remains unchanged in `bundled_static_data` mode and
+continues shipping Search and Commentary.
 
 ## Current measured boundary
 
@@ -115,6 +133,23 @@ Startup reconciliation must compare registry claims with the actual physical
 store. Missing caches, missing files, digest drift, interrupted operations, and
 orphan staging areas must not be reported as active.
 
+The current implementation places existing active claims into a safe
+`startup_verifying` state and verifies exact inventory, media type, byte length,
+SHA-256, and totals asynchronously. Managed resolution cannot use those bytes
+until verification completes. Active and rollback claims are verified
+independently with the same verifier. Losing optional rollback authority never
+invalidates a verified active copy: invalid rollback metadata is cleared,
+sanitized history is retained, and active or catalog-update state remains
+truthful. Rollback promotion uses the same verifier.
+
+Before byte verification, persisted catalog and manifest objects are rerun
+through the maintained schema, package identity, full semantic-version,
+canonical-path, provenance, source-reference, inventory, and aggregate checks.
+Persisted catalog URLs also rerun the same-origin HTTP(S), credential, and
+fragment policy without fetching rejected sources. Incompatible package/app
+authority is distinct from corrupt bytes: it remains non-authoritative local
+data and cannot satisfy managed resolution.
+
 ## Physical modes
 
 ### `bundled_static_data`
@@ -126,10 +161,15 @@ must not hide existing bundled data.
 
 ### `managed_cache_packs`
 
-This opt-in/reference mode resolves capability availability from verified active
-physical pack records plus any explicitly declared immutable base packs. It is
-the architecture used to test missing, installed, corrupt, repaired, removed,
-and updated optional-pack states.
+This opt-in/reference mode applies physical requirements only to the
+distribution manifest's `managed_optional_pack_ids`. Feature packs outside that
+set remain available from the shipped bundle. Managed optional packs prefer a
+verified physical record and use bundled fallback only when the distribution
+sets `bundled_fallback: true`; otherwise they expose structured unavailable
+states. It is the architecture used to test missing, installed, corrupt,
+repaired, removed, and updated optional-pack states.
+Permitted bundled fallback identifies an incompatible managed copy without
+interrupting reading; strict mode exposes `incompatible_version`.
 
 Switching modes must be explicit, reversible, and protected from stale physical
 registry claims. The branch must not silently make managed mode the public
@@ -192,7 +232,7 @@ the canonical loose-file manifest.
 
 Pack installation sources may include:
 
-- a same-origin or explicitly allowed static catalog URL;
+- a same-origin static catalog URL;
 - a relative catalog shipped with a complete offline directory;
 - user-selected local files or directory handles when the browser supports a
   safe deterministic path.
@@ -200,6 +240,13 @@ Pack installation sources may include:
 No source may bypass the same manifest, path, compatibility, and digest checks.
 Cross-origin installation is out of scope unless CORS, integrity, privacy, and
 failure behavior are deliberately implemented and tested.
+
+The current manager rejects cross-origin, credential-bearing, fragmented,
+malformed, and non-HTTP(S) catalog URLs before fetch. Manifest and artifact URLs
+remain same-origin and preserve canonical relative-path rules.
+The same policy and catalog validator apply after reload to metadata restored
+from IndexedDB. Rejection clears catalog authority, records sanitized startup
+evidence, and returns to bundled mode; a later valid refresh recovers normally.
 
 ## Physical storage and atomicity
 
@@ -212,7 +259,8 @@ Use separate versioned staging and active storage identifiers. A safe install or
 update follows this order:
 
 1. fetch and validate the catalog and pack manifest;
-2. check compatibility, dependencies, estimated storage, and path safety;
+2. check full semantic-version compatibility, dependencies, estimated storage,
+   and path safety;
 3. create a unique staging store;
 4. fetch or read each file into staging;
 5. verify byte length and SHA-256 before accepting each file;
@@ -224,6 +272,9 @@ update follows this order:
 10. remove obsolete staging and, after the rollback boundary, obsolete active
     storage.
 
+A meaningful insufficient quota fails before staging is created. Missing or
+unavailable estimates are disclosed but do not cause a false rejection.
+
 A failed operation must preserve the previous active pack. Cleanup failure must
 be reported separately from install failure and must not erase the only valid
 rollback copy.
@@ -232,8 +283,9 @@ Removal must update the active registry before deleting physical bytes, preserve
 logical dependency rules, and recover deterministically when deletion is
 interrupted.
 
-Repair re-verifies the active manifest and bytes, replaces only invalid or
-missing files in staging, and atomically activates the repaired result.
+Repair produces the same complete dependency/file/raw-byte/transfer plan as an
+install or update, redownloads the target into staging, and atomically activates
+the repaired result.
 
 ## Runtime resolution
 
@@ -250,7 +302,17 @@ Resolution order in the current complete application:
 3. classify a missing managed optional pack before falling through to an opaque
    JSON parse or generic 404 failure;
 4. cache parsed JSON only under a key that includes physical source/version so
-   activation or repair cannot return stale parsed data.
+    activation or repair cannot return stale parsed data.
+
+An incompatible active record is never treated as verified managed data. A
+compatible rollback may recover it; an incompatible rollback is never promoted.
+When a newer catalog version and a valid rollback coexist, the primary state is
+`update_available` while rollback metadata continues to expose rollback.
+
+Bundled fallback is an identified runtime source, not an implicit error catch.
+When the distribution forbids fallback, `tryFetchJson()` and Search index
+fallback must preserve the managed structured error instead of silently scanning
+bundled data.
 
 The resolver must expose structured failure classifications sufficient for
 capability state and user-visible messaging:
@@ -293,6 +355,15 @@ management surface should provide:
 - operation history with sanitized errors;
 - storage-estimate and quota information when available;
 - explicit notice/provenance access.
+
+The mounted manager receives scoped snapshot events dispatched only to current
+manager nodes. It updates state, runtime source, failures, history, cleanup
+count, and actions after asynchronous reconciliation without rerendering the
+reader. Lifecycle actions are absent during `startup_verifying`; removed nodes
+retain no global listener or subscription.
+Incompatible cards omit Verify, identify bundled fallback or strict
+unavailability, and offer a compatible update when present. Update and rollback
+actions can appear together after reload.
 
 Opening, cancelling, or dismissing a plan must not mutate logical or physical
 state.
@@ -360,8 +431,10 @@ Add deterministic domain coverage for:
 - startup reconciliation;
 - staged install and atomic activation;
 - interrupted install/update/remove recovery;
-- repair and rollback;
-- corrupt, missing, incompatible, and quota/error states;
+- repair, independent rollback verification, and rollback-loss cleanup;
+- persisted catalog/manifest rejection, corrupt, missing, incompatible, and
+  quota/error states;
+- update availability coexisting with retained rollback authority;
 - portable-backup behavior;
 - provenance enforcement;
 - scenario metrics.
@@ -374,7 +447,8 @@ Add maintained Edge browser coverage using small fixture packs for:
 - Search and Commentary unavailable states;
 - installed pack lookup through the pack-aware data resolver;
 - corruption detection and repair;
-- removal and rollback;
+- removal, rollback, invalid rollback loss, incompatible recovery, simultaneous
+  update/rollback actions, and delayed mounted-view updates;
 - mode return to bundled fallback;
 - keyboard, focus, Escape, narrow/mobile, dark/light, reduced-motion, and no
   horizontal-overflow behavior;
@@ -386,10 +460,10 @@ checks; browser lifecycle tests use representative deterministic fixtures.
 
 ## Completion and future decision
 
-This branch may close issue #46 when it delivers the architecture, measured
-scenarios, artifact builder, verified lifecycle reference implementation,
-pack-aware resolver, explicit unavailable states, recovery behavior, tests, and
-documentation while preserving the complete package.
+Issue #63 delivers the architecture, measured scenarios, artifact builder,
+verified lifecycle implementation, pack-aware resolver, explicit unavailable
+states, recovery behavior, tests, and documentation while preserving the
+complete package.
 
 Any later step that removes Search or Commentary from the default tracked or
 published package requires a separate exact owner decision and a focused
