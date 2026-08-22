@@ -1,5 +1,9 @@
 const ACTIVE_OPTION_SELECTOR = ".reader-picker-option.active";
 const PICKER_READY_TIMEOUT_MS = 1800;
+const PICKER_VIEWPORT_MARGIN = 10;
+const PICKER_TRIGGER_GAP = 6;
+const PICKER_SETTLE_FRAME_COUNT = 3;
+const PICKER_CONTEXT_SETTLE_DURATION_MS = 400;
 const FROZEN_HIGHLIGHT_REFRESH_DELAYS_MS = [0, 40, 120, 300, 700, 1300, 1900];
 const READER_BACKGROUND_RESET_SELECTOR = [
   "button",
@@ -35,6 +39,8 @@ let frozenReaderToken = null;
 let frozenReaderRow = null;
 let frozenReaderContext = null;
 let frozenHighlightObserver = null;
+let pendingPickerContext = null;
+let pickerScrollAnchorState = null;
 
 function afterPickerPaint(callback) {
   window.requestAnimationFrame(() => {
@@ -59,15 +65,166 @@ function setPickerExpanded(button, panel, expanded) {
   panel.hidden = !expanded;
 }
 
-function scrollActivePickerOptionIntoView(panel) {
-  if (!panel) return;
-  afterPickerPaint(() => {
-    if (panel.hidden) return;
-    panel.querySelector(ACTIVE_OPTION_SELECTOR)?.scrollIntoView({
-      block: "center",
-      inline: "nearest",
+function capturePickerContext() {
+  const reader = document.getElementById("chapterContent");
+  const detail = document.getElementById("detailContent");
+  return {
+    pageX: window.scrollX,
+    pageY: window.scrollY,
+    readerScrollLeft: reader?.scrollLeft || 0,
+    readerScrollTop: reader?.scrollTop || 0,
+    detailScrollLeft: detail?.scrollLeft || 0,
+    detailScrollTop: detail?.scrollTop || 0,
+  };
+}
+
+function capturePickerContextBeforeOpen(event) {
+  const button = event.target?.closest?.("#bookPickerButton, #chapterPickerButton");
+  pendingPickerContext = button
+    ? { buttonId: button.id, snapshot: capturePickerContext() }
+    : null;
+}
+
+function pickerContextFor(button) {
+  const snapshot =
+    pendingPickerContext?.buttonId === button?.id
+      ? pendingPickerContext.snapshot
+      : capturePickerContext();
+  pendingPickerContext = null;
+  return snapshot;
+}
+
+function restorePickerContext(snapshot) {
+  if (!snapshot) return;
+  const reader = document.getElementById("chapterContent");
+  const detail = document.getElementById("detailContent");
+  if (reader) {
+    reader.scrollLeft = snapshot.readerScrollLeft;
+    reader.scrollTop = snapshot.readerScrollTop;
+  }
+  if (detail) {
+    detail.scrollLeft = snapshot.detailScrollLeft;
+    detail.scrollTop = snapshot.detailScrollTop;
+  }
+  if (window.scrollX !== snapshot.pageX || window.scrollY !== snapshot.pageY) {
+    window.scrollTo({ left: snapshot.pageX, top: snapshot.pageY, behavior: "auto" });
+  }
+}
+
+function suspendPickerScrollAnchoring() {
+  if (!pickerScrollAnchorState) {
+    const targets = [
+      document.documentElement,
+      document.body,
+      document.getElementById("chapterContent"),
+      document.getElementById("detailContent"),
+    ].filter(Boolean);
+    pickerScrollAnchorState = {
+      targets: targets.map((target) => ({
+        target,
+        previous: target.style.overflowAnchor,
+      })),
+      releaseTimer: 0,
+    };
+    pickerScrollAnchorState.targets.forEach(({ target }) => {
+      target.style.overflowAnchor = "none";
     });
-  });
+  }
+  window.clearTimeout(pickerScrollAnchorState.releaseTimer);
+  pickerScrollAnchorState.releaseTimer = window.setTimeout(() => {
+    pickerScrollAnchorState?.targets.forEach(({ target, previous }) => {
+      if (previous) target.style.overflowAnchor = previous;
+      else target.style.removeProperty("overflow-anchor");
+    });
+    pickerScrollAnchorState = null;
+  }, PICKER_CONTEXT_SETTLE_DURATION_MS);
+}
+
+function activeOptionScroller(panel) {
+  const active = panel?.querySelector(ACTIVE_OPTION_SELECTOR);
+  const scroller = active?.closest?.(".book-picker-list, .chapter-picker-grid");
+  return active && scroller ? { active, scroller } : null;
+}
+
+function revealActivePickerOption(panel) {
+  const target = activeOptionScroller(panel);
+  if (!target) return;
+  const { active, scroller } = target;
+  const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+  if (maxScrollTop <= 0) return;
+  const activeCenter = active.offsetTop + active.offsetHeight / 2;
+  const nextScrollTop = activeCenter - scroller.clientHeight / 2;
+  scroller.scrollTop = Math.max(0, Math.min(maxScrollTop, nextScrollTop));
+}
+
+function positionPickerPanel(button, panel) {
+  if (!button || !panel || panel.hidden) return;
+  const triggerRect = button.getBoundingClientRect();
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+  const maxWidth = Math.max(160, viewportWidth - PICKER_VIEWPORT_MARGIN * 2);
+  const availableBelow = Math.max(
+    0,
+    viewportHeight - triggerRect.bottom - PICKER_TRIGGER_GAP - PICKER_VIEWPORT_MARGIN,
+  );
+  const availableAbove = Math.max(
+    0,
+    triggerRect.top - PICKER_TRIGGER_GAP - PICKER_VIEWPORT_MARGIN,
+  );
+  const placeAbove = availableBelow < 240 && availableAbove > availableBelow;
+  const availableHeight = Math.max(120, placeAbove ? availableAbove : availableBelow);
+
+  panel.dataset.positioned = "true";
+  panel.dataset.placement = placeAbove ? "above" : "below";
+  panel.style.position = "fixed";
+  panel.style.transform = "none";
+  panel.style.maxWidth = `${maxWidth}px`;
+  panel.style.maxHeight = `${availableHeight}px`;
+  panel.style.setProperty("--reader-picker-available-height", `${availableHeight}px`);
+  panel.style.left = "0px";
+  panel.style.top = "0px";
+
+  const naturalRect = panel.getBoundingClientRect();
+  const width = Math.min(naturalRect.width, maxWidth);
+  const left = Math.max(
+    PICKER_VIEWPORT_MARGIN,
+    Math.min(triggerRect.left, viewportWidth - PICKER_VIEWPORT_MARGIN - width),
+  );
+  const measuredHeight = Math.min(naturalRect.height, availableHeight);
+  const top = placeAbove
+    ? Math.max(PICKER_VIEWPORT_MARGIN, triggerRect.top - PICKER_TRIGGER_GAP - measuredHeight)
+    : Math.min(
+        viewportHeight - PICKER_VIEWPORT_MARGIN - measuredHeight,
+        triggerRect.bottom + PICKER_TRIGGER_GAP,
+      );
+
+  panel.style.width = `${width}px`;
+  panel.style.left = `${left}px`;
+  panel.style.top = `${Math.max(PICKER_VIEWPORT_MARGIN, top)}px`;
+}
+
+function settleOpenPicker(button, panel, snapshot = capturePickerContext()) {
+  let remainingFrames = PICKER_SETTLE_FRAME_COUNT;
+  const contextSettleStartedAt = window.performance.now();
+  suspendPickerScrollAnchoring();
+  const restoreWhileOpen = () => {
+    if (!panel || panel.hidden || button?.getAttribute("aria-expanded") !== "true") return;
+    restorePickerContext(snapshot);
+    if (window.performance.now() - contextSettleStartedAt < PICKER_CONTEXT_SETTLE_DURATION_MS) {
+      window.requestAnimationFrame(restoreWhileOpen);
+    }
+  };
+  const settle = () => {
+    if (!panel || panel.hidden || button?.getAttribute("aria-expanded") !== "true") return;
+    positionPickerPanel(button, panel);
+    revealActivePickerOption(panel);
+    restoreWhileOpen();
+    if (remainingFrames <= 0) return;
+    remainingFrames -= 1;
+    window.requestAnimationFrame(settle);
+  };
+  window.requestAnimationFrame(settle);
+  window.requestAnimationFrame(restoreWhileOpen);
 }
 
 function waitForPickerOptions(panel, isReady, callback) {
@@ -97,7 +254,8 @@ function openChapterPickerAfterBookSelection(selectedBookLabel) {
     () => {
       setPickerExpanded(bookButton, bookPanel, false);
       setPickerExpanded(chapterButton, chapterPanel, true);
-      scrollActivePickerOptionIntoView(chapterPanel);
+      chapterButton?.focus?.({ preventScroll: true });
+      settleOpenPicker(chapterButton, chapterPanel);
     },
   );
 }
@@ -238,13 +396,23 @@ function handleReaderPickerClick(event) {
   if (!(target instanceof Element)) return;
 
   if (target.closest("#bookPickerButton")) {
-    scrollActivePickerOptionIntoView(document.getElementById("bookPickerPanel"));
+    const button = document.getElementById("bookPickerButton");
+    settleOpenPicker(
+      button,
+      document.getElementById("bookPickerPanel"),
+      pickerContextFor(button),
+    );
     scheduleFrozenReaderHighlightRefresh();
     return;
   }
 
   if (target.closest("#chapterPickerButton")) {
-    scrollActivePickerOptionIntoView(document.getElementById("chapterPickerPanel"));
+    const button = document.getElementById("chapterPickerButton");
+    settleOpenPicker(
+      button,
+      document.getElementById("chapterPickerPanel"),
+      pickerContextFor(button),
+    );
     scheduleFrozenReaderHighlightRefresh();
     return;
   }
@@ -295,6 +463,14 @@ function handleReaderFreezePointerDown(event) {
 
 function handleFrozenHighlightKeydown(event) {
   if (event.key === "Escape" && document.querySelector("#detailToolSurface:not([hidden])")) return;
+  if (
+    event.key === "Escape" &&
+    document.querySelector(
+      '#bookPickerButton[aria-expanded="true"], #chapterPickerButton[aria-expanded="true"]',
+    )
+  ) {
+    return;
+  }
   if (event.key === "Escape") clearFrozenReaderHighlight();
   else scheduleFrozenReaderHighlightRefresh();
 }
@@ -303,6 +479,7 @@ function bindNavigationReset(selector, eventName) {
   document.querySelector(selector)?.addEventListener(eventName, () => clearFrozenReaderHighlight({ removeClasses: false }));
 }
 
+document.addEventListener("click", capturePickerContextBeforeOpen, true);
 document.addEventListener("click", handleReaderPickerClick);
 document.addEventListener("pointerdown", handleReaderFreezePointerDown, true);
 document.addEventListener("keydown", handleFrozenHighlightKeydown, true);
@@ -311,3 +488,18 @@ bindNavigationReset("#bookSelect", "change");
 bindNavigationReset("#chapterSelect", "change");
 window.addEventListener("hashchange", () => clearFrozenReaderHighlight({ removeClasses: false }));
 window.addEventListener("popstate", () => clearFrozenReaderHighlight({ removeClasses: false }));
+window.addEventListener(
+  "resize",
+  () => {
+    const pairs = [
+      [document.getElementById("bookPickerButton"), document.getElementById("bookPickerPanel")],
+      [document.getElementById("chapterPickerButton"), document.getElementById("chapterPickerPanel")],
+    ];
+    pairs.forEach(([button, panel]) => {
+      if (button?.getAttribute("aria-expanded") === "true" && panel && !panel.hidden) {
+        settleOpenPicker(button, panel);
+      }
+    });
+  },
+  { passive: true },
+);

@@ -25,26 +25,29 @@
         </div>
       </button>
       <nav class="reader-controls" aria-label="Reader controls">
-        <label>
-          <span>Translation</span>
+        <label class="reader-control reader-control-translation">
+          <span class="reader-control-label-line">
+            <span>Translation</span>
+            <span id="compactStatusText" class="reader-control-status" aria-hidden="true" hidden></span>
+          </span>
           <select id="translationSelect"></select>
         </label>
-        <label>
-          <span>Book</span>
-          <select id="bookSelect" class="reader-native-select"></select>
-          <button id="bookPickerButton" class="reader-picker-button" type="button" aria-haspopup="dialog" aria-expanded="false">
+        <div class="reader-control">
+          <span id="bookPickerLabel" class="reader-control-label">Book</span>
+          <select id="bookSelect" class="reader-native-select" hidden aria-hidden="true" tabindex="-1"></select>
+          <button id="bookPickerButton" class="reader-picker-button" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="bookPickerPanel" aria-label="Book: Select book">
             Select book
           </button>
           <div id="bookPickerPanel" class="reader-picker-panel book-picker-panel" hidden></div>
-        </label>
-        <label>
-          <span>Chapter</span>
-          <select id="chapterSelect" class="reader-native-select"></select>
-          <button id="chapterPickerButton" class="reader-picker-button" type="button" aria-haspopup="dialog" aria-expanded="false">
+        </div>
+        <div class="reader-control">
+          <span id="chapterPickerLabel" class="reader-control-label">Chapter</span>
+          <select id="chapterSelect" class="reader-native-select" hidden aria-hidden="true" tabindex="-1"></select>
+          <button id="chapterPickerButton" class="reader-picker-button" type="button" aria-haspopup="dialog" aria-expanded="false" aria-controls="chapterPickerPanel" aria-label="Chapter: Select chapter">
             Select chapter
           </button>
           <div id="chapterPickerPanel" class="reader-picker-panel chapter-picker-panel" hidden></div>
-        </label>
+        </div>
       </nav>
       <p id="statusText" class="header-status" role="status" aria-live="polite">Loading data...</p>
       <button id="themeToggle" class="theme-toggle-button" type="button" title="Switch to dark theme" aria-label="Switch to dark theme" aria-pressed="false">

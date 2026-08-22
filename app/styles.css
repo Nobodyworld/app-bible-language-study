@@ -362,12 +362,25 @@ button:disabled {
   flex-wrap: wrap;
 }
 
-.reader-controls label {
+.reader-control {
   position: relative;
   display: grid;
   gap: 4px;
+  min-width: 0;
   color: var(--muted);
   font-size: 12px;
+}
+
+.reader-control-label-line {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+  min-width: 0;
+}
+
+.reader-control-status {
+  display: none;
 }
 
 .reader-controls select {
@@ -433,6 +446,14 @@ button:disabled {
   color: var(--text);
 }
 
+.reader-picker-panel[data-positioned="true"] {
+  right: auto;
+  bottom: auto;
+  max-width: calc(100vw - 20px);
+  overflow: hidden;
+  transform: none !important;
+}
+
 .reader-picker-panel[hidden] {
   display: none;
 }
@@ -476,7 +497,13 @@ button:disabled {
   align-content: start;
   gap: 3px;
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
   padding: 8px;
+}
+
+.book-picker-panel[data-positioned="true"] .book-picker-column {
+  max-height: min(520px, var(--reader-picker-available-height, 520px));
 }
 
 .chapter-picker-panel {
@@ -491,6 +518,12 @@ button:disabled {
   gap: 5px;
   max-height: min(420px, calc(100dvh - 120px));
   overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-gutter: stable;
+}
+
+.chapter-picker-panel[data-positioned="true"] .chapter-picker-grid {
+  max-height: var(--reader-picker-available-height, min(420px, calc(100dvh - 120px)));
 }
 
 .reader-picker-option {
@@ -4221,7 +4254,7 @@ button.user-data-summary-item {
     justify-content: stretch;
   }
 
-  .reader-controls label {
+  .reader-control {
     flex: 1 1 160px;
   }
 
@@ -4294,6 +4327,95 @@ button.user-data-summary-item {
 }
 
 @media (max-width: 640px) {
+  .app-header {
+    grid-template-areas:
+      "brand theme"
+      "controls controls"
+      "status status";
+    gap: 8px;
+    padding: 10px 12px 12px;
+  }
+
+  .home-button {
+    min-height: 44px;
+  }
+
+  .brand {
+    width: max-content;
+    min-width: 0;
+  }
+
+  .brand h1 {
+    font-size: 18px;
+    white-space: nowrap;
+  }
+
+  .reader-controls {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    gap: 6px;
+  }
+
+  .reader-control {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+    font-size: 11px;
+  }
+
+  .reader-control-label,
+  .reader-control-label-line {
+    min-width: 0;
+    white-space: nowrap;
+  }
+
+  .reader-control-status:not([hidden]) {
+    display: inline;
+    overflow: hidden;
+    color: var(--accent-dark);
+    font-size: 10px;
+    font-weight: 800;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  .reader-controls select,
+  .reader-picker-button {
+    width: 100%;
+    min-width: 0;
+    height: 44px;
+    max-width: none;
+  }
+
+  .reader-picker-button {
+    gap: 5px;
+    padding-inline: 8px;
+  }
+
+  .header-status[data-status-state="loaded"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .header-status:not([data-status-state="loaded"]) {
+    max-width: 100%;
+    text-align: left;
+    white-space: normal;
+  }
+
+  .book-picker-panel[data-positioned="true"] .book-picker-column {
+    max-height: min(260px, calc(var(--reader-picker-available-height, 520px) * 0.5));
+  }
+
   .app-shell {
     width: 100%;
     margin: 0;
@@ -4318,8 +4440,13 @@ button.user-data-summary-item {
   }
 
   .chapter-title {
-    gap: 12px;
+    gap: 6px;
     min-height: 0;
+    padding-block: 8px;
+  }
+
+  .chapter-heading {
+    gap: 6px;
   }
 
   .chapter-stepper {
@@ -4328,6 +4455,7 @@ button.user-data-summary-item {
 
   .chapter-nav-button {
     flex: 1 1 0;
+    min-height: 44px;
   }
 
   .chapter-actions {
@@ -4343,9 +4471,17 @@ button.user-data-summary-item {
     gap: 6px;
   }
 
+  .action-group:first-child {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
   .toolbar-button {
     min-width: 0;
-    min-height: 40px;
+    min-height: 44px;
+    padding: 4px 3px;
+    font-size: 11px;
+    line-height: 1.1;
+    white-space: normal;
   }
 
   .verse-row {

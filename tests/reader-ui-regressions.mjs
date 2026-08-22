@@ -177,6 +177,32 @@ assert(
     /\.chapter-picker-grid\s*{[\s\S]*?grid-template-columns:\s*repeat\(6/.test(css),
   "Book and chapter controls must use app-owned picker popovers: testament columns and chapter grid.",
 );
+assert(
+  /<select id="bookSelect"[^>]*hidden[^>]*aria-hidden="true"[^>]*tabindex="-1"/.test(index) &&
+    /<select id="chapterSelect"[^>]*hidden[^>]*aria-hidden="true"[^>]*tabindex="-1"/.test(index) &&
+    (index.match(/<label\b/g) || []).length === 1 &&
+    /aria-label="Book: Select book"/.test(index) &&
+    /aria-label="Chapter: Select chapter"/.test(index) &&
+    /setAttribute\("aria-label", `Book: \$\{bookLabel\}`\)/.test(app) &&
+    /setAttribute\("aria-label", `Chapter: \$\{chapterLabel\}`\)/.test(app),
+  "Book and Chapter native selects must be internal-only while their visible picker buttons expose purpose and value.",
+);
+assert(
+  (index.match(/aria-live="polite"/g) || []).length === 1 &&
+    /id="statusText" class="header-status" role="status" aria-live="polite"/.test(index) &&
+    /id="compactStatusText"[^>]*aria-hidden="true"/.test(index) &&
+    /status\.dataset\.statusState = statusState/.test(dom) &&
+    /compactStatus\.textContent = isLoaded \? "Loaded"/.test(dom),
+  "The mobile loaded indicator must mirror one real status live region without duplicate announcements.",
+);
+assert(
+  /@media\s*\(max-width:\s*640px\)[\s\S]*?\.reader-controls\s*{[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)[\s\S]*?\.reader-controls select,[\s\S]*?\.reader-picker-button\s*{[\s\S]*?height:\s*44px;/.test(css) &&
+    /\.home-button\s*{[\s\S]*?min-height:\s*44px;/.test(css) &&
+    /\.action-group:first-child\s*{[\s\S]*?grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\)/.test(css) &&
+    /\.toolbar-button\s*{[\s\S]*?min-height:\s*44px;/.test(css) &&
+    /\.chapter-nav-button\s*{[\s\S]*?min-height:\s*44px;/.test(css),
+  "Mobile reader navigation and chapter actions must use a compact, labeled, touch-comfortable composition.",
+);
 assert(/\.fn-marker\s*{[\s\S]*?color:\s*#2347fb;/.test(css), "Footnote markers must use the requested blue.");
 assert(
   /:root\[data-theme="dark"\] \.fn-marker\s*{[\s\S]*?color:\s*#9eafff\s*!important;/.test(css) &&
@@ -196,8 +222,42 @@ assert(
 );
 assert(
   /ACTIVE_OPTION_SELECTOR = "\.reader-picker-option\.active"/.test(pickerFlow) &&
-    /scrollIntoView\(\{[\s\S]*?block:\s*"center",[\s\S]*?inline:\s*"nearest",/.test(pickerFlow),
-  "Opening reader pickers must scroll the active option into view.",
+    /function revealActivePickerOption\(panel\)/.test(pickerFlow) &&
+    /activeOptionScroller\(panel\)/.test(pickerFlow) &&
+    /scroller\.scrollTop = Math\.max/.test(pickerFlow) &&
+    !/scrollIntoView/.test(pickerFlow),
+  "Opening reader pickers must reveal the active option inside only its intended scroller.",
+);
+assert(
+  /function positionPickerPanel\(button, panel\)/.test(pickerFlow) &&
+    /PICKER_VIEWPORT_MARGIN = 10/.test(pickerFlow) &&
+    /viewportWidth - PICKER_VIEWPORT_MARGIN - width/.test(pickerFlow) &&
+    /dataset\.placement = placeAbove \? "above" : "below"/.test(pickerFlow) &&
+    /window\.addEventListener\([\s\S]*?"resize"[\s\S]*?settleOpenPicker\(button, panel\)/.test(pickerFlow) &&
+    /\.reader-picker-panel\[data-positioned="true"\]/.test(css),
+  "Reader picker panels must be measured, shifted, height-constrained, and repositioned within the viewport.",
+);
+assert(
+  /function capturePickerContext\(\)/.test(pickerFlow) &&
+    /readerScrollTop/.test(pickerFlow) &&
+    /detailScrollTop/.test(pickerFlow) &&
+    /capturePickerContextBeforeOpen/.test(pickerFlow) &&
+    /addEventListener\("click", capturePickerContextBeforeOpen, true\)/.test(pickerFlow) &&
+    /PICKER_CONTEXT_SETTLE_DURATION_MS = 400/.test(pickerFlow) &&
+    /function suspendPickerScrollAnchoring\(\)/.test(pickerFlow) &&
+    /target\.style\.overflowAnchor = "none"/.test(pickerFlow) &&
+    /window\.performance\.now\(\) - contextSettleStartedAt < PICKER_CONTEXT_SETTLE_DURATION_MS/.test(pickerFlow) &&
+    /restorePickerContext\(snapshot\)/.test(pickerFlow) &&
+    /window\.scrollTo\(\{ left: snapshot\.pageX, top: snapshot\.pageY/.test(pickerFlow),
+  "Opening and settling a reader picker must preserve document, reader, and detail scroll context.",
+);
+assert(
+  /#bookPickerButton\[aria-expanded="true"\], #chapterPickerButton\[aria-expanded="true"\]/.test(pickerFlow),
+  "Reader picker Escape must preserve the active reader highlight while the picker closes.",
+);
+assert(
+  /if \(!trigger\) return;\s+event\.preventDefault\(\);\s+event\.stopImmediatePropagation\(\);\s+closeReaderPickers\(\)/.test(app),
+  "An open reader picker must consume Escape before the underlying detail workspace handles it.",
 );
 assert(
   /openChapterPickerAfterBookSelection/.test(pickerFlow) &&
