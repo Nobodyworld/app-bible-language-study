@@ -142,6 +142,14 @@ invalidates a verified active copy: invalid rollback metadata is cleared,
 sanitized history is retained, and active or catalog-update state remains
 truthful. Rollback promotion uses the same verifier.
 
+Before byte verification, persisted catalog and manifest objects are rerun
+through the maintained schema, package identity, full semantic-version,
+canonical-path, provenance, source-reference, inventory, and aggregate checks.
+Persisted catalog URLs also rerun the same-origin HTTP(S), credential, and
+fragment policy without fetching rejected sources. Incompatible package/app
+authority is distinct from corrupt bytes: it remains non-authoritative local
+data and cannot satisfy managed resolution.
+
 ## Physical modes
 
 ### `bundled_static_data`
@@ -160,6 +168,8 @@ verified physical record and use bundled fallback only when the distribution
 sets `bundled_fallback: true`; otherwise they expose structured unavailable
 states. It is the architecture used to test missing, installed, corrupt,
 repaired, removed, and updated optional-pack states.
+Permitted bundled fallback identifies an incompatible managed copy without
+interrupting reading; strict mode exposes `incompatible_version`.
 
 Switching modes must be explicit, reversible, and protected from stale physical
 registry claims. The branch must not silently make managed mode the public
@@ -234,6 +244,9 @@ failure behavior are deliberately implemented and tested.
 The current manager rejects cross-origin, credential-bearing, fragmented,
 malformed, and non-HTTP(S) catalog URLs before fetch. Manifest and artifact URLs
 remain same-origin and preserve canonical relative-path rules.
+The same policy and catalog validator apply after reload to metadata restored
+from IndexedDB. Rejection clears catalog authority, records sanitized startup
+evidence, and returns to bundled mode; a later valid refresh recovers normally.
 
 ## Physical storage and atomicity
 
@@ -289,7 +302,12 @@ Resolution order in the current complete application:
 3. classify a missing managed optional pack before falling through to an opaque
    JSON parse or generic 404 failure;
 4. cache parsed JSON only under a key that includes physical source/version so
-   activation or repair cannot return stale parsed data.
+    activation or repair cannot return stale parsed data.
+
+An incompatible active record is never treated as verified managed data. A
+compatible rollback may recover it; an incompatible rollback is never promoted.
+When a newer catalog version and a valid rollback coexist, the primary state is
+`update_available` while rollback metadata continues to expose rollback.
 
 Bundled fallback is an identified runtime source, not an implicit error catch.
 When the distribution forbids fallback, `tryFetchJson()` and Search index
@@ -343,6 +361,9 @@ manager nodes. It updates state, runtime source, failures, history, cleanup
 count, and actions after asynchronous reconciliation without rerendering the
 reader. Lifecycle actions are absent during `startup_verifying`; removed nodes
 retain no global listener or subscription.
+Incompatible cards omit Verify, identify bundled fallback or strict
+unavailability, and offer a compatible update when present. Update and rollback
+actions can appear together after reload.
 
 Opening, cancelling, or dismissing a plan must not mutate logical or physical
 state.
@@ -411,7 +432,9 @@ Add deterministic domain coverage for:
 - staged install and atomic activation;
 - interrupted install/update/remove recovery;
 - repair, independent rollback verification, and rollback-loss cleanup;
-- corrupt, missing, incompatible, and quota/error states;
+- persisted catalog/manifest rejection, corrupt, missing, incompatible, and
+  quota/error states;
+- update availability coexisting with retained rollback authority;
 - portable-backup behavior;
 - provenance enforcement;
 - scenario metrics.
@@ -424,7 +447,8 @@ Add maintained Edge browser coverage using small fixture packs for:
 - Search and Commentary unavailable states;
 - installed pack lookup through the pack-aware data resolver;
 - corruption detection and repair;
-- removal, rollback, invalid rollback loss, and delayed mounted-view updates;
+- removal, rollback, invalid rollback loss, incompatible recovery, simultaneous
+  update/rollback actions, and delayed mounted-view updates;
 - mode return to bundled fallback;
 - keyboard, focus, Escape, narrow/mobile, dark/light, reduced-motion, and no
   horizontal-overflow behavior;

@@ -305,6 +305,8 @@ export function renderPhysicalPackManager(ctx) {
       state.textContent = record
         ? record.state === "startup_verifying"
           ? `State: startup verifying; stored bytes for ${record.pack_version} are being verified before managed use.`
+          : record.state === "incompatible"
+            ? `State: incompatible; stored ${record.pack_version} is not compatible with this app and is not managed runtime authority.`
           : `State: ${record.state.replaceAll("_", " ")}; active ${record.pack_version}; verified ${record.verified_files}/${record.expected_files} files.`
         : `State: not installed${available ? `; available ${available.pack_version}, ${formatBytes(available.bytes)}` : "; no catalog entry"}.`;
       const runtime = document.createElement("p");
@@ -332,11 +334,12 @@ export function renderPhysicalPackManager(ctx) {
         actions.append(verifying);
       } else {
         if (!record || record.state === "failed") addPlanAction(record ? "Retry install" : "Plan install", "install");
-        if (record?.state === "update_available") addPlanAction("Plan update", "update");
+        const compatibleReplacementAvailable = record?.state === "incompatible" && available?.pack_version !== record.pack_version;
+        if (record?.state === "update_available" || compatibleReplacementAvailable) addPlanAction("Plan update", "update");
         if (["corrupt", "repair_required"].includes(record?.state)) addPlanAction("Plan repair", "repair");
         if (record?.active_cache) {
-          addPlanAction("Verify", "verify");
-          if (record.rollback_cache) addPlanAction("Plan rollback", "rollback");
+          if (record.state !== "incompatible") addPlanAction("Verify", "verify");
+          if (record.state !== "incompatible" && record.rollback_cache) addPlanAction("Plan rollback", "rollback");
           addPlanAction("Plan removal", "remove", true);
         }
       }

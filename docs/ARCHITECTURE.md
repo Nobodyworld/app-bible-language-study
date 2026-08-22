@@ -80,13 +80,20 @@ update, repair, retained rollback, removal, cleanup, startup reconciliation,
 and orphan-cache classification. Staging, active, and rollback data use
 separate immutable Cache Storage names. Active and rollback claims are verified
 independently; invalid rollback metadata is removed without invalidating a
-verified active copy.
+verified active copy. Persisted catalogs and manifests are revalidated against
+the current schema, package identity, semantic app range, source policy,
+canonical inventory, aggregate framing, and cache bytes before authority is
+restored. Incompatible authority is distinct from corrupt storage and is never
+used for managed reads.
 
 The validated distribution manifest scopes physical requirements to
 `managed_optional_pack_ids`. Other shipped feature packs remain bundled in
 managed mode. Search and Commentary prefer verified managed bytes and follow
 the manifest's explicit bundled-fallback flag. Full semantic-version checks and
 same-origin source policy run before artifact fetch.
+The same checks run against restored IndexedDB metadata without fetching a
+rejected stored source. Bundled fallback remains identified when permitted;
+strict distributions preserve `incompatible_version`.
 
 `app/src/data-service.js` is the single pack-aware runtime JSON boundary. It
 uses verified managed responses when managed mode is explicit, keys parsed data
@@ -101,6 +108,8 @@ rollback, removal, and cleanup without creating a new primary destination.
 Application snapshot events are dispatched only to currently mounted manager
 nodes, allowing asynchronous verification to update the open surface without a
 global view subscription or reader rerender.
+`update_available` has UI/state precedence over `rollback_available` when both
+facts are true; the retained rollback pointer remains an independent action.
 
 The detailed non-destructive implementation contract is
 `docs/OPTIONAL_PACK_ARCHITECTURE.md`; operational and UI behavior is summarized

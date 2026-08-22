@@ -235,6 +235,83 @@ async function seedCorruptRollbackClaim(page) {
   });
 }
 
+async function seedValidRollbackClaim(page) {
+  return page.evaluate(async () => {
+    const database = await new Promise((resolveDatabase, reject) => {
+      const request = indexedDB.open("bibleapp-physical-packs", 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolveDatabase(request.result);
+    });
+    const record = await new Promise((resolveRecord, reject) => {
+      const tx = database.transaction("pack_records", "readonly");
+      const get = tx.objectStore("pack_records").get("search-verses");
+      get.onerror = () => reject(get.error);
+      get.onsuccess = () => resolveRecord(get.result);
+    });
+    const rollbackCacheName = `bibleapp-pack:test-valid-rollback:${Date.now()}`;
+    const activeCache = await caches.open(record.active_cache);
+    const rollbackCache = await caches.open(rollbackCacheName);
+    for (const request of await activeCache.keys()) {
+      await rollbackCache.put(request, await activeCache.match(request));
+    }
+    const rollback = {
+      pack_version: record.pack_version,
+      manifest_sha256: record.manifest_sha256,
+      aggregate_sha256: record.aggregate_sha256,
+      cache: rollbackCacheName,
+      manifest: record.active_manifest,
+      verified_files: record.verified_files,
+      verified_bytes: record.verified_bytes,
+      activated_at: record.activated_at,
+    };
+    await new Promise((resolvePut, reject) => {
+      const tx = database.transaction("pack_records", "readwrite");
+      tx.objectStore("pack_records").put({
+        ...record,
+        state: "rollback_available",
+        rollback_cache: rollbackCacheName,
+        rollback,
+      });
+      tx.oncomplete = resolvePut;
+      tx.onerror = () => reject(tx.error);
+    });
+    database.close();
+    return rollbackCacheName;
+  });
+}
+
+async function makePersistedActiveIncompatible(page) {
+  await page.evaluate(async () => new Promise((resolveMutation, reject) => {
+    const request = indexedDB.open("bibleapp-physical-packs", 1);
+    request.onerror = () => reject(request.error);
+    request.onsuccess = () => {
+      const database = request.result;
+      const tx = database.transaction("pack_records", "readwrite");
+      const store = tx.objectStore("pack_records");
+      const get = store.get("search-verses");
+      get.onerror = () => reject(get.error);
+      get.onsuccess = () => {
+        const record = get.result;
+        store.put({
+          ...record,
+          active_manifest: {
+            ...record.active_manifest,
+            compatibility: {
+              minimum_app_version: "1.0.1",
+              maximum_app_version_exclusive: "2.0.0",
+            },
+          },
+        });
+      };
+      tx.oncomplete = () => {
+        database.close();
+        resolveMutation();
+      };
+      tx.onerror = () => reject(tx.error);
+    };
+  }));
+}
+
 const { server, url } = await startServer();
 const browser = await chromium.launch({
   executablePath: edgePath(),
@@ -364,7 +441,7 @@ try {
     current.addEventListener("bibleapp:physical-pack-snapshot", () => { globalThis.__mountedPhysicalManagerUpdates += 1; });
   });
   await page.getByRole("button", { name: "Use bundled data", exact: true }).focus();
-  lifecycleReaderContext = await captureReaderContext(page, { prepare: true });
+  lifecycleReaderContext = await captureReaderContext(page);
   await page.waitForFunction(() => document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent.includes("State: active"), null, { timeout: 15000 });
   assert((await packCard(page, "search-verses").locator(".physical-pack-runtime-source").textContent()).includes("verified managed pack"));
   assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Verify", exact: true }).count(), 1, "Verify did not appear after startup verification");
@@ -467,11 +544,27 @@ try {
     await assertReaderContextPreserved(page, lifecycleReaderContext, `${corruptionKind} corruption repair`);
   }
 
+  await seedValidRollbackClaim(page);
   const catalogInput = page.locator(".physical-pack-catalog-controls input");
   await catalogInput.fill("data/physical-pack-fixtures/catalog-v2.json");
   await page.getByRole("button", { name: "Refresh catalog", exact: true }).click();
   await waitCompleted(page, "Catalog refresh");
   assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).includes("State: update available"), "fixture update was not detected");
+  assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Plan update", exact: true }).count(), 1);
+  assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Plan rollback", exact: true }).count(), 1, "retained rollback disappeared when an update became available");
+  await page.reload({ waitUntil: "load" });
+  await waitReady(page);
+  await openManager(page);
+  await page.waitForFunction(() => document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent.includes("State: update available"));
+  assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Plan update", exact: true }).count(), 1, "Plan update was not retained after reload");
+  assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Plan rollback", exact: true }).count(), 1, "Plan rollback was not retained beside update after reload");
+  await packCard(page, "search-verses").getByRole("button", { name: "Plan rollback", exact: true }).scrollIntoViewIfNeeded();
+  lifecycleReaderContext = await captureReaderContext(page);
+  await planAndConfirm(page, "search-verses", "Plan rollback", "Rollback Search", "Search rollback");
+  assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).includes("State: update available"), "rollback erased the pending catalog update");
+  assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Plan update", exact: true }).count(), 1);
+  assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Plan rollback", exact: true }).count(), 1);
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "rollback while update available");
   await packCard(page, "search-verses").getByRole("button", { name: "Plan update", exact: true }).scrollIntoViewIfNeeded();
   lifecycleReaderContext = await captureReaderContext(page);
   const updateStarted = performance.now();
@@ -499,11 +592,33 @@ try {
     const text = document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent || "";
     return text.includes("fixture-v1") && text.includes("update available");
   });
+  await makePersistedActiveIncompatible(page);
+  await page.reload({ waitUntil: "load" });
+  await waitReady(page);
+  await openManager(page);
+  await page.waitForFunction(() => document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent.includes("State: incompatible"));
+  const incompatibleCard = packCard(page, "search-verses");
+  assert((await incompatibleCard.locator(".physical-pack-state").textContent()).includes("not compatible with this app"));
+  assert((await incompatibleCard.locator(".physical-pack-runtime-source").textContent()).includes("bundled fallback"));
+  assert.equal(await incompatibleCard.getByRole("button", { name: "Plan update", exact: true }).count(), 1, "compatible replacement was not offered for incompatible active data");
+  assert.equal(await incompatibleCard.getByRole("button", { name: "Verify", exact: true }).count(), 0, "Verify was incorrectly offered for incompatible data");
+  assert.equal(await incompatibleCard.getByRole("button", { name: "Plan rollback", exact: true }).count(), 0);
+  const incompatibleFallbackRead = await page.evaluate(async () => {
+    const service = await import(`./src/${"data-service.js"}?v=pr13-live-qa-20260711e`);
+    await service.fetchJson("./data/search/manifest.json");
+    return service.physicalDataSource("./data/search/manifest.json")?.runtime_source;
+  });
+  assert.equal(incompatibleFallbackRead, "bundled_fallback");
   await packCard(page, "search-verses").getByRole("button", { name: "Plan update", exact: true }).scrollIntoViewIfNeeded();
   lifecycleReaderContext = await captureReaderContext(page);
   await planAndConfirm(page, "search-verses", "Plan update", "Update Search", "Search update");
   assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).includes("fixture-v2"), "valid rollback recovery could not update back to fixture-v2");
+  assert((await packCard(page, "search-verses").locator(".physical-pack-runtime-source").textContent()).includes("verified managed pack"), "compatible update did not restore managed runtime authority");
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "compatible update from incompatible active data");
 
+  await seedValidRollbackClaim(page);
+  await page.getByRole("button", { name: "Refresh catalog", exact: true }).click();
+  await waitCompleted(page, "Catalog refresh");
   await page.evaluate(async () => {
     const record = await new Promise((resolveRecord, reject) => {
       const request = indexedDB.open("bibleapp-physical-packs", 1);
@@ -646,6 +761,49 @@ try {
     await assertContained(page, label);
   }
 
+  const strictContext = await browser.newContext({ viewport: { width: 900, height: 900 }, reducedMotion: "reduce", colorScheme: "dark" });
+  await strictContext.route("**/data/distribution-manifest.json", async (route) => {
+    const response = await route.fetch();
+    const manifest = await response.json();
+    await route.fulfill({
+      status: 200,
+      headers: { "cache-control": "no-store", "content-type": "application/json; charset=utf-8" },
+      body: JSON.stringify({ ...manifest, bundled_fallback: false }),
+    });
+  });
+  const strictPage = await strictContext.newPage();
+  strictPage.on("console", (message) => { if (message.type() === "error") consoleErrors.push(`strict: ${message.text()}`); });
+  strictPage.on("pageerror", (error) => pageErrors.push(`strict: ${error.message}`));
+  strictPage.on("requestfailed", (request) => failedRequests.push(`strict: ${request.method()} ${request.url()} ${request.failure()?.errorText || "failed"}`));
+  strictPage.on("response", (response) => { if (response.status() >= 400) httpErrors.push(`strict: ${response.status()} ${response.url()}`); });
+  await strictPage.goto(`${url}?physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json#/read/bsb/genesis/1`, { waitUntil: "load" });
+  await waitReady(strictPage);
+  await openManager(strictPage);
+  await strictPage.getByRole("button", { name: "Refresh catalog", exact: true }).click();
+  await waitCompleted(strictPage, "Catalog refresh");
+  await strictPage.getByRole("button", { name: "Use managed packs", exact: true }).click();
+  await waitCompleted(strictPage, "Managed-pack mode");
+  await planAndConfirm(strictPage, "search-verses", "Plan install", "Install Search", "Search install");
+  await makePersistedActiveIncompatible(strictPage);
+  await strictPage.reload({ waitUntil: "load" });
+  await waitReady(strictPage);
+  await openManager(strictPage);
+  await strictPage.waitForFunction(() => document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent.includes("State: incompatible"));
+  assert((await packCard(strictPage, "search-verses").locator(".physical-pack-runtime-source").textContent()).includes("unavailable"));
+  assert.equal(await packCard(strictPage, "search-verses").getByRole("button", { name: "Verify", exact: true }).count(), 0);
+  const strictRuntimeResult = await strictPage.evaluate(async () => {
+    const service = await import(`./src/${"data-service.js"}?v=pr13-live-qa-20260711e`);
+    try {
+      await service.fetchJson("./data/search/manifest.json");
+      return { code: null };
+    } catch (error) {
+      return { code: error.code, forbidden: error.detail?.managed_fallback_forbidden === true };
+    }
+  });
+  assert.deepEqual(strictRuntimeResult, { code: "incompatible_version", forbidden: true });
+  assert((await strictPage.locator("#chapterContent").textContent()).trim().length > 0, "strict incompatible pack interrupted ordinary scripture reading");
+  await strictContext.close();
+
   const quotaContext = await browser.newContext({ viewport: { width: 900, height: 900 } });
   await quotaContext.addInitScript(() => {
     Object.defineProperty(navigator.storage, "estimate", { configurable: true, value: async () => ({ usage: 999, quota: 1000 }) });
@@ -720,8 +878,8 @@ try {
   console.log(JSON.stringify({
     browser: `Microsoft Edge ${browserVersion}`,
     fixtures: ["Search fixture-v1/v2", "Commentary fixture-v1"],
-    lifecycle: ["plan-cancel", "install", "activation", "delayed-startup-live-transition", "reload", "offline-read", "missing-file-reconcile", "digest-reconcile", "byte-length-reconcile", "repair", "update", "valid-rollback-recovery", "invalid-rollback-rejection", "invalid-rollback-live-loss", "remove", "bundled-fallback"],
-    distribution: ["unrelated-bundled-capabilities", "managed-override", "strict-structured-states"],
+    lifecycle: ["plan-cancel", "install", "activation", "delayed-startup-live-transition", "reload", "offline-read", "missing-file-reconcile", "digest-reconcile", "byte-length-reconcile", "repair", "update-plus-rollback", "update", "valid-rollback-recovery", "persisted-incompatible-active", "invalid-rollback-rejection", "invalid-rollback-live-loss", "remove", "bundled-fallback"],
+    distribution: ["unrelated-bundled-capabilities", "managed-override", "persisted-incompatible-fallback", "strict-incompatible-version"],
     storage: ["visible-plan-estimate", "insufficient-before-staging", "unavailable-estimate-safe"],
     reader_context: ["route", "chapter", "selected-word-or-verse", "highlight", "reader-scroll", "detail-history", "detail-lock-follow", "detail-scroll"],
     management_updates: ["startup-actions-suppressed", "mounted-node-only-event", "removed-node-no-update", "focus-preserved", "rollback-action-cleared"],

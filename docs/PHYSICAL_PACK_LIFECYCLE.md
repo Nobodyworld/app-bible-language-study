@@ -55,6 +55,13 @@ versions, and storage estimates without mutation. A meaningful insufficient
 quota fails before staging storage is created; an unavailable estimate is
 disclosed without a false rejection.
 
+Initialization applies the same catalog validator, package/app compatibility,
+and same-origin URL policy to catalog metadata restored from IndexedDB before
+it can support planning or installation. Invalid persisted catalog metadata is
+cleared without fetching its source, a sanitized startup finding is recorded,
+and the application returns safely to complete bundled data. A later valid
+same-origin refresh can establish catalog authority normally.
+
 Install, update, and repair:
 
 1. validate and digest the immutable manifest;
@@ -67,9 +74,12 @@ Install, update, and repair:
 
 Failure or cancellation deletes only unactivated operation caches and preserves
 the previous active and rollback copies. One stored-pack verifier checks cache
-existence, exact inventory, required entries, media types, byte lengths,
-per-file SHA-256, and verified totals. Missing storage is `repair_required`;
-content drift is `corrupt`. Explicit rollback verifies its target before any
+existence, the persisted manifest schema/kind, immutable pack identity,
+package/app compatibility, canonical inventory and aggregate framing, required
+entries, media types, byte lengths, per-file SHA-256, and verified totals.
+Missing storage is `repair_required`; schema or content drift is `corrupt`;
+valid bytes for another package or app-version range are `incompatible`.
+Explicit rollback verifies its target before any
 pointer change and retains the current active copy as the next rollback only
 when its bytes also verify. Removal records pending deletion before deleting cache bytes and
 blocks removal while an active dependent pack still requires the target.
@@ -85,6 +95,14 @@ or corrupt. Reconciliation clears invalid rollback metadata, records sanitized
 rollback-loss history, preserves catalog-driven `update_available`, and deletes
 or reports the invalid cache for cleanup. Explicit cleanup handles remaining
 unreferenced pack caches.
+
+Compatibility and byte verification are both required before managed authority
+returns after reload or an app update. An incompatible active cache remains
+preserved as non-authoritative local data for update, repair, or explicit
+removal. An incompatible rollback is never promoted; a compatible verified
+rollback may recover an incompatible active claim. `update_available` has
+display/action precedence when a newer catalog version and a valid rollback
+both exist, while rollback metadata remains independently actionable.
 
 ## Runtime behavior
 
@@ -108,6 +126,10 @@ The current complete distribution sets `bundled_fallback: true`. Managed mode
 is an opt-in reference implementation; returning to bundled mode remains
 immediate and uses the tracked complete data tree.
 
+An incompatible record never resolves as a managed pack. The complete tracked
+distribution identifies `bundled_fallback`; a strict distribution preserves
+the structured `incompatible_version` error instead.
+
 ## My Data management UI
 
 Controls live only under **My Data → Advanced diagnostics → Physical study
@@ -130,6 +152,11 @@ reopening My Data. Verify, update, repair, rollback, and removal are absent
 while startup hashing is incomplete; removed manager nodes receive no global
 events or retained subscriptions.
 
+Incompatible cards identify the stored copy as non-authoritative, omit Verify,
+and offer a compatible catalog update when one exists. A card may show both
+Plan update and Plan rollback: the primary state remains `update_available`
+while retained rollback metadata supplies the independent rollback action.
+
 ## Test fixtures and coverage
 
 `app/data/physical-pack-fixtures/` contains Search fixture-v1/v2 and Commentary
@@ -140,7 +167,9 @@ exercise dependency planning without hashing or copying the production corpus.
 lifecycle. `npm run test:physical-packs:edge` uses Microsoft Edge and real
 IndexedDB/Cache Storage to cover plan/cancel, install, reload, offline reads,
 missing and modified byte reconciliation, repair, update, independent active
-and rollback verification, delayed live startup transitions, invalid rollback
-authority removal, removal, distribution-aware bundled fallback, strict
+and rollback verification, persisted catalog/manifest revalidation,
+incompatible active and rollback recovery, simultaneous update/rollback state,
+delayed live startup transitions, invalid rollback authority removal, removal,
+distribution-aware bundled fallback, strict
 unavailable states, storage/quota behavior, full reader context, focus, themes,
 reduced motion, responsive/mobile containment, and browser/request health.

@@ -52,6 +52,14 @@ verification fails. Invalid rollback pointers are cleared, sanitized
 `rollback_lost` evidence is retained, and state becomes `active` or remains
 `update_available` as appropriate.
 
+Startup revalidates every persisted active and rollback manifest through the
+current schema, immutable pack identity, package identity, full semantic-version
+range, canonical paths, inventory/aggregate digests, totals, provenance, and
+source references before cache hashing. A compatible manifest with invalid
+bytes is corrupt or repair-required; valid cached bytes with an incompatible
+package identity or app-version range are `incompatible`, remain preserved as
+non-authoritative local data, and cannot satisfy managed resolution.
+
 Physical registry authority and pack bytes are not part of portable
 `bibleapp:user-data` backups. An imported logical preference may require local
 installation or may continue using bundled fallback; import must never fabricate
@@ -83,6 +91,17 @@ recorded cache-deletion list; missing active storage activates a valid retained
 rollback or becomes `repair_required`. Unreferenced pack caches are reported as
 orphans and removed only by startup staging cleanup or the explicit cleanup
 action.
+
+Persisted catalog metadata is not trusted merely because IndexedDB returned it.
+The catalog and URL are revalidated for schema/kind, package/app compatibility,
+same-origin HTTP(S), no credentials, and no fragment before use. Rejection
+clears catalog authority, records sanitized history, and returns to bundled
+mode without fetching the invalid source or changing portable user data.
+
+Lifecycle state and rollback presence are separate fields. When a newer
+catalog version exists beside a compatible rollback, state is
+`update_available` and rollback metadata remains present; therefore update has
+display precedence while both update and rollback operations remain available.
 
 The mounted diagnostics view is a projection of manager snapshots, not another
 authority. Scoped events update only connected manager nodes after asynchronous

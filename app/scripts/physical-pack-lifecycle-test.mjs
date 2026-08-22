@@ -12,6 +12,7 @@ import { MemoryPhysicalPackRegistry, PHYSICAL_PACK_DB_NAME } from "../src/physic
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageManifest = JSON.parse(await readFile(join(appRoot, "data", "package-manifest.json"), "utf8"));
 const distributionManifest = JSON.parse(await readFile(join(appRoot, "data", "distribution-manifest.json"), "utf8"));
+const fixtureCatalogV1 = JSON.parse(await readFile(join(appRoot, "data", "physical-pack-fixtures", "catalog-v1.json"), "utf8"));
 const baseUrl = "http://fixture/";
 
 function requestKey(input) {
@@ -308,6 +309,65 @@ for (const invalidUrl of [
 }
 await recoveredManager.refreshCatalog("http://fixture/data/physical-pack-fixtures/catalog-v1.json");
 
+async function initializeWithPersistedCatalog(catalog, catalogUrl, options = {}) {
+  const storedRegistry = new MemoryPhysicalPackRegistry({
+    metadata: {
+      catalog,
+      catalog_url: catalogUrl,
+      physical_data_mode: "managed_cache_packs",
+    },
+  });
+  const storedFetch = createFixtureFetch();
+  const storedManager = createPhysicalPackManager({
+    registry: storedRegistry,
+    cacheStorage: new MemoryCacheStorage(),
+    fetchImpl: storedFetch.fetchImpl,
+    packageManifest,
+    distributionManifest,
+    appVersion: options.appVersion || "1.0.0",
+    baseUrl,
+    clock: () => ++now,
+  });
+  await storedManager.initialize();
+  await storedManager.whenStartupReconciled();
+  return { manager: storedManager, registry: storedRegistry, fetch: storedFetch };
+}
+
+const validStoredCatalog = await initializeWithPersistedCatalog(
+  fixtureCatalogV1,
+  "data/physical-pack-fixtures/catalog-v1.json",
+);
+assert.equal(validStoredCatalog.manager.snapshot().catalog.catalog_version, "fixture-v1");
+assert.equal(validStoredCatalog.manager.snapshot().catalog_url, "http://fixture/data/physical-pack-fixtures/catalog-v1.json");
+assert.equal(validStoredCatalog.fetch.controls.requests.length, 0, "valid persisted catalog must not require a network fetch");
+
+const invalidStoredCatalogCases = [
+  ["malformed", "invalid", "data/physical-pack-fixtures/catalog-v1.json", "1.0.0"],
+  ["wrong-kind", { ...fixtureCatalogV1, kind: "bibleapp:not-a-catalog" }, "data/physical-pack-fixtures/catalog-v1.json", "1.0.0"],
+  ["wrong-schema", { ...fixtureCatalogV1, schema_version: 2 }, "data/physical-pack-fixtures/catalog-v1.json", "1.0.0"],
+  ["package-mismatch", { ...fixtureCatalogV1, package_identity: { ...fixtureCatalogV1.package_identity, content_sha256: `sha256:${"0".repeat(64)}` } }, "data/physical-pack-fixtures/catalog-v1.json", "1.0.0"],
+  ["below-minimum", { ...fixtureCatalogV1, compatibility: { minimum_app_version: "1.0.1", maximum_app_version_exclusive: "2.0.0" } }, "data/physical-pack-fixtures/catalog-v1.json", "1.0.0"],
+  ["exclusive-maximum", { ...fixtureCatalogV1, compatibility: { minimum_app_version: "0.9.0", maximum_app_version_exclusive: "1.0.0" } }, "data/physical-pack-fixtures/catalog-v1.json", "1.0.0"],
+  ["cross-origin-url", fixtureCatalogV1, "https://example.com/catalog.json", "1.0.0"],
+  ["credential-url", fixtureCatalogV1, "http://user:password@fixture/catalog.json", "1.0.0"],
+  ["fragment-url", fixtureCatalogV1, "data/physical-pack-fixtures/catalog-v1.json#fragment", "1.0.0"],
+];
+let rejectedStoredCatalog;
+for (const [label, catalog, catalogUrl, appVersion] of invalidStoredCatalogCases) {
+  const rejected = await initializeWithPersistedCatalog(catalog, catalogUrl, { appVersion });
+  assert.equal(rejected.fetch.controls.requests.length, 0, `${label} persisted catalog was fetched before validation`);
+  assert.equal(rejected.manager.snapshot().catalog, null, `${label} persisted catalog remained authoritative`);
+  assert.equal(rejected.manager.snapshot().catalog_url, null, `${label} persisted catalog URL remained authoritative`);
+  assert.equal(rejected.manager.snapshot().mode, "bundled_static_data", `${label} persisted catalog did not fail safely to bundled data`);
+  assert.equal(await rejected.registry.getMeta("catalog", "missing"), null);
+  assert.equal(await rejected.registry.getMeta("catalog_url", "missing"), null);
+  assert(rejected.manager.snapshot().history.some((entry) => entry.detail?.catalog_rejected === true), `${label} rejection was not recorded`);
+  await assert.rejects(() => rejected.manager.plan("search-verses"), (error) => error.code === "not_installed");
+  if (label === "malformed") rejectedStoredCatalog = rejected;
+}
+await rejectedStoredCatalog.manager.refreshCatalog("data/physical-pack-fixtures/catalog-v1.json");
+assert.equal(rejectedStoredCatalog.manager.snapshot().catalog.catalog_version, "fixture-v1", "valid refresh did not recover rejected persisted catalog authority");
+
 const insufficientRegistry = new MemoryPhysicalPackRegistry();
 const insufficientCaches = new MemoryCacheStorage();
 const insufficientManager = createPhysicalPackManager({
@@ -336,15 +396,16 @@ const unknownEstimate = await createInstalledSearchScenario({
 assert.equal((await unknownEstimate.manager.storageEstimate()).known, false);
 assert.equal((await unknownEstimate.registry.getRecord("search-verses")).state, "active");
 
-async function reloadScenario(scenario) {
+async function reloadScenario(scenario, options = {}) {
   const reloaded = createPhysicalPackManager({
     registry: scenario.registry,
     cacheStorage: scenario.cacheStorage,
     fetchImpl: scenario.fetch.fetchImpl,
     packageManifest,
-    distributionManifest,
-    appVersion: "1.0.0",
+    distributionManifest: options.distributionManifest || distributionManifest,
+    appVersion: options.appVersion || "1.0.0",
     baseUrl,
+    beforeStoredPackVerification: options.beforeStoredPackVerification || null,
     clock: () => ++now,
   });
   await reloaded.initialize();
@@ -442,6 +503,28 @@ assert.equal(validActiveAndRollbackAfter.state, "rollback_available");
 assert.equal(validActiveAndRollbackAfter.rollback_cache, validActiveAndRollbackBefore.rollback_cache);
 assert.equal((await (await validActiveAndRollbackManager.resolve("data/search/manifest.json")).response.json()).version, 2);
 
+const combinedUpdateRollbackScenario = await createInstalledSearchScenario();
+await combinedUpdateRollbackScenario.manager.repair("search-verses");
+let combinedUpdateRollbackRecord = await combinedUpdateRollbackScenario.registry.getRecord("search-verses");
+assert.equal(combinedUpdateRollbackRecord.state, "rollback_available");
+assert.ok(combinedUpdateRollbackRecord.rollback_cache);
+await combinedUpdateRollbackScenario.manager.refreshCatalog("data/physical-pack-fixtures/catalog-v2.json");
+combinedUpdateRollbackRecord = await combinedUpdateRollbackScenario.registry.getRecord("search-verses");
+assert.equal(combinedUpdateRollbackRecord.state, "update_available");
+assert.ok(combinedUpdateRollbackRecord.rollback_cache, "catalog update must not erase retained rollback authority");
+const combinedUpdateRollbackReloaded = await reloadScenario(combinedUpdateRollbackScenario);
+combinedUpdateRollbackRecord = await combinedUpdateRollbackScenario.registry.getRecord("search-verses");
+assert.equal(combinedUpdateRollbackRecord.state, "update_available");
+assert.ok(combinedUpdateRollbackRecord.rollback_cache, "startup reconciliation must retain rollback while an update is available");
+await combinedUpdateRollbackReloaded.verify("search-verses");
+combinedUpdateRollbackRecord = await combinedUpdateRollbackScenario.registry.getRecord("search-verses");
+assert.equal(combinedUpdateRollbackRecord.state, "update_available", "explicit Verify erased update availability");
+assert.ok(combinedUpdateRollbackRecord.rollback_cache);
+await combinedUpdateRollbackReloaded.update("search-verses");
+combinedUpdateRollbackRecord = await combinedUpdateRollbackScenario.registry.getRecord("search-verses");
+assert.equal(combinedUpdateRollbackRecord.pack_version, "fixture-v2");
+assert.ok(combinedUpdateRollbackRecord.rollback_cache, "successful update did not retain the previous compatible active copy");
+
 const missingRollbackCacheScenario = await createUpdatedSearchScenario();
 const missingRollbackCacheRecord = await missingRollbackCacheScenario.registry.getRecord("search-verses");
 await missingRollbackCacheScenario.cacheStorage.delete(missingRollbackCacheRecord.rollback.cache);
@@ -502,6 +585,137 @@ assert.equal(rejectedRollbackRecord.state, "repair_required");
 assert.equal(rejectedRollbackRecord.rollback, null);
 assert.notEqual(rejectedRollbackRecord.active_cache, invalidRollbackRecord.rollback.cache, "invalid rollback must not be activated");
 
+async function mutatePersistedManifests(scenario, { active = null, rollback = null } = {}) {
+  const record = await scenario.registry.getRecord("search-verses");
+  const next = structuredClone(record);
+  if (active) next.active_manifest = active(structuredClone(next.active_manifest));
+  if (rollback && next.rollback?.manifest) next.rollback.manifest = rollback(structuredClone(next.rollback.manifest));
+  await scenario.registry.putRecord(next);
+  return { before: record, mutated: next };
+}
+
+const incompatiblePackageIdentity = (manifest) => ({
+  ...manifest,
+  package_identity: { ...manifest.package_identity, content_sha256: `sha256:${"f".repeat(64)}` },
+});
+const belowSemanticMinimum = (manifest) => ({
+  ...manifest,
+  compatibility: { minimum_app_version: "1.0.1", maximum_app_version_exclusive: "2.0.0" },
+});
+const atExclusiveSemanticMaximum = (manifest) => ({
+  ...manifest,
+  compatibility: { minimum_app_version: "0.9.0", maximum_app_version_exclusive: "1.0.0" },
+});
+
+async function assertIncompatibleActive(transform, label, options = {}) {
+  const scenario = await createInstalledSearchScenario({ distributionManifest: options.distributionManifest });
+  const { before } = await mutatePersistedManifests(scenario, { active: transform });
+  const reloaded = await reloadScenario(scenario, { distributionManifest: options.distributionManifest });
+  const record = await scenario.registry.getRecord("search-verses");
+  assert.equal(record.state, "incompatible", `${label} did not become incompatible`);
+  assert.equal(record.active_cache, before.active_cache, `${label} deleted the recoverable active cache`);
+  assert.equal(record.last_failure.code, "incompatible_version");
+  return { scenario, reloaded, record };
+}
+
+const incompatiblePackageScenario = await assertIncompatibleActive(incompatiblePackageIdentity, "package identity mismatch");
+const fallbackIncompatibleResolution = await incompatiblePackageScenario.reloaded.resolve("data/search/manifest.json");
+assert.equal(fallbackIncompatibleResolution.runtime_source, "bundled_fallback");
+assert.equal(resolveCapability(packageManifest, {}, "search", {
+  physicalDataMode: "managed_cache_packs",
+  physicalRecords: incompatiblePackageScenario.reloaded.snapshot().records,
+  distributionManifest,
+}).runtime_source, "bundled_fallback");
+await incompatiblePackageScenario.reloaded.refreshCatalog("data/physical-pack-fixtures/catalog-v2.json");
+await incompatiblePackageScenario.reloaded.update("search-verses");
+const compatibleReplacementRecord = await incompatiblePackageScenario.scenario.registry.getRecord("search-verses");
+assert.equal(compatibleReplacementRecord.pack_version, "fixture-v2");
+assert.equal(compatibleReplacementRecord.state, "active");
+assert.equal((await (await incompatiblePackageScenario.reloaded.resolve("data/search/manifest.json")).response.json()).version, 2);
+await assertIncompatibleActive(belowSemanticMinimum, "app below semantic minimum");
+await assertIncompatibleActive(atExclusiveSemanticMaximum, "app at exclusive semantic maximum");
+
+const compatibleActiveScenario = await createInstalledSearchScenario();
+const compatibleActiveReloaded = await reloadScenario(compatibleActiveScenario);
+assert.equal((await compatibleActiveScenario.registry.getRecord("search-verses")).state, "active");
+assert.equal((await (await compatibleActiveReloaded.resolve("data/search/manifest.json")).response.json()).version, 1);
+
+const schemaInvalidActiveScenario = await createInstalledSearchScenario();
+await mutatePersistedManifests(schemaInvalidActiveScenario, {
+  active: (manifest) => ({ ...manifest, schema_version: 2 }),
+});
+await reloadScenario(schemaInvalidActiveScenario);
+assert.equal((await schemaInvalidActiveScenario.registry.getRecord("search-verses")).state, "corrupt");
+
+const compatibleActiveIncompatibleRollback = await createInstalledSearchScenario();
+await compatibleActiveIncompatibleRollback.manager.repair("search-verses");
+await compatibleActiveIncompatibleRollback.manager.refreshCatalog("data/physical-pack-fixtures/catalog-v2.json");
+const incompatibleRollbackClaim = await mutatePersistedManifests(compatibleActiveIncompatibleRollback, { rollback: belowSemanticMinimum });
+await reloadScenario(compatibleActiveIncompatibleRollback);
+const activeAfterIncompatibleRollback = await compatibleActiveIncompatibleRollback.registry.getRecord("search-verses");
+assert.equal(activeAfterIncompatibleRollback.state, "update_available");
+assert.equal(activeAfterIncompatibleRollback.pack_version, "fixture-v1");
+assert.equal(activeAfterIncompatibleRollback.rollback, null);
+assert.equal(activeAfterIncompatibleRollback.rollback_cache, null);
+assert.equal(activeAfterIncompatibleRollback.last_failure.code, "rollback_lost");
+assert((await compatibleActiveIncompatibleRollback.cacheStorage.keys()).includes(incompatibleRollbackClaim.before.rollback_cache), "incompatible rollback bytes were silently deleted");
+
+const incompatibleActiveCompatibleRollback = await createUpdatedSearchScenario();
+await mutatePersistedManifests(incompatibleActiveCompatibleRollback, { active: belowSemanticMinimum });
+const promotedCompatibleRollbackManager = await reloadScenario(incompatibleActiveCompatibleRollback);
+const promotedCompatibleRollback = await incompatibleActiveCompatibleRollback.registry.getRecord("search-verses");
+assert.equal(promotedCompatibleRollback.pack_version, "fixture-v1");
+assert.equal(promotedCompatibleRollback.state, "update_available");
+assert.equal(promotedCompatibleRollback.rollback, null);
+assert.equal((await (await promotedCompatibleRollbackManager.resolve("data/search/manifest.json")).response.json()).version, 1);
+
+const bothIncompatibleScenario = await createUpdatedSearchScenario();
+const bothIncompatibleBefore = await mutatePersistedManifests(bothIncompatibleScenario, {
+  active: belowSemanticMinimum,
+  rollback: atExclusiveSemanticMaximum,
+});
+await reloadScenario(bothIncompatibleScenario);
+const bothIncompatibleRecord = await bothIncompatibleScenario.registry.getRecord("search-verses");
+assert.equal(bothIncompatibleRecord.state, "incompatible");
+assert.equal(bothIncompatibleRecord.active_cache, bothIncompatibleBefore.before.active_cache);
+assert.equal(bothIncompatibleRecord.rollback, null);
+assert.equal(bothIncompatibleRecord.rollback_cache, null);
+
+const strictDistribution = { ...distributionManifest, bundled_fallback: false };
+const strictIncompatibleScenario = await assertIncompatibleActive(incompatiblePackageIdentity, "strict incompatible active", {
+  distributionManifest: strictDistribution,
+});
+await assert.rejects(
+  () => strictIncompatibleScenario.reloaded.resolve("data/search/manifest.json"),
+  (error) => error.code === "incompatible_version" && error.detail.managed_fallback_forbidden,
+);
+assert.equal(resolveCapability(packageManifest, {}, "search", {
+  physicalDataMode: "managed_cache_packs",
+  physicalRecords: strictIncompatibleScenario.reloaded.snapshot().records,
+  distributionManifest: strictDistribution,
+}).state, CAPABILITY_STATES.incompatibleVersion);
+
+const pendingVerificationScenario = await createInstalledSearchScenario();
+let releaseVerification;
+const verificationGate = new Promise((resolveGate) => { releaseVerification = resolveGate; });
+const pendingVerificationManager = createPhysicalPackManager({
+  registry: pendingVerificationScenario.registry,
+  cacheStorage: pendingVerificationScenario.cacheStorage,
+  fetchImpl: pendingVerificationScenario.fetch.fetchImpl,
+  packageManifest,
+  distributionManifest,
+  appVersion: "1.0.0",
+  baseUrl,
+  beforeStoredPackVerification: async () => verificationGate,
+  clock: () => ++now,
+});
+await pendingVerificationManager.initialize();
+assert.equal((await pendingVerificationScenario.registry.getRecord("search-verses")).state, "startup_verifying");
+assert.equal((await pendingVerificationManager.resolve("data/search/manifest.json")).runtime_source, "bundled_fallback", "managed bytes were read before startup verification completed");
+releaseVerification();
+await pendingVerificationManager.whenStartupReconciled();
+assert.equal((await (await pendingVerificationManager.resolve("data/search/manifest.json")).response.json()).version, 1);
+
 const interruptedRemovalScenario = await createInstalledSearchScenario();
 const interruptedRemovalRecord = await interruptedRemovalScenario.registry.getRecord("search-verses");
 await interruptedRemovalScenario.registry.putRecord({
@@ -523,7 +737,8 @@ console.log(JSON.stringify({
   progress_events: progress.length,
   final_mode: recoveredManager.snapshot().mode,
   history_entries: recoveredManager.snapshot().history.length,
-  reconciliation_cases: ["active-cache-missing", "active-file-missing", "digest-drift", "byte-length-drift", "media-type-drift", "inventory-drift", "valid-active-valid-rollback", "rollback-cache-missing", "rollback-file-missing", "rollback-length-drift", "rollback-digest-drift", "explicit-invalid-rollback", "valid-rollback-recovery", "invalid-rollback-recovery", "interrupted-staging", "interrupted-removal", "orphan-staging"],
+  reconciliation_cases: ["persisted-catalog-validation", "persisted-manifest-validation", "active-cache-missing", "active-file-missing", "digest-drift", "byte-length-drift", "media-type-drift", "inventory-drift", "valid-active-valid-rollback", "update-plus-rollback", "rollback-cache-missing", "rollback-file-missing", "rollback-length-drift", "rollback-digest-drift", "explicit-invalid-rollback", "compatible-active-incompatible-rollback", "incompatible-active-compatible-rollback", "both-incompatible", "strict-incompatible", "valid-rollback-recovery", "invalid-rollback-recovery", "interrupted-staging", "interrupted-removal", "orphan-staging"],
+  persisted_catalog_rejections: invalidStoredCatalogCases.map(([label]) => label),
   source_policy_rejections: 6,
   storage_estimates: ["sufficient", "insufficient-before-staging", "unavailable-safe"],
 }, null, 2));
