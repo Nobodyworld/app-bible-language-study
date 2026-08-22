@@ -367,6 +367,20 @@ async function widthState(page) {
       shell: rect(shell),
       shellOverflow: overflow(shell),
       viewport: { height: window.innerHeight, width: window.innerWidth },
+      widthControlArtwork: Object.fromEntries(["compact", "expanded"].map((mode) => {
+        const button = document.querySelector(`[data-study-workspace-width-mode="${mode}"]`);
+        const symbol = button?.querySelector(".study-workspace-width-symbol");
+        const bounds = button?.getBoundingClientRect();
+        const before = symbol ? getComputedStyle(symbol, "::before") : null;
+        const after = symbol ? getComputedStyle(symbol, "::after") : null;
+        return [mode, {
+          buttonHeight: bounds?.height || 0,
+          buttonWidth: bounds?.width || 0,
+          before: before ? { height: before.height, width: before.width } : null,
+          after: after ? { content: after.content, height: after.height, width: after.width } : null,
+          symbolDisplay: symbol ? getComputedStyle(symbol).display : "",
+        }];
+      })),
       workAreaOverflow: overflow(document.querySelector("#detailWorkArea")),
     };
   });
@@ -389,6 +403,28 @@ function assertLayoutHealth(state, label, { mobile = false } = {}) {
     assert(state.reader.width >= state.viewport.width - 2, `${label}: mobile reader is not full width`);
     if (state.paneOpen) assert(state.pane.right <= state.viewport.width + 1, `${label}: open mobile detail pane escapes the viewport`);
   } else {
+    assert.deepEqual(
+      state.widthControlArtwork.compact,
+      {
+        buttonHeight: 24,
+        buttonWidth: 24,
+        before: { height: "2px", width: "10px" },
+        after: { content: "none", height: "auto", width: "auto" },
+        symbolDisplay: "grid",
+      },
+      `${label}: Compact artwork is not geometrically centered in its 24px target`,
+    );
+    assert.deepEqual(
+      state.widthControlArtwork.expanded,
+      {
+        buttonHeight: 24,
+        buttonWidth: 24,
+        before: { height: "2px", width: "10px" },
+        after: { content: '\"\"', height: "10px", width: "2px" },
+        symbolDisplay: "grid",
+      },
+      `${label}: Expanded artwork is not geometrically centered in its 24px target`,
+    );
     assert(state.pane.right <= state.viewport.width + 1, `${label}: detail pane escapes the viewport`);
     assert(state.reader.width >= 340, `${label}: scripture column is not practical`);
     assert(state.pane.height <= state.viewport.height + 1, `${label}: sticky detail pane exceeds viewport height`);
@@ -946,6 +982,64 @@ async function setTheme(page, theme) {
   await waitForFrames(page, 2);
 }
 
+async function exerciseStrongPolishForcedColors(page) {
+  await page.emulateMedia({ forcedColors: "active" });
+  await waitForFrames(page, 2);
+  const state = await page.evaluate(() => {
+    const sourceWord = document.querySelector(".strong-source-word");
+    const hydratedWord = sourceWord?.querySelector(".language-word-hover, .language-letter-hover");
+    const letter = sourceWord?.querySelector(".language-letter-hover");
+    const rtlNote = document.querySelector(".hebrew-rtl-note");
+    const rtlBadge = rtlNote ? getComputedStyle(rtlNote, "::before") : null;
+    const linkProbe = document.createElement("span");
+    linkProbe.style.setProperty("color", "LinkText", "important");
+    linkProbe.style.setProperty("forced-color-adjust", "none");
+    document.body.append(linkProbe);
+    const linkColor = getComputedStyle(linkProbe).color;
+    linkProbe.remove();
+    const rgb = (value) => (value.match(/[\d.]+/g) || []).slice(0, 3).map(Number);
+    const luminance = (values) => {
+      const channels = values.map((value) => {
+        const normalized = value / 255;
+        return normalized <= 0.03928 ? normalized / 12.92 : ((normalized + 0.055) / 1.055) ** 2.4;
+      });
+      return 0.2126 * channels[0] + 0.7152 * channels[1] + 0.0722 * channels[2];
+    };
+    const badgeForeground = luminance(rgb(rtlBadge?.color || ""));
+    const badgeBackground = luminance(rgb(rtlBadge?.backgroundColor || ""));
+    return {
+      forcedColors: window.matchMedia("(forced-colors: active)").matches,
+      hydratedColor: hydratedWord ? getComputedStyle(hydratedWord).color : "",
+      letterBorderStyle: letter ? getComputedStyle(letter).borderBottomStyle : "",
+      linkColor,
+      rtlBadge: rtlBadge ? {
+        background: rtlBadge.backgroundColor,
+        color: rtlBadge.color,
+        forcedColorAdjust: rtlBadge.forcedColorAdjust,
+        height: rtlBadge.height,
+        width: rtlBadge.width,
+      } : null,
+      rtlBadgeContrast: (Math.max(badgeForeground, badgeBackground) + 0.05) /
+        (Math.min(badgeForeground, badgeBackground) + 0.05),
+      sourceColor: sourceWord ? getComputedStyle(sourceWord).color : "",
+    };
+  });
+  assert(state.forcedColors, "Forced-colors emulation was not applied");
+  assert(
+    state.sourceColor === state.linkColor && state.hydratedColor === state.linkColor,
+    `Forced colors did not preserve the Strong's source-word affordance: ${JSON.stringify(state)}`,
+  );
+  assert.equal(state.letterBorderStyle, "dotted", "Forced colors removed the source-letter dotted affordance");
+  assert(
+    state.rtlBadge?.height === "18px" && state.rtlBadge?.width === "18px" &&
+      state.rtlBadge?.forcedColorAdjust === "none" && state.rtlBadge?.background !== "rgba(0, 0, 0, 0)" &&
+      state.rtlBadgeContrast >= 4.5,
+    `Forced colors made the Hebrew direction badge illegible: ${JSON.stringify(state)}`,
+  );
+  await page.emulateMedia({ forcedColors: "none" });
+  await waitForFrames(page, 2);
+}
+
 async function exerciseResponsiveMatrix(page) {
   const results = [];
   for (const viewport of VIEWPORTS.filter((candidate) => candidate.name !== "mobile")) {
@@ -1162,6 +1256,7 @@ async function runPrimaryScenario(browser, baseUrl) {
     assert(widthResults.standard.pane.width + 60 <= widthResults.expanded.pane.width, "Desktop Expanded is not materially wider than Standard");
     assert(widthResults.expanded.reader.width >= 600, "Desktop Expanded leaves scripture impractically narrow");
     assert.deepEqual(await readUserDataSnapshot(page), beforeWidthData, "Width changes mutated portable user data");
+    await exerciseStrongPolishForcedColors(page);
 
     const routeBeforeReload = await page.evaluate(() => window.location.hash);
     await page.waitForLoadState("networkidle");

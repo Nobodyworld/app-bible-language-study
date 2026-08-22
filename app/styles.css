@@ -2330,6 +2330,11 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
+.strong-source-word .language-word-hover,
+.strong-source-word .language-letter-hover {
+  color: inherit;
+}
+
 .strong-overview.hebrew .strong-source-word {
   margin-left: auto;
   order: 2;
@@ -2351,31 +2356,48 @@ button:disabled {
 }
 
 .hebrew-rtl-note {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
+  display: inline-grid;
+  place-items: center;
   width: 24px;
   height: 24px;
   min-width: 24px;
   min-height: 24px;
   padding: 0;
-  border: 2px solid rgba(37, 99, 95, 0.32);
+  border: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  cursor: help;
+  font-size: 0;
+  line-height: 1;
+}
+
+.hebrew-rtl-note::before {
+  content: "!";
+  display: inline-grid;
+  grid-area: 1 / 1;
+  place-items: center;
+  width: 18px;
+  height: 18px;
+  box-sizing: border-box;
+  border: 1px solid rgba(37, 99, 95, 0.42);
   border-radius: 999px;
   background: #f0f7f5;
   color: var(--accent-dark);
-  cursor: help;
   font-size: 9px;
   font-weight: 900;
   line-height: 1;
-  transition: all 150ms ease;
+  transition:
+    background-color 150ms ease,
+    border-color 150ms ease,
+    color 150ms ease;
 }
 
-.hebrew-rtl-note:hover {
+.hebrew-rtl-note:hover::before {
   background: #ddf3f1;
-  border-color: rgba(37, 99, 95, 0.5);
+  border-color: rgba(37, 99, 95, 0.62);
 }
 
-.hebrew-rtl-note[aria-expanded="true"] {
+.hebrew-rtl-note[aria-expanded="true"]::before {
   background: var(--accent);
   border-color: var(--accent);
   color: #fff;
@@ -4966,4 +4988,54 @@ html[data-theme="light"] .word-meaning-menu {
   background: var(--panel) !important;
   border-color: var(--line) !important;
   color: var(--text) !important;
+}
+
+/* Strong's source-language polish: preserve full hit targets while refining
+   their inner artwork, and keep the lexical source word distinctly accented. */
+:root[data-theme="dark"] .strong-source-word,
+:root[data-theme="dark"] .strong-source-word .language-word-hover,
+:root[data-theme="dark"] .strong-source-word .language-letter-hover,
+html[data-theme="light"] .strong-source-word,
+html[data-theme="light"] .strong-source-word .language-word-hover,
+html[data-theme="light"] .strong-source-word .language-letter-hover {
+  color: var(--accent-dark) !important;
+}
+
+:root[data-theme="dark"] .hebrew-rtl-note,
+html[data-theme="light"] .hebrew-rtl-note,
+:root[data-theme="dark"] .hebrew-rtl-note:hover,
+:root[data-theme="dark"] .hebrew-rtl-note:focus-visible,
+html[data-theme="light"] .hebrew-rtl-note:hover,
+html[data-theme="light"] .hebrew-rtl-note:focus-visible {
+  border: 0 !important;
+  background: transparent !important;
+  color: var(--accent-dark) !important;
+  box-shadow: none !important;
+}
+
+@media (forced-colors: active) {
+  :root[data-theme] .strong-source-word,
+  :root[data-theme] .strong-source-word .language-word-hover,
+  :root[data-theme] .strong-source-word .language-letter-hover {
+    color: LinkText !important;
+    forced-color-adjust: none;
+  }
+
+  :root[data-theme] .strong-source-word .language-word-hover,
+  :root[data-theme] .strong-source-word .language-letter-hover {
+    border-bottom-color: LinkText;
+  }
+
+  :root[data-theme] .hebrew-rtl-note::before {
+    border-color: ButtonText !important;
+    background: Canvas !important;
+    color: LinkText !important;
+    forced-color-adjust: none;
+  }
+
+  :root[data-theme] .hebrew-rtl-note[aria-expanded="true"]::before {
+    border-color: Highlight !important;
+    background: Highlight !important;
+    color: HighlightText !important;
+  }
 }

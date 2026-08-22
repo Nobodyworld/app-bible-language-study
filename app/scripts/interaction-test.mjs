@@ -1326,6 +1326,16 @@ async function runQa(page) {
       const markWord = document.querySelector('.mark-study-word');
       const markList = document.querySelector('.language-breakdown.hebrew .mark-list');
       const summaryHeading = document.querySelector('.strong-sticky-summary > h3');
+      const sourceWord = document.querySelector('.strong-source-word');
+      const hydratedSourceWord = sourceWord?.querySelector('.language-word-hover, .language-letter-hover');
+      const rtlNote = document.querySelector('.hebrew-rtl-note');
+      const rtlNoteBounds = rtlNote?.getBoundingClientRect();
+      const rtlNoteBadge = rtlNote ? getComputedStyle(rtlNote, '::before') : null;
+      const accentProbe = document.createElement('span');
+      accentProbe.style.setProperty('color', 'var(--accent-dark)', 'important');
+      document.body.append(accentProbe);
+      const accentColor = getComputedStyle(accentProbe).color;
+      accentProbe.remove();
       const rgb = (value) => (value.match(/[\\d.]+/g) || []).slice(0, 3).map(Number);
       const luminance = (values) => {
         const channels = values.map((value) => {
@@ -1345,7 +1355,17 @@ async function runQa(page) {
         markWordAlignment: markWord ? getComputedStyle(markWord).textAlign : '',
         markListAlignment: markList ? getComputedStyle(markList).justifyContent : '',
         headingBorder: summaryHeading ? getComputedStyle(summaryHeading).borderBottomWidth : '',
-        headingPaddingBottom: summaryHeading ? getComputedStyle(summaryHeading).paddingBottom : ''
+        headingPaddingBottom: summaryHeading ? getComputedStyle(summaryHeading).paddingBottom : '',
+        accentColor,
+        sourceWordColor: sourceWord ? getComputedStyle(sourceWord).color : '',
+        hydratedSourceWordColor: hydratedSourceWord ? getComputedStyle(hydratedSourceWord).color : '',
+        rtlNoteTarget: rtlNoteBounds ? { height: rtlNoteBounds.height, width: rtlNoteBounds.width } : null,
+        rtlNoteBadge: rtlNoteBadge ? {
+          content: rtlNoteBadge.content,
+          display: rtlNoteBadge.display,
+          height: rtlNoteBadge.height,
+          width: rtlNoteBadge.width
+        } : null
       };
     })()`,
   );
@@ -1362,6 +1382,22 @@ async function runQa(page) {
   assert(
     darkHebrewContrast?.headingBorder !== "0px" && Number.parseFloat(darkHebrewContrast?.headingPaddingBottom || "0") >= 8,
     `Strong's heading lacks visual separation: ${JSON.stringify(darkHebrewContrast)}`,
+  );
+  assert(
+    darkHebrewContrast?.rtlNoteTarget?.height === 24 && darkHebrewContrast?.rtlNoteTarget?.width === 24,
+    `Hebrew direction help target changed size: ${JSON.stringify(darkHebrewContrast)}`,
+  );
+  assert(
+    darkHebrewContrast?.rtlNoteBadge?.content === '"!"' &&
+      darkHebrewContrast?.rtlNoteBadge?.display === "grid" &&
+      darkHebrewContrast?.rtlNoteBadge?.height === "18px" &&
+      darkHebrewContrast?.rtlNoteBadge?.width === "18px",
+    `Hebrew direction help badge is not compact and centered: ${JSON.stringify(darkHebrewContrast)}`,
+  );
+  assert(
+    darkHebrewContrast?.sourceWordColor === darkHebrewContrast?.accentColor &&
+      darkHebrewContrast?.hydratedSourceWordColor === darkHebrewContrast?.accentColor,
+    `Hydrated Hebrew source word lost its accent color: ${JSON.stringify(darkHebrewContrast)}`,
   );
   await click(page, ".hebrew-rtl-note");
   await waitFor(
@@ -1645,6 +1681,31 @@ async function runQa(page) {
   await waitFor(page, "!document.querySelector('.interlinear-token .token-target-badges')");
   pass("Interlinear source-token Study Marks");
   pass("Greek interlinear token data");
+  await click(page, '.interlinear-token[data-strong-code^="G"] .link-button');
+  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === \"Strong's\" && Boolean(document.querySelector('.strong-source-word .language-word-hover, .strong-source-word .language-letter-hover'))", 15000);
+  const greekSourceAccent = await evaluate(
+    page,
+    `(() => {
+      const sourceWord = document.querySelector('.strong-source-word');
+      const hydratedSourceWord = sourceWord?.querySelector('.language-word-hover, .language-letter-hover');
+      const accentProbe = document.createElement('span');
+      accentProbe.style.setProperty('color', 'var(--accent-dark)', 'important');
+      document.body.append(accentProbe);
+      const accentColor = getComputedStyle(accentProbe).color;
+      accentProbe.remove();
+      return {
+        accentColor,
+        sourceWordColor: sourceWord ? getComputedStyle(sourceWord).color : '',
+        hydratedSourceWordColor: hydratedSourceWord ? getComputedStyle(hydratedSourceWord).color : ''
+      };
+    })()`,
+  );
+  assert(
+    greekSourceAccent?.sourceWordColor === greekSourceAccent?.accentColor &&
+      greekSourceAccent?.hydratedSourceWordColor === greekSourceAccent?.accentColor,
+    `Hydrated Greek source word lost its accent color: ${JSON.stringify(greekSourceAccent)}`,
+  );
+  pass("Greek Strong's source accent");
 
   await navigate(page, `${routeBase}#/read/bsb/proverbs/1/1`);
   await waitFor(page, "document.querySelector('#chapterTitle')?.textContent.includes('Proverbs 1')");

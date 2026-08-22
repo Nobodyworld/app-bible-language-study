@@ -40,6 +40,39 @@
   line-height: 1;
 }
 
+.study-workspace-width-controls
+  button[data-study-workspace-width-mode="compact"]
+  .study-workspace-width-symbol,
+.study-workspace-width-controls
+  button[data-study-workspace-width-mode="expanded"]
+  .study-workspace-width-symbol {
+  font-size: 0;
+}
+
+.study-workspace-width-controls
+  button[data-study-workspace-width-mode="compact"]
+  .study-workspace-width-symbol::before,
+.study-workspace-width-controls
+  button[data-study-workspace-width-mode="expanded"]
+  .study-workspace-width-symbol::before,
+.study-workspace-width-controls
+  button[data-study-workspace-width-mode="expanded"]
+  .study-workspace-width-symbol::after {
+  content: "";
+  grid-area: 1 / 1;
+  width: 10px;
+  height: 2px;
+  border-radius: 999px;
+  background: currentColor;
+}
+
+.study-workspace-width-controls
+  button[data-study-workspace-width-mode="expanded"]
+  .study-workspace-width-symbol::after {
+  width: 2px;
+  height: 10px;
+}
+
 .study-workspace-width-reset-symbol {
   font-size: 14px;
 }
@@ -280,6 +313,19 @@
 }
 
 @media (forced-colors: active) {
+  .study-workspace-width-controls
+    button[data-study-workspace-width-mode="compact"]
+    .study-workspace-width-symbol::before,
+  .study-workspace-width-controls
+    button[data-study-workspace-width-mode="expanded"]
+    .study-workspace-width-symbol::before,
+  .study-workspace-width-controls
+    button[data-study-workspace-width-mode="expanded"]
+    .study-workspace-width-symbol::after {
+    background: currentColor;
+    forced-color-adjust: auto;
+  }
+
   .detail-header-icon-button svg,
   .study-workspace-show-button svg {
     stroke: ButtonText;
