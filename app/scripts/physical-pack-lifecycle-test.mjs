@@ -352,6 +352,40 @@ async function reloadScenario(scenario) {
   return reloaded;
 }
 
+async function createUpdatedSearchScenario() {
+  const scenario = await createInstalledSearchScenario();
+  await scenario.manager.refreshCatalog("data/physical-pack-fixtures/catalog-v2.json");
+  await scenario.manager.update("search-verses");
+  return scenario;
+}
+
+async function replaceRollbackSearchManifest(scenario, transform) {
+  const record = await scenario.registry.getRecord("search-verses");
+  const cache = await scenario.cacheStorage.open(record.rollback.cache);
+  const url = new URL("data/search/manifest.json", baseUrl).href;
+  const response = await cache.match(url);
+  const original = new Uint8Array(await response.arrayBuffer());
+  await cache.put(url, new Response(transform(original), {
+    status: 200,
+    headers: { "content-type": "application/json" },
+  }));
+  return record.rollback.cache;
+}
+
+async function assertRollbackLoss(scenario, expectedState, expectedVersion, invalidCache) {
+  const reloaded = await reloadScenario(scenario);
+  const record = await scenario.registry.getRecord("search-verses");
+  assert.equal(record.state, expectedState);
+  assert.equal(record.pack_version, expectedVersion);
+  assert.equal(record.rollback, null);
+  assert.equal(record.rollback_cache, null);
+  assert.equal(record.last_failure.code, "rollback_lost");
+  assert.notEqual(record.state, "rollback_available");
+  assert.equal((await (await reloaded.resolve("data/search/manifest.json")).response.json()).version, expectedVersion === "fixture-v2" ? 2 : 1);
+  assert(reloaded.snapshot().history.some((entry) => entry.detail?.rollback_lost === true), "rollback loss must be recorded in history");
+  if (invalidCache) assert(!(await scenario.cacheStorage.keys()).includes(invalidCache), "invalid rollback cache should be deleted when possible");
+}
+
 const missingCacheScenario = await createInstalledSearchScenario();
 const missingCacheRecord = await missingCacheScenario.registry.getRecord("search-verses");
 await missingCacheScenario.cacheStorage.delete(missingCacheRecord.active_cache);
@@ -400,6 +434,50 @@ await (await inventoryDriftScenario.cacheStorage.open(inventoryRecord.active_cac
 );
 await assert.rejects(() => inventoryDriftScenario.manager.verify("search-verses"), (error) => error.code === "corrupt");
 
+const validActiveAndRollbackScenario = await createUpdatedSearchScenario();
+const validActiveAndRollbackBefore = await validActiveAndRollbackScenario.registry.getRecord("search-verses");
+const validActiveAndRollbackManager = await reloadScenario(validActiveAndRollbackScenario);
+const validActiveAndRollbackAfter = await validActiveAndRollbackScenario.registry.getRecord("search-verses");
+assert.equal(validActiveAndRollbackAfter.state, "rollback_available");
+assert.equal(validActiveAndRollbackAfter.rollback_cache, validActiveAndRollbackBefore.rollback_cache);
+assert.equal((await (await validActiveAndRollbackManager.resolve("data/search/manifest.json")).response.json()).version, 2);
+
+const missingRollbackCacheScenario = await createUpdatedSearchScenario();
+const missingRollbackCacheRecord = await missingRollbackCacheScenario.registry.getRecord("search-verses");
+await missingRollbackCacheScenario.cacheStorage.delete(missingRollbackCacheRecord.rollback.cache);
+await assertRollbackLoss(missingRollbackCacheScenario, "active", "fixture-v2", missingRollbackCacheRecord.rollback.cache);
+
+const missingRollbackFileScenario = await createUpdatedSearchScenario();
+const missingRollbackFileRecord = await missingRollbackFileScenario.registry.getRecord("search-verses");
+await (await missingRollbackFileScenario.cacheStorage.open(missingRollbackFileRecord.rollback.cache)).delete(new URL("data/search/manifest.json", baseUrl).href);
+await assertRollbackLoss(missingRollbackFileScenario, "active", "fixture-v2", missingRollbackFileRecord.rollback.cache);
+
+const rollbackLengthDriftScenario = await createUpdatedSearchScenario();
+const rollbackLengthCache = await replaceRollbackSearchManifest(rollbackLengthDriftScenario, () => new TextEncoder().encode("{}"));
+await assertRollbackLoss(rollbackLengthDriftScenario, "active", "fixture-v2", rollbackLengthCache);
+
+const rollbackDigestDriftScenario = await createInstalledSearchScenario();
+await rollbackDigestDriftScenario.manager.repair("search-verses");
+await rollbackDigestDriftScenario.manager.refreshCatalog("data/physical-pack-fixtures/catalog-v2.json");
+const rollbackDigestCache = await replaceRollbackSearchManifest(rollbackDigestDriftScenario, (bytes) => {
+  const copy = new Uint8Array(bytes);
+  copy[0] = copy[0] === 123 ? 91 : 123;
+  return copy;
+});
+await assertRollbackLoss(rollbackDigestDriftScenario, "update_available", "fixture-v1", rollbackDigestCache);
+
+const explicitInvalidRollbackScenario = await createUpdatedSearchScenario();
+const explicitInvalidRollbackCache = await replaceRollbackSearchManifest(explicitInvalidRollbackScenario, () => new TextEncoder().encode("{}"));
+await assert.rejects(() => explicitInvalidRollbackScenario.manager.rollback("search-verses"), (error) => error.code === "corrupt");
+const explicitInvalidRollbackRecord = await explicitInvalidRollbackScenario.registry.getRecord("search-verses");
+assert.equal(explicitInvalidRollbackRecord.state, "active");
+assert.equal(explicitInvalidRollbackRecord.pack_version, "fixture-v2");
+assert.equal(explicitInvalidRollbackRecord.rollback, null);
+assert.equal(explicitInvalidRollbackRecord.rollback_cache, null);
+assert.equal((await (await explicitInvalidRollbackScenario.manager.resolve("data/search/manifest.json")).response.json()).version, 2);
+assert(!(await explicitInvalidRollbackScenario.cacheStorage.keys()).includes(explicitInvalidRollbackCache));
+assert(explicitInvalidRollbackScenario.manager.snapshot().history.some((entry) => entry.action === "rollback" && entry.state === "failed" && entry.detail?.rollback_lost));
+
 const validRollbackScenario = await createInstalledSearchScenario();
 await validRollbackScenario.manager.refreshCatalog("data/physical-pack-fixtures/catalog-v2.json");
 await validRollbackScenario.manager.update("search-verses");
@@ -445,7 +523,7 @@ console.log(JSON.stringify({
   progress_events: progress.length,
   final_mode: recoveredManager.snapshot().mode,
   history_entries: recoveredManager.snapshot().history.length,
-  reconciliation_cases: ["active-cache-missing", "active-file-missing", "digest-drift", "byte-length-drift", "media-type-drift", "inventory-drift", "valid-rollback", "invalid-rollback", "interrupted-staging", "interrupted-removal", "orphan-staging"],
+  reconciliation_cases: ["active-cache-missing", "active-file-missing", "digest-drift", "byte-length-drift", "media-type-drift", "inventory-drift", "valid-active-valid-rollback", "rollback-cache-missing", "rollback-file-missing", "rollback-length-drift", "rollback-digest-drift", "explicit-invalid-rollback", "valid-rollback-recovery", "invalid-rollback-recovery", "interrupted-staging", "interrupted-removal", "orphan-staging"],
   source_policy_rejections: 6,
   storage_estimates: ["sufficient", "insufficient-before-staging", "unavailable-safe"],
 }, null, 2));

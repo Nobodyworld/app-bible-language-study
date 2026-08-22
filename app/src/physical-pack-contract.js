@@ -3,6 +3,8 @@ export const PHYSICAL_DATA_MODES = Object.freeze({
   managed: "managed_cache_packs",
 });
 
+export const PHYSICAL_PACK_SNAPSHOT_EVENT = "bibleapp:physical-pack-snapshot";
+
 export const PHYSICAL_PACK_STATES = Object.freeze([
   "discovered",
   "staging",

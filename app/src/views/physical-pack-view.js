@@ -1,4 +1,4 @@
-import { PHYSICAL_DATA_MODES } from "../physical-pack-contract.js";
+import { PHYSICAL_DATA_MODES, PHYSICAL_PACK_SNAPSHOT_EVENT } from "../physical-pack-contract.js";
 
 function formatBytes(value) {
   const bytes = Number(value || 0);
@@ -168,6 +168,7 @@ export function renderPhysicalPackManager(ctx) {
 
   let busy = false;
   let activeAbort = null;
+  let latestSnapshot = manager.snapshot();
   const preservedReaderSelection = captureReaderSelection();
 
   const run = async (label, action, focusKey = null) => {
@@ -237,10 +238,10 @@ export function renderPhysicalPackManager(ctx) {
     }
   };
 
-  const render = (restoreFocusKey = null) => {
+  const render = (restoreFocusKey = null, snapshotOverride = null) => {
     const detailScroller = section.closest("#detailContent");
     const detailScrollTop = detailScroller?.scrollTop ?? null;
-    const snapshot = manager.snapshot();
+    const snapshot = latestSnapshot = snapshotOverride || manager.snapshot();
     const wrap = document.createDocumentFragment();
 
     const mode = document.createElement("div");
@@ -302,7 +303,9 @@ export function renderPhysicalPackManager(ctx) {
       const state = document.createElement("p");
       state.className = "physical-pack-state";
       state.textContent = record
-        ? `State: ${record.state.replaceAll("_", " ")}; active ${record.pack_version}; verified ${record.verified_files}/${record.expected_files} files.`
+        ? record.state === "startup_verifying"
+          ? `State: startup verifying; stored bytes for ${record.pack_version} are being verified before managed use.`
+          : `State: ${record.state.replaceAll("_", " ")}; active ${record.pack_version}; verified ${record.verified_files}/${record.expected_files} files.`
         : `State: not installed${available ? `; available ${available.pack_version}, ${formatBytes(available.bytes)}` : "; no catalog entry"}.`;
       const runtime = document.createElement("p");
       runtime.className = "physical-pack-runtime-source";
@@ -322,13 +325,20 @@ export function renderPhysicalPackManager(ctx) {
         button.disabled = busy || !available && ["install", "update", "repair"].includes(action);
         actions.append(button);
       };
-      if (!record || record.state === "failed") addPlanAction(record ? "Retry install" : "Plan install", "install");
-      if (record?.state === "update_available") addPlanAction("Plan update", "update");
-      if (["corrupt", "repair_required"].includes(record?.state)) addPlanAction("Plan repair", "repair");
-      if (record?.active_cache) {
-        addPlanAction("Verify", "verify");
-        if (record.rollback_cache) addPlanAction("Plan rollback", "rollback");
-        addPlanAction("Plan removal", "remove", true);
+      if (record?.state === "startup_verifying") {
+        const verifying = document.createElement("p");
+        verifying.className = "physical-pack-verification-status";
+        verifying.textContent = "Lifecycle actions are unavailable until stored-byte verification finishes.";
+        actions.append(verifying);
+      } else {
+        if (!record || record.state === "failed") addPlanAction(record ? "Retry install" : "Plan install", "install");
+        if (record?.state === "update_available") addPlanAction("Plan update", "update");
+        if (["corrupt", "repair_required"].includes(record?.state)) addPlanAction("Plan repair", "repair");
+        if (record?.active_cache) {
+          addPlanAction("Verify", "verify");
+          if (record.rollback_cache) addPlanAction("Plan rollback", "rollback");
+          addPlanAction("Plan removal", "remove", true);
+        }
       }
       card.append(title, state, runtime, actions);
       if (record?.last_failure) {
@@ -381,6 +391,18 @@ export function renderPhysicalPackManager(ctx) {
     if (detailScroller && detailScrollTop != null) detailScroller.scrollTop = detailScrollTop;
     restoreReaderSelection(preservedReaderSelection);
   };
+
+  section.addEventListener(PHYSICAL_PACK_SNAPSHOT_EVENT, (event) => {
+    if (!section.isConnected || !event.detail) return;
+    const wasVerifying = latestSnapshot.records.some((record) => record.state === "startup_verifying");
+    const focusKey = section.contains(document.activeElement) ? document.activeElement?.dataset?.focusKey || null : null;
+    latestSnapshot = event.detail;
+    render(focusKey, event.detail);
+    if (!busy && wasVerifying && !latestSnapshot.records.some((record) => record.state === "startup_verifying")) {
+      live.className = "physical-pack-live-status success";
+      live.textContent = "Stored-pack startup verification completed.";
+    }
+  });
 
   render();
   return section;

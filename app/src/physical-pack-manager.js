@@ -106,6 +106,7 @@ export class PhysicalPackManager {
     this.fetchImpl = options.fetchImpl || globalThis.fetch?.bind(globalThis);
     this.cryptoImpl = options.cryptoImpl || globalThis.crypto;
     this.storage = options.storage || globalThis.navigator?.storage || null;
+    this.beforeStoredPackVerification = options.beforeStoredPackVerification || null;
     this.clock = options.clock || Date.now;
     this.baseUrl = new URL(options.baseUrl || globalThis.document?.baseURI || globalThis.location?.href || "http://localhost/");
     this.packageManifest = options.packageManifest || null;
@@ -595,6 +596,7 @@ export class PhysicalPackManager {
   }
 
   async verifyStoredPack({ cacheName, manifest, label = "Stored physical pack" }) {
+    await this.beforeStoredPackVerification?.({ cacheName, manifest, label });
     if (!cacheName || !manifest?.files) {
       throw new PhysicalPackError("repair_required", `${label} has no complete cache or manifest claim.`);
     }
@@ -637,6 +639,41 @@ export class PhysicalPackManager {
       throw new PhysicalPackError("corrupt", `${label} verified byte total does not match its manifest.`);
     }
     return Object.freeze({ files: expectedUrls.size, bytes });
+  }
+
+  catalogUpdateAvailable(packId, packVersion) {
+    return Boolean(this.catalog?.packs?.some((entry) => entry.pack_id === packId && entry.pack_version !== packVersion));
+  }
+
+  stateWithoutRollback(record) {
+    return record.state === "update_available" || record.startup_previous_state === "update_available" || this.catalogUpdateAvailable(record.pack_id, record.pack_version)
+      ? "update_available"
+      : "active";
+  }
+
+  async clearInvalidRollback(record, error, action) {
+    const rollbackCache = record.rollback?.cache || record.rollback_cache || null;
+    const message = `Retained rollback copy was removed after verification failed: ${sanitizeMessage(error)}`;
+    const now = isoNow(this.clock);
+    const next = {
+      ...record,
+      state: this.stateWithoutRollback(record),
+      rollback_cache: null,
+      rollback: null,
+      startup_previous_state: null,
+      last_failure: { code: "rollback_lost", message, at: now },
+      updated_at: now,
+    };
+    await this.registry.putRecord(next);
+    await this.appendHistory(action, "failed", {
+      pack_id: record.pack_id,
+      rollback_lost: true,
+      message,
+    });
+    if (rollbackCache && rollbackCache !== record.active_cache) {
+      await this.cacheStorage.delete(rollbackCache).catch(() => false);
+    }
+    return next;
   }
 
   async verify(packId) {
@@ -710,12 +747,7 @@ export class PhysicalPackManager {
         label: `Rollback ${packId} pack`,
       });
     } catch (error) {
-      await this.registry.putRecord({
-        ...record,
-        last_failure: { code: error.code || "corrupt", message: sanitizeMessage(error), at: isoNow(this.clock) },
-        updated_at: isoNow(this.clock),
-      });
-      await this.appendHistory("rollback", "failed", { pack_id: packId, message: sanitizeMessage(error) });
+      await this.clearInvalidRollback(record, error, "rollback");
       await this.refreshSnapshot();
       throw error;
     }
@@ -869,24 +901,49 @@ export class PhysicalPackManager {
             manifest: record.active_manifest,
             label: `Active ${record.pack_id} pack`,
           });
-          const previousState = record.startup_previous_state;
-          const catalogUpdateAvailable = this.catalog?.packs?.some((entry) => entry.pack_id === record.pack_id && entry.pack_version !== record.pack_version);
-          await this.registry.putRecord({
+          const now = isoNow(this.clock);
+          const activeRecord = {
             ...record,
-            state: previousState === "update_available" || catalogUpdateAvailable
-              ? "update_available"
-              : record.rollback?.cache ? "rollback_available" : "active",
+            state: this.stateWithoutRollback(record),
             startup_previous_state: null,
             verified_files: verified.files,
             verified_bytes: verified.bytes,
-            last_verified_at: isoNow(this.clock),
-            updated_at: isoNow(this.clock),
+            last_verified_at: now,
+            updated_at: now,
             last_failure: record.last_failure?.code === "interrupted" ? record.last_failure : null,
-          });
+          };
+          const hasRollbackClaim = Boolean(record.rollback_cache || record.rollback);
+          if (hasRollbackClaim) {
+            try {
+              if (!record.rollback?.cache || !record.rollback?.manifest || record.rollback_cache !== record.rollback.cache) {
+                throw new PhysicalPackError("corrupt", `Rollback ${record.pack_id} pack metadata is incomplete or inconsistent.`);
+              }
+              const rollbackVerified = await this.verifyStoredPack({
+                cacheName: record.rollback.cache,
+                manifest: record.rollback.manifest,
+                label: `Rollback ${record.pack_id} pack`,
+              });
+              await this.registry.putRecord({
+                ...activeRecord,
+                state: "rollback_available",
+                rollback_cache: record.rollback.cache,
+                rollback: {
+                  ...clone(record.rollback),
+                  verified_files: rollbackVerified.files,
+                  verified_bytes: rollbackVerified.bytes,
+                },
+              });
+            } catch (rollbackError) {
+              await this.clearInvalidRollback(activeRecord, rollbackError, "startup-reconcile");
+            }
+          } else {
+            await this.registry.putRecord(activeRecord);
+          }
           await this.appendHistory("startup-reconcile", "completed", {
             pack_id: record.pack_id,
             verified_files: verified.files,
             verified_bytes: verified.bytes,
+            rollback_verified: hasRollbackClaim && Boolean((await this.registry.getRecord(record.pack_id))?.rollback_cache),
           });
         } catch (activeError) {
           let recovered = false;
@@ -898,7 +955,7 @@ export class PhysicalPackManager {
                 label: `Rollback ${record.pack_id} pack`,
               });
               const rollback = record.rollback;
-              const catalogUpdateAvailable = this.catalog?.packs?.some((entry) => entry.pack_id === record.pack_id && entry.pack_version !== rollback.pack_version);
+              const catalogUpdateAvailable = this.catalogUpdateAvailable(record.pack_id, rollback.pack_version);
               await this.registry.putRecord({
                 ...record,
                 pack_version: rollback.pack_version,

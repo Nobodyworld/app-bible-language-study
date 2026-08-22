@@ -136,7 +136,11 @@ orphan staging areas must not be reported as active.
 The current implementation places existing active claims into a safe
 `startup_verifying` state and verifies exact inventory, media type, byte length,
 SHA-256, and totals asynchronously. Managed resolution cannot use those bytes
-until verification completes. Rollback promotion uses the same verifier.
+until verification completes. Active and rollback claims are verified
+independently with the same verifier. Losing optional rollback authority never
+invalidates a verified active copy: invalid rollback metadata is cleared,
+sanitized history is retained, and active or catalog-update state remains
+truthful. Rollback promotion uses the same verifier.
 
 ## Physical modes
 
@@ -334,6 +338,12 @@ management surface should provide:
 - storage-estimate and quota information when available;
 - explicit notice/provenance access.
 
+The mounted manager receives scoped snapshot events dispatched only to current
+manager nodes. It updates state, runtime source, failures, history, cleanup
+count, and actions after asynchronous reconciliation without rerendering the
+reader. Lifecycle actions are absent during `startup_verifying`; removed nodes
+retain no global listener or subscription.
+
 Opening, cancelling, or dismissing a plan must not mutate logical or physical
 state.
 
@@ -400,7 +410,7 @@ Add deterministic domain coverage for:
 - startup reconciliation;
 - staged install and atomic activation;
 - interrupted install/update/remove recovery;
-- repair and rollback;
+- repair, independent rollback verification, and rollback-loss cleanup;
 - corrupt, missing, incompatible, and quota/error states;
 - portable-backup behavior;
 - provenance enforcement;
@@ -414,7 +424,7 @@ Add maintained Edge browser coverage using small fixture packs for:
 - Search and Commentary unavailable states;
 - installed pack lookup through the pack-aware data resolver;
 - corruption detection and repair;
-- removal and rollback;
+- removal, rollback, invalid rollback loss, and delayed mounted-view updates;
 - mode return to bundled fallback;
 - keyboard, focus, Escape, narrow/mobile, dark/light, reduced-motion, and no
   horizontal-overflow behavior;

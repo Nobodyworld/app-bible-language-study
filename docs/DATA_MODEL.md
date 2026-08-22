@@ -46,7 +46,11 @@ active cache, but runtime resolution cannot use it until cache existence, exact
 declared inventory, required entries, media types, byte lengths, per-file
 SHA-256, and verified totals all pass. Missing storage becomes
 `repair_required`; content drift becomes `corrupt`. Rollback metadata is not
-promoted until the same verification passes.
+promoted until the same verification passes. Active and rollback records are
+independent claims: a valid active cache remains authoritative if rollback
+verification fails. Invalid rollback pointers are cleared, sanitized
+`rollback_lost` evidence is retained, and state becomes `active` or remains
+`update_available` as appropriate.
 
 Physical registry authority and pack bytes are not part of portable
 `bibleapp:user-data` backups. An imported logical preference may require local
@@ -79,6 +83,10 @@ recorded cache-deletion list; missing active storage activates a valid retained
 rollback or becomes `repair_required`. Unreferenced pack caches are reported as
 orphans and removed only by startup staging cleanup or the explicit cleanup
 action.
+
+The mounted diagnostics view is a projection of manager snapshots, not another
+authority. Scoped events update only connected manager nodes after asynchronous
+reconciliation; removed nodes own no global listener.
 
 The validated distribution manifest remains the authority for
 `managed_optional_pack_ids` and `bundled_fallback`. Physical records describe

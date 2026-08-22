@@ -12,7 +12,7 @@ import {
   invalidatePhysicalPackData,
 } from "./src/data-service.js?v=pr13-live-qa-20260711e";
 import { createPhysicalPackManager } from "./src/physical-pack-manager.js";
-import { validateDistributionManifest } from "./src/physical-pack-contract.js";
+import { PHYSICAL_PACK_SNAPSHOT_EVENT, validateDistributionManifest } from "./src/physical-pack-contract.js";
 import { createDetailViews } from "./src/detail-views.js?v=pr13-live-qa-20260711e";
 import {
   beginDetailIntent,
@@ -1249,11 +1249,19 @@ async function init() {
       }),
     ]);
     try {
+      let verificationDelayMs = Number(globalThis.__BIBLEAPP_TEST_PHYSICAL_PACK_VERIFICATION_DELAY_MS__ || 0);
       state.physicalPackManager = createPhysicalPackManager({
         packageManifest: state.packageManifest,
         distributionManifest: state.distributionManifest,
         appVersion: "1.0.0",
         baseUrl: new URL("./", document.baseURI),
+        beforeStoredPackVerification: verificationDelayMs > 0 && Number.isFinite(verificationDelayMs)
+          ? async () => {
+            const delay = verificationDelayMs;
+            verificationDelayMs = 0;
+            await new Promise((resolveDelay) => setTimeout(resolveDelay, delay));
+          }
+          : null,
       });
       await state.physicalPackManager.initialize();
       const applyPhysicalSnapshot = (snapshot) => {
@@ -1262,6 +1270,9 @@ async function init() {
         invalidatePhysicalPackData(snapshot.records.map((record) => record.pack_id));
         state.commentary = null;
         syncToolButtons();
+        document.querySelectorAll(`[data-physical-pack-manager="true"]`).forEach((node) => {
+          node.dispatchEvent(new CustomEvent(PHYSICAL_PACK_SNAPSHOT_EVENT, { detail: snapshot }));
+        });
       };
       state.physicalPackManager.subscribe(applyPhysicalSnapshot);
       applyPhysicalSnapshot(state.physicalPackManager.snapshot());

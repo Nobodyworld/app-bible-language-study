@@ -182,6 +182,59 @@ async function assertReaderContextPreserved(page, before, label) {
   return after;
 }
 
+async function delayNextStartupVerification(page, milliseconds = 6000) {
+  await page.evaluate((delay) => sessionStorage.setItem("bibleapp:test:physical-pack-verification-delay", String(delay)), milliseconds);
+}
+
+async function seedCorruptRollbackClaim(page) {
+  return page.evaluate(async () => {
+    const database = await new Promise((resolveDatabase, reject) => {
+      const request = indexedDB.open("bibleapp-physical-packs", 1);
+      request.onerror = () => reject(request.error);
+      request.onsuccess = () => resolveDatabase(request.result);
+    });
+    const record = await new Promise((resolveRecord, reject) => {
+      const tx = database.transaction("pack_records", "readonly");
+      const get = tx.objectStore("pack_records").get("search-verses");
+      get.onerror = () => reject(get.error);
+      get.onsuccess = () => resolveRecord(get.result);
+    });
+    const rollbackCacheName = `bibleapp-pack:test-invalid-rollback:${Date.now()}`;
+    const activeCache = await caches.open(record.active_cache);
+    const rollbackCache = await caches.open(rollbackCacheName);
+    for (const request of await activeCache.keys()) {
+      await rollbackCache.put(request, await activeCache.match(request));
+    }
+    const manifestUrl = new URL("data/search/manifest.json", document.baseURI).href;
+    await rollbackCache.put(manifestUrl, new Response("{}", { headers: { "content-type": "application/json" } }));
+    const rollback = {
+      pack_version: record.pack_version,
+      manifest_sha256: record.manifest_sha256,
+      aggregate_sha256: record.aggregate_sha256,
+      cache: rollbackCacheName,
+      manifest: record.active_manifest,
+      verified_files: record.verified_files,
+      verified_bytes: record.verified_bytes,
+      activated_at: record.activated_at,
+    };
+    await new Promise((resolvePut, reject) => {
+      const tx = database.transaction("pack_records", "readwrite");
+      const put = tx.objectStore("pack_records").put({
+        ...record,
+        state: "rollback_available",
+        rollback_cache: rollbackCacheName,
+        rollback,
+        last_failure: null,
+      });
+      put.onerror = () => reject(put.error);
+      tx.oncomplete = resolvePut;
+      tx.onerror = () => reject(tx.error);
+    });
+    database.close();
+    return rollbackCacheName;
+  });
+}
+
 const { server, url } = await startServer();
 const browser = await chromium.launch({
   executablePath: edgePath(),
@@ -199,6 +252,11 @@ const timings = {};
 try {
   const context = await browser.newContext({ viewport: { width: 1280, height: 720 }, reducedMotion: "reduce" });
   const page = await context.newPage();
+  await page.addInitScript(() => {
+    const delay = Number(sessionStorage.getItem("bibleapp:test:physical-pack-verification-delay") || 0);
+    sessionStorage.removeItem("bibleapp:test:physical-pack-verification-delay");
+    if (delay > 0) globalThis.__BIBLEAPP_TEST_PHYSICAL_PACK_VERIFICATION_DELAY_MS__ = delay;
+  });
   page.on("console", (message) => { if (message.type() === "error") consoleErrors.push(message.text()); });
   page.on("pageerror", (error) => pageErrors.push(error.message));
   page.on("requestfailed", (request) => failedRequests.push(`${request.method()} ${request.url()} ${request.failure()?.errorText || "failed"}`));
@@ -280,11 +338,46 @@ try {
   assert((await packCard(page, "commentary-verse-index").locator(".physical-pack-state").textContent()).includes("State: active"), "Commentary did not activate");
   await assertReaderContextPreserved(page, lifecycleReaderContext, "Commentary installation");
 
+  await delayNextStartupVerification(page);
   const reloadStarted = performance.now();
   await page.reload({ waitUntil: "load" });
   await waitReady(page);
-  timings.reload_persistence_ms = Math.round(performance.now() - reloadStarted);
+  await page.locator(".strong-token[data-strong-code]").first().click();
+  await page.waitForFunction(() => document.querySelector(".detail-pane")?.dataset.panelMode === "locked");
   await openManager(page);
+  await page.waitForFunction(() => document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent.includes("State: startup verifying"));
+  const verifyingCard = packCard(page, "search-verses");
+  assert((await verifyingCard.locator(".physical-pack-verification-status").textContent()).includes("unavailable"));
+  for (const action of ["Verify", "Plan update", "Plan repair", "Plan rollback", "Plan removal"]) {
+    assert.equal(await verifyingCard.getByRole("button", { name: action, exact: true }).count(), 0, `${action} was exposed during startup verification`);
+  }
+  await page.evaluate(() => {
+    const current = document.querySelector("[data-physical-pack-manager='true']");
+    globalThis.__removedPhysicalManager = current;
+    globalThis.__removedPhysicalManagerUpdates = 0;
+    current.addEventListener("bibleapp:physical-pack-snapshot", () => { globalThis.__removedPhysicalManagerUpdates += 1; });
+  });
+  await openManager(page);
+  await page.evaluate(() => {
+    const current = document.querySelector("[data-physical-pack-manager='true']");
+    globalThis.__mountedPhysicalManagerUpdates = 0;
+    current.addEventListener("bibleapp:physical-pack-snapshot", () => { globalThis.__mountedPhysicalManagerUpdates += 1; });
+  });
+  await page.getByRole("button", { name: "Use bundled data", exact: true }).focus();
+  lifecycleReaderContext = await captureReaderContext(page, { prepare: true });
+  await page.waitForFunction(() => document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent.includes("State: active"), null, { timeout: 15000 });
+  assert((await packCard(page, "search-verses").locator(".physical-pack-runtime-source").textContent()).includes("verified managed pack"));
+  assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Verify", exact: true }).count(), 1, "Verify did not appear after startup verification");
+  assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Plan removal", exact: true }).count(), 1, "Remove did not appear after startup verification");
+  assert(await page.getByRole("button", { name: "Use bundled data", exact: true }).evaluate((node) => document.activeElement === node), "live startup update did not preserve focus");
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "delayed startup live update");
+  const liveUpdateCounts = await page.evaluate(() => ({
+    removed: globalThis.__removedPhysicalManagerUpdates,
+    mounted: globalThis.__mountedPhysicalManagerUpdates,
+    mountedManagers: document.querySelectorAll("[data-physical-pack-manager='true']").length,
+  }));
+  assert.deepEqual(liveUpdateCounts, { removed: 0, mounted: 1, mountedManagers: 1 }, "mounted-manager updates leaked or duplicated");
+  timings.reload_persistence_ms = Math.round(performance.now() - reloadStarted);
   assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).match(/State: (active|rollback available)/), "Search activation did not persist across reload");
   assert((await packCard(page, "commentary-verse-index").locator(".physical-pack-state").textContent()).includes("State: active"), "Commentary activation did not persist across reload");
   lifecycleReaderContext = await captureReaderContext(page, { prepare: true });
@@ -432,7 +525,39 @@ try {
   await rollbackDialog.getByRole("button", { name: "Rollback Search", exact: true }).click();
   await page.locator(".physical-pack-live-status").filter({ hasText: "Search rollback failed:" }).waitFor({ state: "visible", timeout: 30000 });
   assert((await packCard(page, "search-verses").locator(".physical-pack-state").textContent()).includes("fixture-v2"), "invalid rollback changed the active pointer");
+  assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Plan rollback", exact: true }).count(), 0, "invalid rollback authority remained actionable");
+  const explicitRollbackFailureRecord = (await registryRecords(page)).find((record) => record.pack_id === "search-verses");
+  assert.equal(explicitRollbackFailureRecord.rollback, null);
+  assert.equal(explicitRollbackFailureRecord.rollback_cache, null);
+  const activeAfterRollbackFailure = await page.evaluate(async () => {
+    const service = await import(`./src/${"data-service.js"}?v=pr13-live-qa-20260711e`);
+    const manifest = await service.fetchJson("./data/search/manifest.json");
+    return { version: manifest.version, source: service.physicalDataSource("./data/search/manifest.json")?.runtime_source };
+  });
+  assert.deepEqual(activeAfterRollbackFailure, { version: 2, source: "managed_pack" });
   await assertReaderContextPreserved(page, lifecycleReaderContext, "invalid rollback rejection");
+
+  const seededInvalidRollbackCache = await seedCorruptRollbackClaim(page);
+  await delayNextStartupVerification(page);
+  await page.reload({ waitUntil: "load" });
+  await waitReady(page);
+  await page.locator(".strong-token[data-strong-code]").first().click();
+  await page.waitForFunction(() => document.querySelector(".detail-pane")?.dataset.panelMode === "locked");
+  await openManager(page);
+  await page.waitForFunction(() => document.querySelector('.physical-pack-card[data-pack-id="search-verses"] .physical-pack-state')?.textContent.includes("State: startup verifying"));
+  assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Plan rollback", exact: true }).count(), 0);
+  await page.getByRole("button", { name: "Use bundled data", exact: true }).focus();
+  lifecycleReaderContext = await captureReaderContext(page, { prepare: true });
+  await page.waitForFunction(() => {
+    const card = document.querySelector('.physical-pack-card[data-pack-id="search-verses"]');
+    return card?.querySelector(".physical-pack-state")?.textContent.includes("State: active") &&
+      card?.querySelector(".physical-pack-failure")?.textContent.includes("Retained rollback copy was removed");
+  }, null, { timeout: 15000 });
+  assert.equal(await packCard(page, "search-verses").getByRole("button", { name: "Plan rollback", exact: true }).count(), 0, "lost rollback action returned after startup reconciliation");
+  assert((await packCard(page, "search-verses").locator(".physical-pack-runtime-source").textContent()).includes("verified managed pack"));
+  assert((await page.locator(".physical-pack-history").textContent()).includes("startup-reconcile failed"), "rollback-loss history did not update live");
+  assert(!(await page.evaluate(() => caches.keys())).includes(seededInvalidRollbackCache), "invalid rollback cache was not removed");
+  await assertReaderContextPreserved(page, lifecycleReaderContext, "live invalid-rollback reconciliation");
 
   await packCard(page, "commentary-verse-index").getByRole("button", { name: "Plan removal", exact: true }).scrollIntoViewIfNeeded();
   lifecycleReaderContext = await captureReaderContext(page);
@@ -595,10 +720,11 @@ try {
   console.log(JSON.stringify({
     browser: `Microsoft Edge ${browserVersion}`,
     fixtures: ["Search fixture-v1/v2", "Commentary fixture-v1"],
-    lifecycle: ["plan-cancel", "install", "activation", "reload", "offline-read", "missing-file-reconcile", "digest-reconcile", "byte-length-reconcile", "repair", "update", "valid-rollback-recovery", "invalid-rollback-rejection", "remove", "bundled-fallback"],
+    lifecycle: ["plan-cancel", "install", "activation", "delayed-startup-live-transition", "reload", "offline-read", "missing-file-reconcile", "digest-reconcile", "byte-length-reconcile", "repair", "update", "valid-rollback-recovery", "invalid-rollback-rejection", "invalid-rollback-live-loss", "remove", "bundled-fallback"],
     distribution: ["unrelated-bundled-capabilities", "managed-override", "strict-structured-states"],
     storage: ["visible-plan-estimate", "insufficient-before-staging", "unavailable-estimate-safe"],
     reader_context: ["route", "chapter", "selected-word-or-verse", "highlight", "reader-scroll", "detail-history", "detail-lock-follow", "detail-scroll"],
+    management_updates: ["startup-actions-suppressed", "mounted-node-only-event", "removed-node-no-update", "focus-preserved", "rollback-action-cleared"],
     accessibility: ["Escape focus restoration", "progress status", "light/dark", "reduced motion"],
     viewports: viewports.map(([width, height, label]) => ({ label, width, height })).concat([{ label: "mobile-device", width: 390, height: 844 }]),
     timings,

@@ -78,7 +78,9 @@ for:
 owns catalog refresh, dependency planning, verified staging, atomic activation,
 update, repair, retained rollback, removal, cleanup, startup reconciliation,
 and orphan-cache classification. Staging, active, and rollback data use
-separate immutable Cache Storage names.
+separate immutable Cache Storage names. Active and rollback claims are verified
+independently; invalid rollback metadata is removed without invalidating a
+verified active copy.
 
 The validated distribution manifest scopes physical requirements to
 `managed_optional_pack_ids`. Other shipped feature packs remain bundled in
@@ -96,6 +98,9 @@ My Data → Advanced diagnostics renders the management surface. It exposes
 mode, catalog, immutable version, expected/verified totals, provenance,
 operation history, progress, plan/confirmation, focus restoration, repair,
 rollback, removal, and cleanup without creating a new primary destination.
+Application snapshot events are dispatched only to currently mounted manager
+nodes, allowing asynchronous verification to update the open surface without a
+global view subscription or reader rerender.
 
 The detailed non-destructive implementation contract is
 `docs/OPTIONAL_PACK_ARCHITECTURE.md`; operational and UI behavior is summarized

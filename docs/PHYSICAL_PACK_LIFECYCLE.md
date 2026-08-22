@@ -79,7 +79,12 @@ active record after an interrupted install/update, and completes interrupted
 removal. Active claims enter `startup_verifying`, so managed resolution cannot
 use unverified bytes while full verification completes asynchronously. A
 verified rollback may recover an invalid active copy; an invalid rollback is
-never activated. Explicit cleanup handles remaining unreferenced pack caches.
+never activated. Active and rollback are independent physical authorities, so
+a valid active copy remains active when its optional rollback cache is missing
+or corrupt. Reconciliation clears invalid rollback metadata, records sanitized
+rollback-loss history, preserves catalog-driven `update_available`, and deletes
+or reports the invalid cache for cleanup. Explicit cleanup handles remaining
+unreferenced pack caches.
 
 ## Runtime behavior
 
@@ -119,6 +124,12 @@ scroll without rerendering the reader. Plans disclose usage, quota, approximate
 available storage, and required raw bytes. The surface uses existing light/dark
 and responsive visual tokens.
 
+An open manager receives scoped snapshot events only while its node is mounted.
+Cards move live from `startup_verifying` to their final truthful state without
+reopening My Data. Verify, update, repair, rollback, and removal are absent
+while startup hashing is incomplete; removed manager nodes receive no global
+events or retained subscriptions.
+
 ## Test fixtures and coverage
 
 `app/data/physical-pack-fixtures/` contains Search fixture-v1/v2 and Commentary
@@ -128,7 +139,8 @@ exercise dependency planning without hashing or copying the production corpus.
 `npm run test:physical-packs` covers contracts and the complete in-memory
 lifecycle. `npm run test:physical-packs:edge` uses Microsoft Edge and real
 IndexedDB/Cache Storage to cover plan/cancel, install, reload, offline reads,
-missing and modified byte reconciliation, repair, update, valid and invalid
-rollback recovery, removal, distribution-aware bundled fallback, strict
+missing and modified byte reconciliation, repair, update, independent active
+and rollback verification, delayed live startup transitions, invalid rollback
+authority removal, removal, distribution-aware bundled fallback, strict
 unavailable states, storage/quota behavior, full reader context, focus, themes,
 reduced motion, responsive/mobile containment, and browser/request health.
