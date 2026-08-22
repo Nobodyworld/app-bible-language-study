@@ -192,7 +192,10 @@ assert(
     /id="statusText" class="header-status" role="status" aria-live="polite"/.test(index) &&
     /id="compactStatusText"[^>]*aria-hidden="true"/.test(index) &&
     /status\.dataset\.statusState = statusState/.test(dom) &&
-    /compactStatus\.textContent = isLoaded \? "Loaded"/.test(dom),
+    /statusState = isError \? "error" : isLoading \? "loading" : isLoaded \? "loaded" : "message"/.test(dom) &&
+    /showCompactLoaded = statusState === "loaded"/.test(dom) &&
+    /compactStatus\.textContent = showCompactLoaded \? "Loaded"/.test(dom) &&
+    /compactStatus\.hidden = !showCompactLoaded/.test(dom),
   "The mobile loaded indicator must mirror one real status live region without duplicate announcements.",
 );
 assert(
@@ -229,11 +232,14 @@ assert(
   "Opening reader pickers must reveal the active option inside only its intended scroller.",
 );
 assert(
-  /function positionPickerPanel\(button, panel\)/.test(pickerFlow) &&
+    /function positionPickerPanel\(button, panel\)/.test(pickerFlow) &&
     /PICKER_VIEWPORT_MARGIN = 10/.test(pickerFlow) &&
+    /panel\.style\.removeProperty\("width"\);\s+const naturalRect = panel\.getBoundingClientRect\(\)/.test(pickerFlow) &&
+    /activePickerContext = \{ buttonId: button\.id, snapshot \}/.test(pickerFlow) &&
+    /activePickerContext\?\.buttonId === button\.id[\s\S]*?activePickerContext\.snapshot[\s\S]*?settleOpenPicker\(button, panel, snapshot\)/.test(pickerFlow) &&
     /viewportWidth - PICKER_VIEWPORT_MARGIN - width/.test(pickerFlow) &&
     /dataset\.placement = placeAbove \? "above" : "below"/.test(pickerFlow) &&
-    /window\.addEventListener\([\s\S]*?"resize"[\s\S]*?settleOpenPicker\(button, panel\)/.test(pickerFlow) &&
+    /window\.addEventListener\([\s\S]*?"resize"[\s\S]*?settleOpenPicker\(button, panel, snapshot\)/.test(pickerFlow) &&
     /\.reader-picker-panel\[data-positioned="true"\]/.test(css),
   "Reader picker panels must be measured, shifted, height-constrained, and repositioned within the viewport.",
 );

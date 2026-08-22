@@ -53,13 +53,14 @@ export function setStatus(text) {
   const isLoaded = /\bdata loaded\b/i.test(value);
   const isLoading = /\bloading\b/i.test(value);
   const isError = /\b(?:failed|error|warning|could not|unavailable)\b/i.test(value);
-  const statusState = isLoaded ? "loaded" : isLoading ? "loading" : isError ? "error" : "message";
+  const statusState = isError ? "error" : isLoading ? "loading" : isLoaded ? "loaded" : "message";
+  const showCompactLoaded = statusState === "loaded";
 
   els.status.textContent = value;
   els.status.dataset.statusState = statusState;
   if (els.compactStatus) {
-    els.compactStatus.textContent = isLoaded ? "Loaded" : "";
-    els.compactStatus.hidden = !isLoaded;
+    els.compactStatus.textContent = showCompactLoaded ? "Loaded" : "";
+    els.compactStatus.hidden = !showCompactLoaded;
   }
 }
 

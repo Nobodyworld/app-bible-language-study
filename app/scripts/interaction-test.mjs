@@ -14,6 +14,7 @@ const qaDevice =
   cliArgs.includes("--mobile") || process.env.OPENBIBLE_QA_DEVICE === "mobile" ? "mobile" : "desktop";
 const customTagLabel = `QA Custom ${Date.now()}`;
 const customTagEditedLabel = `${customTagLabel} Edited`;
+const qaEvidence = {};
 
 function debugQa(message) {
   if (process.env.OPENBIBLE_QA_DEBUG === "1") {
@@ -146,6 +147,9 @@ async function launchBrowser() {
     },
     async emulateMedia(options) {
       await playwrightPage.emulateMedia(options);
+    },
+    async setViewportSize(viewport) {
+      await playwrightPage.setViewportSize(viewport);
     },
     async browserHealth() {
       return structuredClone(browserHealth);
@@ -572,37 +576,74 @@ async function runQa(page) {
     })()`,
   );
   assert(Math.abs(stickyHeaderState.top) <= 1, `reader header must remain sticky: ${JSON.stringify(stickyHeaderState)}`);
-  const exceptionalStatusState = await evaluate(
+  const statusMatrix = await evaluate(
     page,
     `(async () => {
+      const domModuleUrl = new URL('./src/dom.js?v=pr13-live-qa-20260711e', document.baseURI).href;
+      const { setStatus } = await import(domModuleUrl);
       const status = document.querySelector('#statusText');
       const compact = document.querySelector('#compactStatusText');
-      const original = { text: status.textContent, state: status.dataset.statusState, compactText: compact.textContent, compactHidden: compact.hidden };
-      const snapshot = () => {
+      const originalText = status.textContent;
+      const snapshot = (name) => {
         const bounds = status.getBoundingClientRect();
-        return { width: bounds.width, height: bounds.height, text: status.textContent, state: status.dataset.statusState };
+        return {
+          name,
+          width: bounds.width,
+          height: bounds.height,
+          right: bounds.right,
+          text: status.textContent,
+          state: status.dataset.statusState,
+          compactText: compact.textContent.trim(),
+          compactHidden: compact.hidden,
+          compactAriaHidden: compact.getAttribute('aria-hidden'),
+          liveRegionCount: document.querySelectorAll('[role="status"][aria-live]').length,
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+          headerHeight: document.querySelector('.app-header')?.getBoundingClientRect().height || 0,
+          viewportWidth: innerWidth
+        };
       };
-      status.textContent = 'Loading selected translation data...';
-      status.dataset.statusState = 'loading';
-      compact.hidden = true;
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-      const loading = snapshot();
-      status.textContent = 'Reader data could not be loaded. Try again when the files are available.';
-      status.dataset.statusState = 'error';
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-      const error = snapshot();
-      status.textContent = original.text;
-      status.dataset.statusState = original.state;
-      compact.textContent = original.compactText;
-      compact.hidden = original.compactHidden;
-      return { loading, error, viewportWidth: innerWidth };
+      const cases = [
+        ['loaded', 'BSB data loaded'],
+        ['loading', 'Loading book data...'],
+        ['failed', 'Data load failed'],
+        ['warning', 'BSB data loaded with warning: optional data unavailable'],
+        ['message', 'Home']
+      ];
+      const results = [];
+      for (const [name, message] of cases) {
+        setStatus(message);
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        results.push(snapshot(name));
+      }
+      setStatus(originalText);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return { results, restored: snapshot('restored') };
     })()`,
   );
+  qaEvidence.statusMatrix = statusMatrix;
+  const expectedStatusStates = {
+    loaded: "loaded",
+    loading: "loading",
+    failed: "error",
+    warning: "error",
+    message: "message",
+  };
   assert(
-    exceptionalStatusState.loading.width > 1 && exceptionalStatusState.loading.height > 1 &&
-      exceptionalStatusState.error.width > 1 && exceptionalStatusState.error.height > 1 &&
-      exceptionalStatusState.error.width <= exceptionalStatusState.viewportWidth,
-    `loading and error status must remain visible and contained: ${JSON.stringify(exceptionalStatusState)}`,
+    statusMatrix.results.every((result) =>
+      result.state === expectedStatusStates[result.name] &&
+      result.liveRegionCount === 1 &&
+      result.compactAriaHidden === "true" &&
+      result.compactHidden === (result.name !== "loaded") &&
+      result.compactText === (result.name === "loaded" ? "Loaded" : "") &&
+      (result.name === "loaded" || (result.width > 1 && result.height > 1)) &&
+      result.right <= result.viewportWidth + 0.5 &&
+      result.scrollWidth <= result.clientWidth + 1,
+    ) &&
+      statusMatrix.restored.state === "loaded" &&
+      !statusMatrix.restored.compactHidden &&
+      Math.abs(statusMatrix.restored.headerHeight - readerTopContract.header.height) <= 1,
+    `setStatus classification, announcement, containment, and restoration failed: ${JSON.stringify(statusMatrix)}`,
   );
   await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "none" });
   const reducedMotionTopState = await evaluate(
@@ -742,6 +783,113 @@ async function runQa(page) {
       return true;
     })()`,
   );
+  const measurePicker = (kind) =>
+    evaluate(
+      page,
+      `(() => {
+        const panel = document.querySelector('#${kind}PickerPanel');
+        const active = panel?.querySelector('.reader-picker-option.active');
+        const scroller = active?.closest('.book-picker-list, .chapter-picker-grid') || panel;
+        const panelRect = panel?.getBoundingClientRect();
+        const activeRect = active?.getBoundingClientRect();
+        const scrollerRect = scroller?.getBoundingClientRect();
+        const columnTarget = ${JSON.stringify(kind)} === 'book'
+          ? panel
+          : panel?.querySelector('.chapter-picker-grid');
+        const gridTemplateColumns = columnTarget ? getComputedStyle(columnTarget).gridTemplateColumns : '';
+        return {
+          width: panelRect?.width || 0,
+          inlineWidth: panel?.style.width || '',
+          left: panelRect?.left || 0,
+          right: panelRect?.right || 0,
+          viewportWidth: innerWidth,
+          columns: gridTemplateColumns.split(' ').filter(Boolean).length,
+          gridTemplateColumns,
+          activeVisible: Boolean(
+            activeRect && scrollerRect &&
+            activeRect.top >= scrollerRect.top - .5 &&
+            activeRect.bottom <= scrollerRect.bottom + .5
+          ),
+          context: window.__readerTopPickerContext()
+        };
+      })()`,
+    );
+  if (qaDevice !== "mobile") {
+    const contextBeforeResize = await evaluate(page, "window.__readerTopPickerContext()");
+    const openPicker = async (kind) => {
+      await evaluate(page, `document.querySelector('#${kind}PickerButton').click()`);
+      await waitFor(page, `document.querySelector('#${kind}PickerPanel')?.hidden === false`);
+      await delay(450);
+    };
+    const closePicker = async (kind) => {
+      await page.press(`#${kind}PickerButton`, "Escape");
+      await waitFor(page, `document.querySelector('#${kind}PickerPanel')?.hidden === true`);
+    };
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openPicker("book");
+    const bookWideBefore = await measurePicker("book");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await delay(450);
+    const bookNarrow = await measurePicker("book");
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await delay(450);
+    const bookWideAfter = await measurePicker("book");
+    await closePicker("book");
+    await openPicker("book");
+    const bookWideReopened = await measurePicker("book");
+    await closePicker("book");
+    assert(
+      bookWideBefore.width >= 500 && bookWideBefore.columns === 2 &&
+        bookNarrow.width <= 370.5 && bookNarrow.columns === 1 &&
+        bookNarrow.left >= 8 && bookNarrow.right <= bookNarrow.viewportWidth - 8 &&
+        bookWideAfter.width >= bookWideBefore.width - 1 && bookWideAfter.columns === 2 &&
+        bookWideAfter.width > bookNarrow.width + 100 &&
+        bookWideReopened.width >= bookWideBefore.width - 1 && bookWideReopened.columns === 2 &&
+        [bookWideBefore, bookNarrow, bookWideAfter, bookWideReopened].every(
+          (state) => state.activeVisible && state.context === contextBeforeResize,
+        ),
+      `Book picker natural width must recover across one live wide-narrow-wide page: ${JSON.stringify({
+        bookWideBefore,
+        bookNarrow,
+        bookWideAfter,
+        bookWideReopened,
+      })}`,
+    );
+
+    await openPicker("chapter");
+    const chapterWideBefore = await measurePicker("chapter");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await delay(450);
+    const chapterNarrow = await measurePicker("chapter");
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await delay(450);
+    const chapterWideAfter = await measurePicker("chapter");
+    await closePicker("chapter");
+    await openPicker("chapter");
+    const chapterWideReopened = await measurePicker("chapter");
+    await closePicker("chapter");
+    assert(
+      chapterWideBefore.width > 0 && chapterNarrow.width > 0 &&
+        chapterNarrow.left >= 8 && chapterNarrow.right <= chapterNarrow.viewportWidth - 8 &&
+        Math.abs(chapterWideAfter.width - chapterWideBefore.width) <= 1 &&
+        Math.abs(chapterWideReopened.width - chapterWideBefore.width) <= 1 &&
+        [chapterWideBefore, chapterNarrow, chapterWideAfter, chapterWideReopened].every(
+          (state) => state.activeVisible && state.context === contextBeforeResize,
+        ),
+      `Chapter picker natural width must recover across one live wide-narrow-wide page: ${JSON.stringify({
+        chapterWideBefore,
+        chapterNarrow,
+        chapterWideAfter,
+        chapterWideReopened,
+      })}`,
+    );
+    qaEvidence.readerPickerResize = {
+      book: { wideBefore: bookWideBefore, narrow: bookNarrow, wideAfter: bookWideAfter, wideReopened: bookWideReopened },
+      chapter: { wideBefore: chapterWideBefore, narrow: chapterNarrow, wideAfter: chapterWideAfter, wideReopened: chapterWideReopened },
+    };
+    pass("live wide-narrow-wide picker natural-width restoration");
+  }
   for (const kind of ["book", "chapter"]) {
     const buttonSelector = `#${kind}PickerButton`;
     const panelSelector = `#${kind}PickerPanel`;
@@ -2448,6 +2596,7 @@ try {
         device: qaDevice,
         checks,
         checkCount: checks.length,
+        evidence: qaEvidence,
       },
       null,
       2,

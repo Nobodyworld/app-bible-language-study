@@ -41,6 +41,7 @@ let frozenReaderContext = null;
 let frozenHighlightObserver = null;
 let pendingPickerContext = null;
 let pickerScrollAnchorState = null;
+let activePickerContext = null;
 
 function afterPickerPaint(callback) {
   window.requestAnimationFrame(() => {
@@ -183,6 +184,7 @@ function positionPickerPanel(button, panel) {
   panel.style.setProperty("--reader-picker-available-height", `${availableHeight}px`);
   panel.style.left = "0px";
   panel.style.top = "0px";
+  panel.style.removeProperty("width");
 
   const naturalRect = panel.getBoundingClientRect();
   const width = Math.min(naturalRect.width, maxWidth);
@@ -204,6 +206,8 @@ function positionPickerPanel(button, panel) {
 }
 
 function settleOpenPicker(button, panel, snapshot = capturePickerContext()) {
+  if (!button || !panel || panel.hidden || button.getAttribute("aria-expanded") !== "true") return;
+  activePickerContext = { buttonId: button.id, snapshot };
   let remainingFrames = PICKER_SETTLE_FRAME_COUNT;
   const contextSettleStartedAt = window.performance.now();
   suspendPickerScrollAnchoring();
@@ -497,7 +501,11 @@ window.addEventListener(
     ];
     pairs.forEach(([button, panel]) => {
       if (button?.getAttribute("aria-expanded") === "true" && panel && !panel.hidden) {
-        settleOpenPicker(button, panel);
+        const snapshot =
+          activePickerContext?.buttonId === button.id
+            ? activePickerContext.snapshot
+            : capturePickerContext();
+        settleOpenPicker(button, panel, snapshot);
       }
     });
   },
