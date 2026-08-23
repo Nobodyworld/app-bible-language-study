@@ -14,6 +14,7 @@ const qaDevice =
   cliArgs.includes("--mobile") || process.env.OPENBIBLE_QA_DEVICE === "mobile" ? "mobile" : "desktop";
 const customTagLabel = `QA Custom ${Date.now()}`;
 const customTagEditedLabel = `${customTagLabel} Edited`;
+const qaEvidence = {};
 
 function debugQa(message) {
   if (process.env.OPENBIBLE_QA_DEBUG === "1") {
@@ -114,6 +115,26 @@ async function launchBrowser() {
       : undefined,
   });
   const playwrightPage = await context.newPage();
+  const browserHealth = {
+    consoleErrors: [],
+    pageErrors: [],
+    failedRequests: [],
+    errorResponses: [],
+  };
+  playwrightPage.on("console", (message) => {
+    if (message.type() === "error") browserHealth.consoleErrors.push(message.text());
+  });
+  playwrightPage.on("pageerror", (error) => browserHealth.pageErrors.push(error?.message || String(error)));
+  playwrightPage.on("requestfailed", (request) => {
+    browserHealth.failedRequests.push(`${request.method()} ${request.url()}: ${request.failure()?.errorText || "failed"}`);
+  });
+  playwrightPage.on("response", (response) => {
+    if (response.status() < 400) return;
+    const url = new URL(response.url());
+    if (url.hostname === "127.0.0.1" || url.hostname === "localhost") {
+      browserHealth.errorResponses.push(`${response.status()} ${response.request().method()} ${response.url()}`);
+    }
+  });
   const page = {
     async waitForDownload() {
       return playwrightPage.waitForEvent("download");
@@ -123,6 +144,15 @@ async function launchBrowser() {
     },
     async tap(selector) {
       await playwrightPage.locator(selector).tap();
+    },
+    async emulateMedia(options) {
+      await playwrightPage.emulateMedia(options);
+    },
+    async setViewportSize(viewport) {
+      await playwrightPage.setViewportSize(viewport);
+    },
+    async browserHealth() {
+      return structuredClone(browserHealth);
     },
     async send(method, params = {}) {
       if (method === "Page.enable" || method === "Runtime.enable") return {};
@@ -455,6 +485,210 @@ async function runQa(page) {
     ),
     "Outline and Language Study controls must live in the reader header",
   );
+  const readerTopContract = await evaluate(
+    page,
+    `(() => {
+      const rect = (selector) => document.querySelector(selector)?.getBoundingClientRect();
+      const visibleSelects = [...document.querySelectorAll('.reader-controls select')]
+        .filter((node) => {
+          const style = getComputedStyle(node);
+          const bounds = node.getBoundingClientRect();
+          return !node.hidden && style.display !== 'none' && bounds.width > 0 && bounds.height > 0;
+        })
+        .map((node) => node.id);
+      const targetSelectors = [
+        '#homeButton', '#themeToggle', '#translationSelect', '#bookPickerButton', '#chapterPickerButton',
+        '#prevChapter', '#nextChapter', '#showSearch', '#openStudyPanel', '#showInterlinear',
+        '#showOutline', '#showTags', '#showMyData'
+      ];
+      const targets = Object.fromEntries(targetSelectors.map((selector) => {
+        const bounds = rect(selector);
+        return [selector, bounds ? { width: bounds.width, height: bounds.height, top: bounds.top } : null];
+      }));
+      const header = rect('.app-header');
+      const firstScripture = document.querySelector('#chapterContent')?.firstElementChild?.getBoundingClientRect();
+      const navTops = ['#translationSelect', '#bookPickerButton', '#chapterPickerButton']
+        .map((selector) => rect(selector)?.top)
+        .filter((value) => Number.isFinite(value));
+      return {
+        header: header ? { top: header.top, height: header.height } : null,
+        firstScriptureTop: firstScripture?.top ?? null,
+        visibleSelects,
+        hiddenBookSelect: document.querySelector('#bookSelect')?.hidden === true &&
+          document.querySelector('#bookSelect')?.getAttribute('aria-hidden') === 'true' &&
+          document.querySelector('#bookSelect')?.tabIndex === -1,
+        hiddenChapterSelect: document.querySelector('#chapterSelect')?.hidden === true &&
+          document.querySelector('#chapterSelect')?.getAttribute('aria-hidden') === 'true' &&
+          document.querySelector('#chapterSelect')?.tabIndex === -1,
+        bookName: document.querySelector('#bookPickerButton')?.getAttribute('aria-label') || '',
+        chapterName: document.querySelector('#chapterPickerButton')?.getAttribute('aria-label') || '',
+        liveStatusCount: document.querySelectorAll('#statusText[role="status"][aria-live]').length,
+        compactStatus: {
+          text: document.querySelector('#compactStatusText')?.textContent.trim() || '',
+          hidden: Boolean(document.querySelector('#compactStatusText')?.hidden),
+          ariaHidden: document.querySelector('#compactStatusText')?.getAttribute('aria-hidden')
+        },
+        navTopSpread: navTops.length ? Math.max(...navTops) - Math.min(...navTops) : null,
+        targets,
+        scrollWidth: document.documentElement.scrollWidth,
+        clientWidth: document.documentElement.clientWidth
+      };
+    })()`,
+  );
+  assert(
+    JSON.stringify(readerTopContract.visibleSelects) === JSON.stringify(["translationSelect"]) &&
+      readerTopContract.hiddenBookSelect &&
+      readerTopContract.hiddenChapterSelect,
+    `only Translation may remain an exposed native selector: ${JSON.stringify(readerTopContract)}`,
+  );
+  assert(
+    readerTopContract.bookName === "Book: Psalms" && readerTopContract.chapterName === "Chapter: 23",
+    `visible picker names must include purpose and value: ${JSON.stringify(readerTopContract)}`,
+  );
+  assert(
+    readerTopContract.liveStatusCount === 1 &&
+      readerTopContract.compactStatus.text === "Loaded" &&
+      !readerTopContract.compactStatus.hidden &&
+      readerTopContract.compactStatus.ariaHidden === "true",
+    `loaded state must keep one live region and one non-live compact mirror: ${JSON.stringify(readerTopContract)}`,
+  );
+  if (qaDevice === "mobile") {
+    const undersizedTargets = Object.entries(readerTopContract.targets)
+      .filter(([, bounds]) => !bounds || bounds.height < 43.5)
+      .map(([selector]) => selector);
+    assert(readerTopContract.header?.height <= 150, `mobile app header is too tall: ${JSON.stringify(readerTopContract)}`);
+    assert(readerTopContract.firstScriptureTop <= 400.5, `mobile scripture begins too low: ${JSON.stringify(readerTopContract)}`);
+    assert(readerTopContract.navTopSpread <= 1, `mobile reader navigation is not one aligned row: ${JSON.stringify(readerTopContract)}`);
+    assert(
+      undersizedTargets.length === 0,
+      `mobile reader controls must retain 44px targets: ${JSON.stringify({ undersizedTargets, targets: readerTopContract.targets })}`,
+    );
+    assert(readerTopContract.scrollWidth <= readerTopContract.clientWidth + 1, "mobile top area has horizontal overflow");
+  }
+  const stickyHeaderState = await evaluate(
+    page,
+    `(() => {
+      const before = scrollY;
+      window.scrollTo(0, Math.min(240, document.documentElement.scrollHeight - innerHeight));
+      const top = document.querySelector('.app-header')?.getBoundingClientRect().top;
+      window.scrollTo(0, before);
+      return { top };
+    })()`,
+  );
+  assert(Math.abs(stickyHeaderState.top) <= 1, `reader header must remain sticky: ${JSON.stringify(stickyHeaderState)}`);
+  const statusMatrix = await evaluate(
+    page,
+    `(async () => {
+      const domModuleUrl = new URL('./src/dom.js?v=pr13-live-qa-20260711e', document.baseURI).href;
+      const { setStatus } = await import(domModuleUrl);
+      const status = document.querySelector('#statusText');
+      const compact = document.querySelector('#compactStatusText');
+      const originalText = status.textContent;
+      const snapshot = (name) => {
+        const bounds = status.getBoundingClientRect();
+        return {
+          name,
+          width: bounds.width,
+          height: bounds.height,
+          right: bounds.right,
+          text: status.textContent,
+          state: status.dataset.statusState,
+          compactText: compact.textContent.trim(),
+          compactHidden: compact.hidden,
+          compactAriaHidden: compact.getAttribute('aria-hidden'),
+          liveRegionCount: document.querySelectorAll('[role="status"][aria-live]').length,
+          scrollWidth: document.documentElement.scrollWidth,
+          clientWidth: document.documentElement.clientWidth,
+          headerHeight: document.querySelector('.app-header')?.getBoundingClientRect().height || 0,
+          viewportWidth: innerWidth
+        };
+      };
+      const cases = [
+        ['loaded', 'BSB data loaded'],
+        ['loading', 'Loading book data...'],
+        ['failed', 'Data load failed'],
+        ['warning', 'BSB data loaded with warning: optional data unavailable'],
+        ['message', 'Home']
+      ];
+      const results = [];
+      for (const [name, message] of cases) {
+        setStatus(message);
+        await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+        results.push(snapshot(name));
+      }
+      setStatus(originalText);
+      await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+      return { results, restored: snapshot('restored') };
+    })()`,
+  );
+  qaEvidence.statusMatrix = statusMatrix;
+  const expectedStatusStates = {
+    loaded: "loaded",
+    loading: "loading",
+    failed: "error",
+    warning: "error",
+    message: "message",
+  };
+  assert(
+    statusMatrix.results.every((result) =>
+      result.state === expectedStatusStates[result.name] &&
+      result.liveRegionCount === 1 &&
+      result.compactAriaHidden === "true" &&
+      result.compactHidden === (result.name !== "loaded") &&
+      result.compactText === (result.name === "loaded" ? "Loaded" : "") &&
+      (result.name === "loaded" || (result.width > 1 && result.height > 1)) &&
+      result.right <= result.viewportWidth + 0.5 &&
+      result.scrollWidth <= result.clientWidth + 1,
+    ) &&
+      statusMatrix.restored.state === "loaded" &&
+      !statusMatrix.restored.compactHidden &&
+      Math.abs(statusMatrix.restored.headerHeight - readerTopContract.header.height) <= 1,
+    `setStatus classification, announcement, containment, and restoration failed: ${JSON.stringify(statusMatrix)}`,
+  );
+  await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "none" });
+  const reducedMotionTopState = await evaluate(
+    page,
+    `(() => {
+      const button = document.querySelector('#bookPickerButton');
+      const bounds = button.getBoundingClientRect();
+      return {
+        matches: matchMedia('(prefers-reduced-motion: reduce)').matches,
+        transitionDuration: getComputedStyle(button).transitionDuration,
+        width: bounds.width,
+        height: bounds.height
+      };
+    })()`,
+  );
+  assert(
+    reducedMotionTopState.matches && reducedMotionTopState.width > 0 && reducedMotionTopState.height >= 36 &&
+      reducedMotionTopState.transitionDuration.split(",").every((value) => parseFloat(value) <= 0.01),
+    `reduced-motion reader controls must remain operable without material transitions: ${JSON.stringify(reducedMotionTopState)}`,
+  );
+  await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "active" });
+  const forcedColorsTopState = await evaluate(
+    page,
+    `(() => {
+      const selectors = ['#translationSelect', '#bookPickerButton', '#chapterPickerButton', '#themeToggle'];
+      return {
+        matches: matchMedia('(forced-colors: active)').matches,
+        controls: selectors.map((selector) => {
+          const node = document.querySelector(selector);
+          const bounds = node.getBoundingClientRect();
+          const style = getComputedStyle(node);
+          return { selector, width: bounds.width, height: bounds.height, borderStyle: style.borderTopStyle, color: style.color };
+        })
+      };
+    })()`,
+  );
+  assert(
+    forcedColorsTopState.matches && forcedColorsTopState.controls.every(
+      (control) => control.width > 0 && control.height >= 36 && control.borderStyle !== "none" && control.color,
+    ),
+    `forced-colors reader controls must remain visible and operable: ${JSON.stringify(forcedColorsTopState)}`,
+  );
+  await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "none" });
+  pass("reduced motion and forced colors reader top area");
+  pass("compact reader header semantics, status, targets, and sticky geometry");
   await click(page, "#chapterPickerButton");
   await waitFor(page, "!document.querySelector('#chapterPickerPanel')?.hidden");
   const chapterPickerState = await evaluate(
@@ -494,7 +728,228 @@ async function runQa(page) {
       bookPickerState.scrollableColumns >= 1,
     `book picker should expose two scrollable testament columns: ${JSON.stringify(bookPickerState)}`,
   );
+  await clickButtonByText(page, "Proverbs", { scope: "#bookPickerPanel" });
+  await waitFor(
+    page,
+    "location.hash.includes('/read/bsb/proverbs/1') && document.querySelector('#chapterPickerButton')?.getAttribute('aria-expanded') === 'true'",
+  );
+  const bookToChapterState = await evaluate(
+    page,
+    `(() => ({
+      book: document.querySelector('#bookSelect')?.value,
+      chapter: document.querySelector('#chapterSelect')?.value,
+      chapterName: document.querySelector('#chapterPickerButton')?.getAttribute('aria-label'),
+      focused: document.activeElement === document.querySelector('#chapterPickerButton')
+    }))()`,
+  );
+  assert(
+    bookToChapterState.book === "proverbs" && bookToChapterState.chapter === "1" &&
+      bookToChapterState.chapterName === "Chapter: 1" && bookToChapterState.focused,
+    `Book selection must hand off to the synchronized Chapter picker: ${JSON.stringify(bookToChapterState)}`,
+  );
+  await page.press("#chapterPickerButton", "Escape");
   await click(page, "#bookPickerButton");
+  await clickButtonByText(page, "Psalms", { scope: "#bookPickerPanel" });
+  await waitFor(
+    page,
+    "document.querySelector('#bookSelect')?.value === 'psalms' && document.querySelector('#chapterPickerButton')?.getAttribute('aria-expanded') === 'true'",
+  );
+  await clickButtonByText(page, "23", { scope: "#chapterPickerPanel" });
+  await waitFor(page, "document.querySelector('#chapterTitle')?.textContent.includes('Psalms 23')");
+  await click(page, ".strong-token");
+  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === \"Strong's\"");
+  await evaluate(page, "[...document.querySelectorAll('.strong-token')][1]?.click()");
+  await waitFor(page, "document.querySelector('#detailBack')?.disabled === false");
+  await evaluate(
+    page,
+    `(() => {
+      window.scrollTo(0, Math.min(240, document.documentElement.scrollHeight - innerHeight));
+      const chapter = document.querySelector('#chapterContent');
+      const detail = document.querySelector('#detailContent');
+      if (chapter) chapter.scrollTop = Math.min(80, chapter.scrollHeight - chapter.clientHeight);
+      if (detail) detail.scrollTop = Math.min(60, detail.scrollHeight - detail.clientHeight);
+      const snapshot = () => JSON.stringify({
+        route: location.href,
+        values: [document.querySelector('#translationSelect')?.value, document.querySelector('#bookSelect')?.value, document.querySelector('#chapterSelect')?.value],
+        pageScroll: scrollY,
+        chapterScroll: chapter?.scrollTop || 0,
+        detailScroll: detail?.scrollTop || 0,
+        detailTitle: document.querySelector('#detailTitle')?.textContent.trim() || '',
+        backDisabled: Boolean(document.querySelector('#detailBack')?.disabled),
+        forwardDisabled: Boolean(document.querySelector('#detailForward')?.disabled),
+        context: [...document.querySelectorAll('.reader-context-word, .reader-context-verse')].map((node) => [node.className, node.dataset.verse || '', node.dataset.strongCode || '', node.dataset.tokenIndex || ''])
+      });
+      window.__readerTopPickerContext = snapshot;
+      return true;
+    })()`,
+  );
+  const measurePicker = (kind) =>
+    evaluate(
+      page,
+      `(() => {
+        const panel = document.querySelector('#${kind}PickerPanel');
+        const active = panel?.querySelector('.reader-picker-option.active');
+        const scroller = active?.closest('.book-picker-list, .chapter-picker-grid') || panel;
+        const panelRect = panel?.getBoundingClientRect();
+        const activeRect = active?.getBoundingClientRect();
+        const scrollerRect = scroller?.getBoundingClientRect();
+        const columnTarget = ${JSON.stringify(kind)} === 'book'
+          ? panel
+          : panel?.querySelector('.chapter-picker-grid');
+        const gridTemplateColumns = columnTarget ? getComputedStyle(columnTarget).gridTemplateColumns : '';
+        return {
+          width: panelRect?.width || 0,
+          inlineWidth: panel?.style.width || '',
+          left: panelRect?.left || 0,
+          right: panelRect?.right || 0,
+          viewportWidth: innerWidth,
+          columns: gridTemplateColumns.split(' ').filter(Boolean).length,
+          gridTemplateColumns,
+          activeVisible: Boolean(
+            activeRect && scrollerRect &&
+            activeRect.top >= scrollerRect.top - .5 &&
+            activeRect.bottom <= scrollerRect.bottom + .5
+          ),
+          context: window.__readerTopPickerContext()
+        };
+      })()`,
+    );
+  if (qaDevice !== "mobile") {
+    const contextBeforeResize = await evaluate(page, "window.__readerTopPickerContext()");
+    const openPicker = async (kind) => {
+      await evaluate(page, `document.querySelector('#${kind}PickerButton').click()`);
+      await waitFor(page, `document.querySelector('#${kind}PickerPanel')?.hidden === false`);
+      await delay(450);
+    };
+    const closePicker = async (kind) => {
+      await page.press(`#${kind}PickerButton`, "Escape");
+      await waitFor(page, `document.querySelector('#${kind}PickerPanel')?.hidden === true`);
+    };
+
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await openPicker("book");
+    const bookWideBefore = await measurePicker("book");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await delay(450);
+    const bookNarrow = await measurePicker("book");
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await delay(450);
+    const bookWideAfter = await measurePicker("book");
+    await closePicker("book");
+    await openPicker("book");
+    const bookWideReopened = await measurePicker("book");
+    await closePicker("book");
+    assert(
+      bookWideBefore.width >= 500 && bookWideBefore.columns === 2 &&
+        bookNarrow.width <= 370.5 && bookNarrow.columns === 1 &&
+        bookNarrow.left >= 8 && bookNarrow.right <= bookNarrow.viewportWidth - 8 &&
+        bookWideAfter.width >= bookWideBefore.width - 1 && bookWideAfter.columns === 2 &&
+        bookWideAfter.width > bookNarrow.width + 100 &&
+        bookWideReopened.width >= bookWideBefore.width - 1 && bookWideReopened.columns === 2 &&
+        [bookWideBefore, bookNarrow, bookWideAfter, bookWideReopened].every(
+          (state) => state.activeVisible && state.context === contextBeforeResize,
+        ),
+      `Book picker natural width must recover across one live wide-narrow-wide page: ${JSON.stringify({
+        bookWideBefore,
+        bookNarrow,
+        bookWideAfter,
+        bookWideReopened,
+      })}`,
+    );
+
+    await openPicker("chapter");
+    const chapterWideBefore = await measurePicker("chapter");
+    await page.setViewportSize({ width: 390, height: 844 });
+    await delay(450);
+    const chapterNarrow = await measurePicker("chapter");
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await delay(450);
+    const chapterWideAfter = await measurePicker("chapter");
+    await closePicker("chapter");
+    await openPicker("chapter");
+    const chapterWideReopened = await measurePicker("chapter");
+    await closePicker("chapter");
+    assert(
+      chapterWideBefore.width > 0 && chapterNarrow.width > 0 &&
+        chapterNarrow.left >= 8 && chapterNarrow.right <= chapterNarrow.viewportWidth - 8 &&
+        Math.abs(chapterWideAfter.width - chapterWideBefore.width) <= 1 &&
+        Math.abs(chapterWideReopened.width - chapterWideBefore.width) <= 1 &&
+        [chapterWideBefore, chapterNarrow, chapterWideAfter, chapterWideReopened].every(
+          (state) => state.activeVisible && state.context === contextBeforeResize,
+        ),
+      `Chapter picker natural width must recover across one live wide-narrow-wide page: ${JSON.stringify({
+        chapterWideBefore,
+        chapterNarrow,
+        chapterWideAfter,
+        chapterWideReopened,
+      })}`,
+    );
+    qaEvidence.readerPickerResize = {
+      book: { wideBefore: bookWideBefore, narrow: bookNarrow, wideAfter: bookWideAfter, wideReopened: bookWideReopened },
+      chapter: { wideBefore: chapterWideBefore, narrow: chapterNarrow, wideAfter: chapterWideAfter, wideReopened: chapterWideReopened },
+    };
+    pass("live wide-narrow-wide picker natural-width restoration");
+  }
+  for (const kind of ["book", "chapter"]) {
+    const buttonSelector = `#${kind}PickerButton`;
+    const panelSelector = `#${kind}PickerPanel`;
+    await evaluate(
+      page,
+      `(() => {
+        const button = document.querySelector(${JSON.stringify(buttonSelector)});
+        button.focus({ preventScroll: true });
+        return true;
+      })()`,
+    );
+    const pickerContextBeforeOpen = await evaluate(page, "window.__readerTopPickerContext()");
+    await evaluate(page, `document.querySelector(${JSON.stringify(buttonSelector)}).click()`);
+    await waitFor(page, `document.querySelector(${JSON.stringify(panelSelector)})?.hidden === false`);
+    await delay(250);
+    const openPickerState = await evaluate(
+      page,
+      `(() => {
+        const panel = document.querySelector(${JSON.stringify(panelSelector)});
+        const active = panel?.querySelector('.reader-picker-option.active');
+        const scroller = active?.closest('.book-picker-list, .chapter-picker-grid') || panel;
+        const panelRect = panel?.getBoundingClientRect();
+        const activeRect = active?.getBoundingClientRect();
+        const scrollerRect = scroller?.getBoundingClientRect();
+        return {
+          positioned: panel?.dataset.positioned,
+          panel: panelRect && { left: panelRect.left, top: panelRect.top, right: panelRect.right, bottom: panelRect.bottom },
+          viewport: { width: innerWidth, height: innerHeight },
+          activeVisible: Boolean(activeRect && scrollerRect && activeRect.top >= scrollerRect.top - .5 && activeRect.bottom <= scrollerRect.bottom + .5),
+          context: window.__readerTopPickerContext()
+        };
+      })()`,
+    );
+    assert(
+      openPickerState.positioned === "true" &&
+        openPickerState.panel.left >= 8 && openPickerState.panel.top >= 8 &&
+        openPickerState.panel.right <= openPickerState.viewport.width - 8 &&
+        openPickerState.panel.bottom <= openPickerState.viewport.height - 8 &&
+        openPickerState.activeVisible,
+      `${kind} picker must be viewport-bounded with its active option visible: ${JSON.stringify(openPickerState)}`,
+    );
+    assert(
+      openPickerState.context === pickerContextBeforeOpen,
+      `${kind} picker mutated reader context while opening: ${JSON.stringify({ before: pickerContextBeforeOpen, after: openPickerState.context })}`,
+    );
+    await page.press(buttonSelector, "Escape");
+    const closedPickerState = await evaluate(
+      page,
+      `({
+        expanded: document.querySelector(${JSON.stringify(buttonSelector)})?.getAttribute('aria-expanded'),
+        focused: document.activeElement === document.querySelector(${JSON.stringify(buttonSelector)}),
+        context: window.__readerTopPickerContext()
+      })`,
+    );
+    assert(
+      closedPickerState.expanded === "false" && closedPickerState.focused && closedPickerState.context === pickerContextBeforeOpen,
+      `${kind} picker Escape must restore focus without mutating reader context: ${JSON.stringify(closedPickerState)}`,
+    );
+  }
+  pass("stable viewport-bounded reader pickers and Book-to-Chapter flow");
   pass("initial Psalm 23 render");
   assert(
     await evaluate(
@@ -2100,6 +2555,27 @@ async function runQa(page) {
 
   state = await getQaState(page);
   assert(state.consoleErrors.length === 0, `page errors found: ${state.consoleErrors.join("; ")}`);
+  const finalBrowserHealth = await page.browserHealth();
+  assert(
+    finalBrowserHealth.consoleErrors.length === 0 &&
+      finalBrowserHealth.pageErrors.length === 0 &&
+      finalBrowserHealth.failedRequests.length === 0 &&
+      finalBrowserHealth.errorResponses.length === 0,
+    `browser health failures found: ${JSON.stringify(finalBrowserHealth)}`,
+  );
+  const finalLoadingState = await evaluate(
+    page,
+    `(() => ({
+      status: document.querySelector('#statusText')?.textContent.trim() || '',
+      busy: [...document.querySelectorAll('[aria-busy="true"]')]
+        .filter((node) => !node.hidden && getComputedStyle(node).display !== 'none').length
+    }))()`,
+  );
+  assert(
+    !/loading/i.test(finalLoadingState.status) && finalLoadingState.busy === 0,
+    `browser left a stale loading state: ${JSON.stringify(finalLoadingState)}`,
+  );
+  pass("console, page, request, and loading-state health");
   return checks;
 }
 
@@ -2120,6 +2596,7 @@ try {
         device: qaDevice,
         checks,
         checkCount: checks.length,
+        evidence: qaEvidence,
       },
       null,
       2,

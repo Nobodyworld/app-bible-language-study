@@ -3,10 +3,11 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [index, css, runtime, contextTabs] = await Promise.all([
+const [index, css, runtime, pickerFlow, contextTabs] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
   readFile(new URL("../app/styles-portrait.css", import.meta.url), "utf8"),
   readFile(new URL("../app/src/portrait-workspace.js", import.meta.url), "utf8"),
+  readFile(new URL("../app/src/reader-picker-flow.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8"),
 ]);
 
@@ -119,10 +120,12 @@ assert(
   "Portrait book columns must remain separately scrollable and viewport-contained.",
 );
 assert(
-  /centerActiveOption/.test(runtime) &&
-    /active\.offsetTop/.test(runtime) &&
-    !/scrollIntoView/.test(runtime),
-  "Portrait picker correction must center within the intended scroller without broad scrollIntoView behavior.",
+  /function revealActivePickerOption\(panel\)/.test(pickerFlow) &&
+    /activeOptionScroller\(panel\)/.test(pickerFlow) &&
+    /scroller\.scrollTop = Math\.max/.test(pickerFlow) &&
+    !/scrollIntoView/.test(pickerFlow) &&
+    !/centerActiveOption|settlePicker/.test(runtime),
+  "Reader picker correction must have one owner and center only within the intended scroller.",
 );
 assert(
   /@media\s*\(max-width:\s*768px\)[\s\S]*?\.study-workspace-width-controls,[\s\S]*?display:\s*none !important;/.test(css),

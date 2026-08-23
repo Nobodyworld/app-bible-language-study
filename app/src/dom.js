@@ -4,6 +4,7 @@ import { dismissContainedDetailTool } from "./detail-tool-surface.js";
 export const els = {
   homeButton: document.querySelector("#homeButton"),
   status: document.querySelector("#statusText"),
+  compactStatus: document.querySelector("#compactStatusText"),
   translation: document.querySelector("#translationSelect"),
   book: document.querySelector("#bookSelect"),
   bookPickerButton: document.querySelector("#bookPickerButton"),
@@ -48,7 +49,19 @@ export function sortedNumericKeys(object) {
 }
 
 export function setStatus(text) {
-  els.status.textContent = text;
+  const value = String(text || "");
+  const isLoaded = /\bdata loaded\b/i.test(value);
+  const isLoading = /\bloading\b/i.test(value);
+  const isError = /\b(?:failed|error|warning|could not|unavailable)\b/i.test(value);
+  const statusState = isError ? "error" : isLoading ? "loading" : isLoaded ? "loaded" : "message";
+  const showCompactLoaded = statusState === "loaded";
+
+  els.status.textContent = value;
+  els.status.dataset.statusState = statusState;
+  if (els.compactStatus) {
+    els.compactStatus.textContent = showCompactLoaded ? "Loaded" : "";
+    els.compactStatus.hidden = !showCompactLoaded;
+  }
 }
 
 const defaultDetailText =

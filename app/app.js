@@ -503,10 +503,14 @@ function closeReaderPickers(except = null) {
 function syncReaderPickerButtons() {
   const book = findBook(state.bookId);
   if (els.bookPickerButton) {
-    els.bookPickerButton.textContent = book?.name || state.bookId || "Select book";
+    const bookLabel = book?.name || state.bookId || "Select book";
+    els.bookPickerButton.textContent = bookLabel;
+    els.bookPickerButton.setAttribute("aria-label", `Book: ${bookLabel}`);
   }
   if (els.chapterPickerButton) {
-    els.chapterPickerButton.textContent = state.chapter || "Select chapter";
+    const chapterLabel = state.chapter || "Select chapter";
+    els.chapterPickerButton.textContent = chapterLabel;
+    els.chapterPickerButton.setAttribute("aria-label", `Chapter: ${chapterLabel}`);
   }
 }
 
@@ -957,10 +961,18 @@ function bindEvents() {
     setPickerExpanded(els.chapterPickerButton, els.chapterPickerPanel, !expanded);
   });
   document.addEventListener("click", (event) => {
-    if (!event.target.closest?.(".reader-controls label")) closeReaderPickers();
+    if (!event.target.closest?.(".reader-control")) closeReaderPickers();
   });
   document.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") closeReaderPickers();
+    if (event.key !== "Escape") return;
+    const trigger = [els.bookPickerButton, els.chapterPickerButton].find(
+      (button) => button?.getAttribute("aria-expanded") === "true",
+    );
+    if (!trigger) return;
+    event.preventDefault();
+    event.stopImmediatePropagation();
+    closeReaderPickers();
+    trigger?.focus?.({ preventScroll: true });
   });
   els.prev.addEventListener("click", () => void goToChapter(-1));
   els.next.addEventListener("click", () => void goToChapter(1));

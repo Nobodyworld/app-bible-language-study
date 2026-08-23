@@ -47,7 +47,15 @@ function checkIndex(indexHtml) {
   assert(/<nav\b[^>]*aria-label="Reader controls"/i.test(indexHtml), "Reader controls nav must have an accessible label.");
   assert(/<section\b[^>]*aria-label="Bible reader"/i.test(indexHtml), "Reader pane must have an accessible label.");
   assert(/<aside\b[^>]*aria-label="Reference details"/i.test(indexHtml), "Detail pane must have an accessible label.");
-  assert((indexHtml.match(/<label>/g) || []).length >= 3, "Reader selectors must be wrapped in visible labels.");
+  assert(
+    /<label\s+class="reader-control reader-control-translation">[\s\S]*?<span>Translation<\/span>[\s\S]*?<select id="translationSelect"/.test(indexHtml),
+    "The exposed Translation selector must retain a visible label.",
+  );
+  assert(
+    /id="bookPickerLabel"[^>]*>Book<\/span>[\s\S]*?id="bookSelect"[^>]*hidden[^>]*aria-hidden="true"[^>]*tabindex="-1"[\s\S]*?id="bookPickerButton"[^>]*aria-label="Book: Select book"/.test(indexHtml) &&
+      /id="chapterPickerLabel"[^>]*>Chapter<\/span>[\s\S]*?id="chapterSelect"[^>]*hidden[^>]*aria-hidden="true"[^>]*tabindex="-1"[\s\S]*?id="chapterPickerButton"[^>]*aria-label="Chapter: Select chapter"/.test(indexHtml),
+    "Book and Chapter must use visible control labels while their synchronized native selectors stay outside Tab and accessibility navigation.",
+  );
   const buttons = staticButtons(indexHtml);
   const unnamed = buttons.filter((button) => !hasAccessibleButtonName(button));
   assert(unnamed.length === 0, "Static buttons must have visible text, title, or aria-label.", { unnamed });
@@ -57,7 +65,7 @@ function checkIndex(indexHtml) {
   assert(!/id="showJobs"|id="showUserData"/.test(indexHtml), "Legacy Processing and Study Data controls must be removed.");
   return {
     staticButtons: buttons.length,
-    labeledControls: (indexHtml.match(/<label>/g) || []).length,
+    labeledControls: (indexHtml.match(/<(?:label|div) class="reader-control(?:\s|")/g) || []).length,
     landmarks: ["header", "main", "aside", "nav", "section"],
   };
 }
