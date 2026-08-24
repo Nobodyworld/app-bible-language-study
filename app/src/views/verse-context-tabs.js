@@ -185,7 +185,11 @@ function actionForTool(ctx, tool, reference, verse, active, wordContext) {
       dataAvailable: hasInterlinear(ctx, verse) || datasetMayLoad(ctx, "interlinear"),
       unavailableKey: "interlinear",
       dataUnavailableMessage: `Language Study data is not available for ${reference}.`,
-      run: () => void ctx.detailViews.showInterlinearVerse(reference, verse, { history: "replace", lock: true }),
+      run: () => void ctx.detailViews.showInterlinearVerse(reference, verse, {
+        history: "replace",
+        lock: true,
+        textSpanTarget: ctx.getActiveTextSpanTarget?.(verse) || null,
+      }),
     };
   }
 

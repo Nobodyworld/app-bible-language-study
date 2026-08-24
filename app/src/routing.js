@@ -38,11 +38,17 @@ export function readerRouteHash(route) {
 
 export function writeReaderRoute(route, options = {}) {
   const hash = readerRouteHash(route);
-  if (window.location.hash === hash) return hash;
+  const historyState = Object.prototype.hasOwnProperty.call(options, "state") ? options.state : null;
+  if (window.location.hash === hash) {
+    if (options.replace && Object.prototype.hasOwnProperty.call(options, "state")) {
+      window.history.replaceState(historyState, "", hash);
+    }
+    return hash;
+  }
   if (options.replace) {
-    window.history.replaceState(null, "", hash);
+    window.history.replaceState(historyState, "", hash);
   } else {
-    window.history.pushState(null, "", hash);
+    window.history.pushState(historyState, "", hash);
   }
   return hash;
 }

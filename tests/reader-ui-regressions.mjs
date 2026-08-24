@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolveReferencePreviewPlacement } from "../app/src/reference-preview-placement.js";
 
-const [index, css, portraitCss, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, jobsView, languageStudyTooltipTest] = await Promise.all([
+const [index, css, portraitCss, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, jobsView, languageStudyTooltipTest, readerNavigation] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
   readFile(new URL("../app/styles.css", import.meta.url), "utf8"),
   readFile(new URL("../app/styles-portrait.css", import.meta.url), "utf8"),
@@ -21,6 +21,7 @@ const [index, css, portraitCss, contextCss, stylesPolish, app, dom, pickerFlow, 
   readFile(new URL("../app/src/detail-views.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/views/jobs-view.js", import.meta.url), "utf8"),
   readFile(new URL("../app/scripts/language-study-tooltip-interaction-test.mjs", import.meta.url), "utf8"),
+  readFile(new URL("../app/src/reader-navigation.js", import.meta.url), "utf8"),
 ]);
 
 assert.equal((index.match(/id="study-marks-icon"/g) || []).length, 1, "Study Marks must have one official icon definition.");
@@ -469,4 +470,48 @@ assert(
   "Browser-visible app and stylesheet entry points must use the current cache-buster key.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 69 }, null, 2));
+assert(
+  /const scroller = els\.detail;/.test(strongsView) &&
+    /scroller\.scrollTo\(\{ top, behavior: reducedMotion \? "auto" : "smooth" \}\)/.test(strongsView) &&
+    !/target\.scrollIntoView/.test(strongsView),
+  "Strong's section controls must scroll only the detail-content owner and respect reduced motion.",
+);
+assert(
+  /commitTextSpanSelection\?\.\(target\)/.test(renderer) &&
+    /textSpanTarget: committedTarget/.test(renderer) &&
+    /activeRange\.char_start/.test(renderer) &&
+    /reader-context-phrase/.test(renderer),
+  "The selection Study action must retain the canonical text-span and render exact phrase boundaries.",
+);
+assert(
+  /createSelectedPhraseSummary/.test(interlinearView) &&
+    /createTranslationAlignmentPanel\(tokens, selected\.wordMapLookup, selected\.range\)/.test(interlinearView) &&
+    /pair\.dataset\.selectedRange = "true"/.test(interlinearView),
+  "Language Study must summarize the exact phrase and mark every overlap in the existing alignment model.",
+);
+assert(
+  /READER_NAVIGATION_SNAPSHOT_VERSION = 1/.test(readerNavigation) &&
+    /textSpanTarget/.test(readerNavigation) &&
+    /historyStateWithReaderSnapshot/.test(readerNavigation) &&
+    /readerSnapshotFromHistoryState/.test(readerNavigation) &&
+    !/HTMLElement|Range\(|Event\(/.test(readerNavigation),
+  "Reader restoration state must remain one versioned serializable snapshot without DOM objects.",
+);
+assert(
+  /historyTraversal: true,[\s\S]*?restorationSnapshot: readerSnapshotFromHistoryState\(event\.state\)/.test(app) &&
+    /popstateHashToIgnore/.test(app) &&
+    /history\.scrollRestoration = "manual"/.test(app) &&
+    /String\(restorationSnapshot\.verse \|\| ""\) === String\(next\.verse \|\| ""\)/.test(app) &&
+    /state\.pendingScrollVerse = canRestore \? null/.test(app) &&
+    /window\.scrollTo\(\{ left: snapshot\.pageX, top: snapshot\.pageY, behavior: "auto" \}\)/.test(app) &&
+    /scrollTop: els\.detail\?\.scrollTop \|\| 0/.test(dom),
+  "Browser/detail history must restore exact reader and detail positions without target-verse centering or duplicate route handling.",
+);
+assert(
+  /readerSnapshotSuspendedGeneration === state\.navigationGeneration/.test(app) &&
+    /window\.cancelAnimationFrame\(readerSnapshotFrame\)/.test(app) &&
+    /const scheduledNavigationGeneration = state\.navigationGeneration;[\s\S]*?scheduledNavigationGeneration !== state\.navigationGeneration/.test(app),
+  "Deferred scroll and focus snapshots from an earlier navigation must not contaminate the current Reader history stack.",
+);
+
+console.log(JSON.stringify({ status: "ok", assertions: 75 }, null, 2));

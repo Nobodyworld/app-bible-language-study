@@ -130,6 +130,10 @@ function cloneReaderContext(context) {
   return context ? JSON.parse(JSON.stringify(context)) : null;
 }
 
+function cloneReaderLocation(location) {
+  return location ? JSON.parse(JSON.stringify(location)) : null;
+}
+
 function snapshotDetail() {
   return {
     title: els.detailTitle.textContent,
@@ -137,6 +141,7 @@ function snapshotDetail() {
     contextHidden: els.detailContext ? els.detailContext.hidden : true,
     nodes: [...els.detail.childNodes],
     readerContext: cloneReaderContext(currentDetailReaderContext) || snapshotReaderContextFromDom(),
+    scrollTop: els.detail?.scrollTop || 0,
   };
 }
 
@@ -159,6 +164,9 @@ function restoreDetail(snapshot) {
   els.detail.replaceChildren(...snapshot.nodes);
   currentDetailReaderContext = cloneReaderContext(snapshot.readerContext);
   notifyDetailRestored(snapshot);
+  window.requestAnimationFrame(() => {
+    if (els.detail) els.detail.scrollTop = Number(snapshot.scrollTop) || 0;
+  });
 }
 
 function extractContextNode(node, options = {}) {
@@ -285,13 +293,13 @@ export function goBackDetail() {
     return;
   }
 
-  if (lastTrackedLocation) readerLocationForwardHistory.push(lastTrackedLocation);
+  if (lastTrackedLocation) readerLocationForwardHistory.push(cloneReaderLocation(lastTrackedLocation));
 
   transientBase = null;
   currentDetailTransient = false;
   detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
 
-  lastTrackedLocation = { ...previousLocation };
+  lastTrackedLocation = cloneReaderLocation(previousLocation);
   updateDetailHistoryButtons();
   return previousLocation;
 }
@@ -318,13 +326,13 @@ export function goForwardDetail() {
     return;
   }
 
-  if (lastTrackedLocation) readerLocationHistory.push(lastTrackedLocation);
+  if (lastTrackedLocation) readerLocationHistory.push(cloneReaderLocation(lastTrackedLocation));
 
   transientBase = null;
   currentDetailTransient = false;
   detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
 
-  lastTrackedLocation = { ...nextLocation };
+  lastTrackedLocation = cloneReaderLocation(nextLocation);
   updateDetailHistoryButtons();
   return nextLocation;
 }
@@ -357,16 +365,18 @@ export function resetDetail(title = "Details", message = defaultDetailText) {
 }
 
 // Track reader location changes for back/forward navigation
-export function trackReaderLocation(location) {
+export function trackReaderLocation(location, options = {}) {
   if (!location) return;
-  const locationKey = `${location.bookId}:${location.chapter}:${location.verse || ''}`;
-  const lastKey = lastTrackedLocation ? `${lastTrackedLocation.bookId}:${lastTrackedLocation.chapter}:${lastTrackedLocation.verse || ''}` : null;
+  const locationKey = `${location.translationId || ''}:${location.bookId}:${location.chapter}:${location.verse || ''}`;
+  const lastKey = lastTrackedLocation
+    ? `${lastTrackedLocation.translationId || ''}:${lastTrackedLocation.bookId}:${lastTrackedLocation.chapter}:${lastTrackedLocation.verse || ''}`
+    : null;
 
-  if (locationKey !== lastKey && lastTrackedLocation) {
-    readerLocationHistory.push({ ...lastTrackedLocation });
+  if (!options.replace && locationKey !== lastKey && lastTrackedLocation) {
+    readerLocationHistory.push(cloneReaderLocation(lastTrackedLocation));
     readerLocationForwardHistory.length = 0;
   }
-  lastTrackedLocation = { ...location };
+  lastTrackedLocation = cloneReaderLocation(location);
   updateDetailHistoryButtons();
 }
 

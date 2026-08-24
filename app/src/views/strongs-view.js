@@ -4,7 +4,7 @@ import {
   fetchWordMapBook,
   loadLanguageMetadata,
 } from "../data-service.js?v=pr13-live-qa-20260711e";
-import { isDetailHoverLocked, setDetail, textNode } from "../dom.js?v=pr13-live-qa-20260711e";
+import { els, isDetailHoverLocked, setDetail, textNode } from "../dom.js?v=pr13-live-qa-20260711e";
 import { capabilityMessage } from "../capabilities.js";
 import {
   languageUnitTooltip,
@@ -537,12 +537,19 @@ export function createStrongsView(ctx = null) {
 
   function scrollStrongSection(section) {
     const target = currentStrongDetail?.querySelector(`[data-strong-section="${section}"]`);
-    if (!target) return false;
+    const scroller = els.detail;
+    if (!target || !scroller?.contains(target)) return false;
     currentStrongDetail.querySelectorAll("[data-strong-section-active]").forEach((node) => {
       delete node.dataset.strongSectionActive;
     });
-    target.scrollIntoView({ block: "start", behavior: "smooth" });
     target.dataset.strongSectionActive = "true";
+    const scrollerRect = scroller.getBoundingClientRect();
+    const targetRect = target.getBoundingClientRect();
+    const desiredTop = scroller.scrollTop + targetRect.top - scrollerRect.top;
+    const maximumTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const top = Math.min(Math.max(0, desiredTop), maximumTop);
+    const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    scroller.scrollTo({ top, behavior: reducedMotion ? "auto" : "smooth" });
     return true;
   }
 

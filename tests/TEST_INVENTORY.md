@@ -63,13 +63,13 @@ order:
 | `tests/study-workspace-width.mjs` | Exact width modes/default, normalization, malformed and throwing storage, isolated preference key, follow/locked separation, and pressed-state synchronization. |
 | `tests/study-workspace-contracts.mjs` | Width-control DOM, responsive clamps, independent scrolling, semantic anchoring, contained tool surface, explicit Study Marks/Meaning presentations, lifecycle cleanup, and reduced motion. |
 | `tests/strong-section-lifecycle.mjs` | Strong's section loading, presence, absence, and rerender lifecycle. |
-| `tests/reader-ui-regressions.mjs` | Reader layout and source-level UI regressions, including retired header controls. |
+| `tests/reader-ui-regressions.mjs` | Reader layout and source-level UI regressions, including stable reader snapshots, exact phrase highlighting/alignment, contained Strong's scrolling, and retired header controls. |
 | `tests/original-language-source-importer.mjs` | Reproducible original-language source transformation. |
 | `tests/original-language-source-data.mjs` | Packaged Hebrew and Greek source coverage and identity. |
 | `tests/original-language-study.mjs` | Language Study entry, source-backed cards, and related-reference behavior. |
 | `tests/morphology.mjs` | Original-language morphology parsing and display contracts. |
 | `tests/module-singletons.mjs` | Release-key consistency and singleton stateful module URLs. |
-| `tests/reference-context.mjs` | Immutable reference hierarchy and stable navigation keys. |
+| `tests/reference-context.mjs` | Immutable reference hierarchy, stable navigation keys, and serializable reader-navigation snapshots with exact zero-scroll and canonical text-span preservation. |
 | `tests/tags.mjs` | Tag definitions, assertions, target applicability, and projections. |
 | `tests/word-meaning.mjs` | Exact canonical source-token Meaning storage and compatibility. |
 | `tests/word-meaning-hidden.mjs` | Hidden Meaning-dialog regression behavior. |
@@ -106,7 +106,7 @@ entry.
 |---|---|---|
 | `app/scripts/interaction-test.mjs` | Desktop and `--mobile` | Main rendered reader journey, selection, Study Marks, My Data, persistence, and cleanup. |
 | `app/scripts/reader-data-loading-interaction-test.mjs` | Desktop | Deferred reader-dataset request boundaries, first/repeat activation, stale-route suppression, retry behavior, reader-core preservation, and browser-error checks. |
-| `app/scripts/frozen-highlight-interaction-test.mjs` | Desktop | Locked/frozen reader-to-panel highlighting. |
+| `app/scripts/frozen-highlight-interaction-test.mjs` | Edge desktop, portrait, narrow, mobile-width, and reduced motion | Locked/frozen reader-to-panel highlighting; canonical multi-word phrase preservation and source-token overlap; contained Strong's section scrolling; exact browser/detail history scroll, focus, and highlight restoration; long-chapter stability; responsive containment; and browser-error health. |
 | `app/scripts/original-language-study-interaction-test.mjs` | Desktop | Rendered Language Study data, lazy enhancement, references, history, and tooltip containment. |
 | `app/scripts/language-study-tooltip-interaction-test.mjs` | Desktop, narrow, mobile-width, and optional touch mode | Exact H3068 Language Study readiness plus morphology and original-language mark tooltip interaction, containment, dismissal, repositioning, and state non-mutation. |
 | `app/scripts/strong-preview-hydration-test.mjs` | Desktop | Strong's preview hydration and interaction lifecycle. |

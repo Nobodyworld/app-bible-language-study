@@ -121,8 +121,9 @@ assert(
   "Detail replacement, history, reset, Clear, and route navigation must dismiss the shared surface.",
 );
 assert(
-  /const handleRouteChange = \(\) => \{[\s\S]*?void navigateToRoute\(route, \{ writeUrl: false \}\)/.test(sources.app) &&
-    !/const handleRouteChange = \(\) => \{[\s\S]*?route\.home[\s\S]*?showHomePage/.test(sources.app),
+  /const handlePopState = \(event\) => \{[\s\S]*?void navigateToRoute\(route, \{[\s\S]*?writeUrl: false,[\s\S]*?historyTraversal: true,[\s\S]*?restorationSnapshot: readerSnapshotFromHistoryState\(event\.state\)/.test(sources.app) &&
+    /const handleHashChange = \(\) => \{[\s\S]*?void navigateToRoute\(route, \{ writeUrl: false, historyTraversal: true \}\)/.test(sources.app) &&
+    !/const handle(?:PopState|HashChange)[\s\S]*?route\.home[\s\S]*?showHomePage/.test(sources.app),
   "Hash/popstate Home navigation must pass through the same contained-tool cleanup as reader routes.",
 );
 assert(
