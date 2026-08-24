@@ -141,7 +141,24 @@ assert(
   delayedLanguageStudyIntent !== modeledDetailIntent && newerOutlineIntent === modeledDetailIntent,
   "A newer deferred Outline intent must supersede an older held Language Study intent on the same route.",
 );
-assert(/@media\s*\(min-width:\s*641px\)\s*and\s*\(max-width:\s*1380px\)[\s\S]*?\.chapter-actions \.toolbar-button\s*{[\s\S]*?width:\s*34px;/.test(css), "Workspace controls must compact at intermediate widths.");
+assert(
+  /\.reader-pane\s*{[\s\S]*?container-name:\s*reader-pane;[\s\S]*?container-type:\s*inline-size;/.test(css) &&
+    /@media\s*\(min-width:\s*641px\)[\s\S]*?\.chapter-actions \.toolbar-button\s*{[\s\S]*?width:\s*34px;/.test(css) &&
+    /@media\s*\(min-width:\s*641px\)\s*and\s*\(max-width:\s*960px\)[\s\S]*?@container\s+reader-pane\s*\(min-width:\s*550px\)[\s\S]*?white-space:\s*nowrap;/.test(css) &&
+    /@media\s*\(min-width:\s*961px\)[\s\S]*?@container\s+reader-pane\s*\(min-width:\s*840px\)[\s\S]*?white-space:\s*nowrap;/.test(css),
+  "Chapter action labels must use measured reader-pane thresholds and retain the compact fallback.",
+);
+assert(
+  /@media\s*\(max-width:\s*640px\)[\s\S]*?\.chapter-favorite-actions \.scope-mark-button\s*{[\s\S]*?min-height:\s*44px;/.test(css) &&
+    /\.chapter-actions\s*{[\s\S]*?gap:\s*4px;[\s\S]*?\.action-group\s*{[\s\S]*?gap:\s*4px;[\s\S]*?padding:\s*0;[\s\S]*?border:\s*0;/.test(css),
+  "Mobile Book and Chapter marks must have real 44px targets while the 4+2 action groups remove duplicate chrome.",
+);
+assert(
+  /@media\s*\(max-width:\s*640px\)[\s\S]*?\.chapter-content\s*{[\s\S]*?padding-top:\s*16px;/.test(css) &&
+    /\.chapter-content\s*>\s*\.presentation-block\.section_heading:first-child\s*{[\s\S]*?margin-top:\s*14px;/.test(css) &&
+    /\.presentation-block\.section_heading:first-child\s*\+\s*\.presentation-block\.psalm_superscription\s*{[\s\S]*?margin-top:\s*14px;[\s\S]*?margin-bottom:\s*6px;/.test(css),
+  "Mobile first-content spacing must use semantic presentation classes without removing heading or superscription content.",
+);
 assert(/:root\[data-theme="dark"\] \.parallel-verse\.active\s*{[\s\S]*?background:\s*rgba\(148,\s*163,\s*184,\s*0\.12\)/.test(css), "Dark parallel selection must not use a white background.");
 assert(/:root\[data-theme="dark"\] \.reader-context-verse\s*{[\s\S]*?background:\s*rgba\(148,\s*163,\s*184,\s*0\.08\)/.test(css), "Dark reader selection must use the calm slate highlight.");
 assert(/\.reader-nav-arrow\s*{[\s\S]*?width:\s*20px;[\s\S]*?min-height:\s*56px;/.test(css), "Chapter navigation must remain edge-sliver sized.");
@@ -169,6 +186,15 @@ assert(
     /renderStudyMarksTrigger\(target/.test(app) &&
     /Favorite/.test(tagsView),
   "Favorite and non-favorite tags must share each consolidated scope picker.",
+);
+assert(
+  /renderStudyMarksTrigger\(target,\s*\{[\s\S]*?openOnFocus:\s*false,/.test(app) &&
+    /options\.openOnFocus === false\) menu\.dataset\.openOnFocus = "false";/.test(tagsView) &&
+    /menu\.dataset\.openOnFocus === "false"[\s\S]*?document\.activeElement === menu\.__targetTagTrigger[\s\S]*?return;/.test(tagsView) &&
+    /menu\.dataset\.openOnFocus === "false"[\s\S]*?menu\.__targetTagOpenedFromPointer = true;/.test(tagsView) &&
+    /keepPointerOpenedMenu[\s\S]*?menu\.dataset\.openOnFocus === "false"[\s\S]*?menu\.__targetTagOpenedFromPointer === true[\s\S]*?keepFocusOpenedMenu \|\| keepPointerOpenedMenu/.test(tagsView) &&
+    /\.target-tag-picker-menu\[data-open-on-focus="false"\]:not\(\[data-menu-open="true"\]\):focus-within\s*>\s*\.tag-picker-popover\s*{[\s\S]*?display:\s*none;/.test(css),
+  "Book and Chapter Study Marks must retain first-click, hover, and activation menus without inserting menu items into top-level Tab order on focus alone.",
 );
 assert(
   /id="bookPickerButton"/.test(index) &&

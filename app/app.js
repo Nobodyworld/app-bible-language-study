@@ -659,6 +659,7 @@ function renderScopeMarkControl(mount, target, label, options = {}) {
       visibleLabel: label,
       title: `${label} marks`,
       manageLabel: "Manage other tags",
+      openOnFocus: false,
       onChange: refresh,
     }),
   );

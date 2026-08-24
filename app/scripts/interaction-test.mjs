@@ -145,6 +145,12 @@ async function launchBrowser() {
     async tap(selector) {
       await playwrightPage.locator(selector).tap();
     },
+    async clickPointer(selector) {
+      await playwrightPage.locator(selector).click();
+    },
+    async movePointer(x, y) {
+      await playwrightPage.mouse.move(x, y);
+    },
     async emulateMedia(options) {
       await playwrightPage.emulateMedia(options);
     },
@@ -565,6 +571,336 @@ async function runQa(page) {
     );
     assert(readerTopContract.scrollWidth <= readerTopContract.clientWidth + 1, "mobile top area has horizontal overflow");
   }
+
+  const measureChapterIntro = () => evaluate(
+    page,
+    `(() => {
+      const rect = (selector) => {
+        const bounds = document.querySelector(selector)?.getBoundingClientRect();
+        return bounds ? { top: bounds.top, bottom: bounds.bottom, width: bounds.width, height: bounds.height } : null;
+      };
+      const isVisible = (node) => {
+        if (!node) return false;
+        const bounds = node.getBoundingClientRect();
+        const style = getComputedStyle(node);
+        return bounds.width > 0 && bounds.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+      };
+      const toolSelectors = [
+        '#showSearch', '#openStudyPanel', '#showInterlinear', '#showOutline', '#showTags', '#showMyData'
+      ];
+      const targetSelectors = [
+        '#favoriteBook', '#favoriteChapter', '#prevChapter', '#nextChapter', ...toolSelectors
+      ];
+      const targets = Object.fromEntries(targetSelectors.map((selector) => [selector, rect(selector)]));
+      const visibleTools = toolSelectors.map((selector) => document.querySelector(selector)).filter(isVisible);
+      const rowTops = [];
+      for (const node of visibleTools) {
+        const top = node.getBoundingClientRect().top;
+        if (!rowTops.some((value) => Math.abs(value - top) <= 1)) rowTops.push(top);
+      }
+      const rowCounts = rowTops.map((top) => visibleTools.filter(
+        (node) => Math.abs(node.getBoundingClientRect().top - top) <= 1
+      ).length);
+      const labels = visibleTools.map((node) => {
+        const label = node.querySelector('span:not(.toolbar-icon)');
+        return {
+          id: node.id,
+          text: label?.textContent.trim() || '',
+          visible: isVisible(label) && label.getBoundingClientRect().width > 1,
+          clipped: node.scrollWidth > node.clientWidth + 1,
+        };
+      });
+      const presentation = [...document.querySelectorAll('#chapterContent > .presentation-block')].map((node) => ({
+        className: node.className,
+        text: node.firstChild?.textContent?.trim() || '',
+        crossReferences: node.querySelectorAll('.cross-links .reference-hover').length,
+      }));
+      const chapter = rect('.chapter-title');
+      const content = rect('#chapterContent');
+      const firstContent = rect('#chapterContent > :first-child');
+      const firstVerse = rect('#chapterContent .verse-row');
+      return {
+        viewport: { width: innerWidth, height: innerHeight },
+        workspaceMode: document.documentElement.dataset.studyWorkspaceWidth,
+        readerWidth: rect('.reader-pane')?.width || 0,
+        headerHeight: rect('.app-header')?.height || 0,
+        chapterHeight: chapter?.height || 0,
+        titleHeight: rect('.chapter-heading-title')?.height || 0,
+        navigationHeight: rect('.chapter-stepper')?.height || 0,
+        actionHeight: rect('.chapter-actions')?.height || 0,
+        actionRows: rowTops.length,
+        actionRowCounts: rowCounts,
+        scriptureTop: content?.top ?? null,
+        firstContentTop: firstContent?.top ?? null,
+        firstVerseTop: firstVerse?.top ?? null,
+        targets,
+        labels,
+        presentation,
+        redLetterCount: document.querySelectorAll('#chapterContent .red-letter, #chapterContent .verse-line.red, #chapterContent .verse-line.red_letter').length,
+        chapterPosition: getComputedStyle(document.querySelector('.chapter-title')).position,
+        horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
+      };
+    })()`,
+  );
+
+  let chapterIntroContract = await measureChapterIntro();
+  qaEvidence.chapterIntro = { initial: chapterIntroContract };
+  assert(
+    chapterIntroContract.presentation.some((block) => block.className.includes('section_heading') && block.text === 'The LORD Is My Shepherd' && block.crossReferences === 2) &&
+      chapterIntroContract.presentation.some((block) => block.className.includes('psalm_superscription') && block.text === 'A Psalm of David.') &&
+      chapterIntroContract.chapterPosition === 'static' && chapterIntroContract.horizontalOverflow === 0,
+    `Psalm 23 chapter presentation and non-sticky containment failed: ${JSON.stringify(chapterIntroContract)}`,
+  );
+
+  const expectedChapterFocusOrder = [
+    'favoriteBook', 'favoriteChapter', 'prevChapter', 'nextChapter', 'showSearch',
+    ...(qaDevice === 'mobile' ? ['openStudyPanel'] : []),
+    'showInterlinear', 'showOutline', 'showTags', 'showMyData',
+  ];
+  await evaluate(page, "document.querySelector('#themeToggle').focus({ preventScroll: true })");
+  const observedChapterFocusOrder = [];
+  const chapterFocusVisibility = [];
+  let previousFocusSelector = '#themeToggle';
+  for (const expectedId of expectedChapterFocusOrder) {
+    await page.press(previousFocusSelector, 'Tab');
+    const focusState = await evaluate(
+      page,
+      `(() => {
+        const node = document.activeElement;
+        const style = getComputedStyle(node);
+        return { id: node?.id || '', focusVisible: node?.matches(':focus-visible') || false, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth };
+      })()`,
+    );
+    observedChapterFocusOrder.push(focusState.id);
+    chapterFocusVisibility.push(focusState);
+    previousFocusSelector = `#${expectedId}`;
+  }
+  assert(
+    JSON.stringify(observedChapterFocusOrder) === JSON.stringify(expectedChapterFocusOrder) &&
+      chapterFocusVisibility.every((state) => state.focusVisible && state.outlineStyle !== 'none' && parseFloat(state.outlineWidth) >= 2),
+    `Chapter keyboard order or visible focus failed: ${JSON.stringify({ expectedChapterFocusOrder, observedChapterFocusOrder, chapterFocusVisibility })}`,
+  );
+
+  const scopeMenuMarksBefore = await evaluate(page, `JSON.stringify({
+    book: document.querySelector('#favoriteBook')?.getAttribute('aria-pressed'),
+    chapter: document.querySelector('#favoriteChapter')?.getAttribute('aria-pressed')
+  })`);
+  await evaluate(page, "document.querySelector('#favoriteBook').focus({ preventScroll: true })");
+  await delay(30);
+  const closedScopeMenu = await evaluate(page, `(() => {
+    const trigger = document.querySelector('#favoriteBook');
+    const menu = trigger.closest('.target-tag-picker-menu');
+    return {
+      open: menu.dataset.menuOpen === 'true',
+      display: getComputedStyle(menu.querySelector('.target-tag-picker-popover')).display,
+      active: document.activeElement?.id || ''
+    };
+  })()`);
+  await page.press('#favoriteBook', 'Tab');
+  const closedScopeTabTarget = await evaluate(page, "document.activeElement?.id || ''");
+  assert(
+    !closedScopeMenu.open && closedScopeMenu.display === 'none' && closedScopeMenu.active === 'favoriteBook' && closedScopeTabTarget === 'favoriteChapter',
+    `Closed Book menu must stay out of the top-level Tab sequence: ${JSON.stringify({ closedScopeMenu, closedScopeTabTarget })}`,
+  );
+
+  await page.clickPointer('#favoriteBook');
+  await waitForStudyMarksMenuOpen(page, '#favoriteBook');
+  const pointerScopeMenu = await evaluate(page, `({
+    open: document.querySelector('#favoriteBook')?.closest('.target-tag-picker-menu')?.dataset.menuOpen === 'true',
+    expanded: document.querySelector('#favoriteBook')?.getAttribute('aria-expanded')
+  })`);
+  await page.press('#favoriteBook', 'Escape');
+  await waitFor(page, "document.querySelector('#favoriteBook')?.closest('.target-tag-picker-menu')?.dataset.menuOpen !== 'true'");
+  await page.movePointer(1, 1);
+  assert(pointerScopeMenu.open && pointerScopeMenu.expanded === 'true', `Pointer click must keep the Book menu open: ${JSON.stringify(pointerScopeMenu)}`);
+
+  await evaluate(page, "document.querySelector('#favoriteBook').focus({ preventScroll: true })");
+  await page.press('#favoriteBook', 'Enter');
+  await waitForStudyMarksMenuOpen(page, '#favoriteBook');
+  await page.press('#favoriteBook', 'Tab');
+  const enterScopeMenu = await evaluate(page, `(() => {
+    const menu = document.querySelector('#favoriteBook')?.closest('.target-tag-picker-menu');
+    return { open: menu?.dataset.menuOpen === 'true', focusedInside: menu?.querySelector('.target-tag-picker-popover')?.contains(document.activeElement) || false };
+  })()`);
+  await page.press('.target-tag-picker-menu[data-menu-open="true"] .tag-picker-option[aria-label$="Favorite tag"]', 'Escape');
+  await waitFor(page, "document.querySelector('#favoriteBook')?.closest('.target-tag-picker-menu')?.dataset.menuOpen !== 'true'");
+  const enterEscapeFocus = await evaluate(page, "document.activeElement?.id || ''");
+
+  await evaluate(page, "document.querySelector('#favoriteChapter').focus({ preventScroll: true })");
+  await page.press('#favoriteChapter', ' ');
+  await waitForStudyMarksMenuOpen(page, '#favoriteChapter');
+  const spaceScopeMenu = await evaluate(page, "document.querySelector('#favoriteChapter')?.getAttribute('aria-expanded') === 'true'");
+  await page.press('#favoriteChapter', 'Escape');
+  await waitFor(page, "document.querySelector('#favoriteChapter')?.closest('.target-tag-picker-menu')?.dataset.menuOpen !== 'true'");
+  const spaceEscapeFocus = await evaluate(page, "document.activeElement?.id || ''");
+
+  let touchScopeMenu = null;
+  if (qaDevice === 'mobile') {
+    await page.tap('#favoriteChapter');
+    await waitForStudyMarksMenuOpen(page, '#favoriteChapter');
+    touchScopeMenu = await evaluate(page, `(() => {
+      const menu = document.querySelector('#favoriteChapter')?.closest('.target-tag-picker-menu');
+      const popover = menu?.querySelector('.target-tag-picker-popover');
+      return {
+        open: menu?.dataset.menuOpen === 'true',
+        display: popover ? getComputedStyle(popover).display : '',
+        focusableOptions: [...(popover?.querySelectorAll('button') || [])].filter((node) => node.tabIndex >= 0).length
+      };
+    })()`);
+    await page.press('#favoriteChapter', 'Escape');
+    await waitFor(page, "document.querySelector('#favoriteChapter')?.closest('.target-tag-picker-menu')?.dataset.menuOpen !== 'true'");
+  }
+  const scopeMenuMarksAfter = await evaluate(page, `JSON.stringify({
+    book: document.querySelector('#favoriteBook')?.getAttribute('aria-pressed'),
+    chapter: document.querySelector('#favoriteChapter')?.getAttribute('aria-pressed')
+  })`);
+  assert(
+    enterScopeMenu.open && enterScopeMenu.focusedInside && enterEscapeFocus === 'favoriteBook' &&
+      spaceScopeMenu && spaceEscapeFocus === 'favoriteChapter' &&
+      (!touchScopeMenu || (touchScopeMenu.open && touchScopeMenu.display !== 'none' && touchScopeMenu.focusableOptions > 0)) &&
+      scopeMenuMarksAfter === scopeMenuMarksBefore,
+    `Book and Chapter menu activation, Tab, Escape, touch, or non-mutation failed: ${JSON.stringify({ enterScopeMenu, enterEscapeFocus, spaceScopeMenu, spaceEscapeFocus, touchScopeMenu, scopeMenuMarksBefore, scopeMenuMarksAfter })}`,
+  );
+  qaEvidence.chapterIntro.scopeMenuLifecycle = {
+    closedScopeMenu, closedScopeTabTarget, pointerScopeMenu, enterScopeMenu, enterEscapeFocus,
+    spaceScopeMenu, spaceEscapeFocus, touchScopeMenu, marksUnchanged: scopeMenuMarksAfter === scopeMenuMarksBefore,
+  };
+  pass('Book and Chapter menu pointer, keyboard, touch, and Escape lifecycle');
+
+  if (qaDevice === "mobile") {
+    const requiredMobileTargets = Object.entries(chapterIntroContract.targets).filter(([, bounds]) => bounds);
+    assert(
+      requiredMobileTargets.every(([, bounds]) => bounds.width >= 43.5 && bounds.height >= 43.5) &&
+        chapterIntroContract.chapterHeight <= 200.5 &&
+        chapterIntroContract.actionHeight <= 92.5 &&
+        chapterIntroContract.actionRows === 2 &&
+        JSON.stringify(chapterIntroContract.actionRowCounts) === JSON.stringify([4, 2]) &&
+        chapterIntroContract.firstVerseTop <= 480.5 &&
+        chapterIntroContract.labels.every((label) => label.visible && !label.clipped),
+      `Mobile chapter targets, 4+2 actions, geometry, or labels failed: ${JSON.stringify(chapterIntroContract)}`,
+    );
+
+    const chapterIntroRouteBase = baseUrl.split('#')[0];
+    const representativeChapters = [];
+    for (const fixture of [
+      { hash: '#/read/bsb/genesis/1', title: 'Genesis 1', kind: 'prose' },
+      { hash: '#/read/bsb/john/10', title: 'John 10', kind: 'gospel' },
+    ]) {
+      await navigate(page, `${chapterIntroRouteBase}${fixture.hash}`);
+      await waitFor(page, `document.querySelector('#chapterTitle')?.textContent === ${JSON.stringify(fixture.title)}`);
+      const measurement = await measureChapterIntro();
+      representativeChapters.push({ ...fixture, measurement });
+      assert(
+        measurement.firstVerseTop > measurement.scriptureTop &&
+          measurement.horizontalOverflow === 0 &&
+          !measurement.presentation.some((block) => block.className.includes('psalm_superscription')),
+        `Representative ${fixture.kind} chapter spacing failed: ${JSON.stringify(measurement)}`,
+      );
+      if (fixture.kind === 'gospel') {
+        assert(
+          measurement.presentation.some((block) => block.className.includes('section_heading')) && measurement.redLetterCount > 0,
+          `Gospel presentation or red-letter rendering failed: ${JSON.stringify(measurement)}`,
+        );
+      }
+    }
+    qaEvidence.chapterIntro.representativeChapters = representativeChapters;
+    await navigate(page, `${chapterIntroRouteBase}#/read/bsb/psalms/23`);
+    await waitFor(page, "document.querySelector('#chapterTitle')?.textContent === 'Psalms 23'");
+    pass("mobile chapter intro targets, spacing, and representative content");
+  } else {
+    const labelProfiles = [
+      { name: '1440 standard', width: 1440, height: 900, mode: 'standard', labelsVisible: true },
+      { name: '1440 expanded', width: 1440, height: 900, mode: 'expanded', labelsVisible: false },
+      { name: '1280 standard', width: 1280, height: 720, mode: 'standard', labelsVisible: false },
+      { name: '1200 compact', width: 1200, height: 900, mode: 'compact', labelsVisible: true },
+      { name: '1200 standard', width: 1200, height: 900, mode: 'standard', labelsVisible: false },
+      { name: '960 standard', width: 960, height: 1200, mode: 'standard', labelsVisible: true },
+      { name: '960 expanded', width: 960, height: 1200, mode: 'expanded', labelsVisible: false },
+      { name: '820 standard', width: 820, height: 900, mode: 'standard', labelsVisible: false },
+      { name: '390 desktop', width: 390, height: 844, mode: 'standard', labelsVisible: true },
+    ];
+    const labelEvidence = [];
+    for (const profile of labelProfiles) {
+      await page.setViewportSize({ width: profile.width, height: profile.height });
+      await evaluate(page, `document.documentElement.dataset.studyWorkspaceWidth = ${JSON.stringify(profile.mode)}`);
+      await delay(100);
+      const measurement = await measureChapterIntro();
+      labelEvidence.push({ ...profile, measurement });
+      assert(
+        measurement.labels.every((label) => label.visible === profile.labelsVisible && !label.clipped) &&
+          measurement.actionRows === (profile.width <= 640 ? 2 : 1) &&
+          measurement.horizontalOverflow === 0,
+        `Reader-pane label threshold, action rows, or containment failed for ${profile.name}: ${JSON.stringify(measurement)}`,
+      );
+      if (profile.width <= 640) {
+        assert(
+          measurement.chapterHeight <= 200.5 && measurement.firstVerseTop <= 480.5 &&
+            JSON.stringify(measurement.actionRowCounts) === JSON.stringify([4, 2]),
+          `Desktop-width mobile chapter geometry failed: ${JSON.stringify(measurement)}`,
+        );
+      }
+    }
+    qaEvidence.chapterIntro.labelThreshold = labelEvidence;
+    await page.setViewportSize({ width: 1280, height: 720 });
+    await evaluate(page, "document.documentElement.dataset.studyWorkspaceWidth = 'standard'");
+    await delay(100);
+    pass("reader-pane action-label thresholds and mobile-width geometry");
+  }
+
+  const visibleChapterTools = [
+    ['#showSearch', 'Search this book'],
+    ...(qaDevice === 'mobile' ? [['#openStudyPanel', 'Study panel']] : []),
+    ['#showInterlinear', 'Language Study'],
+    ['#showOutline', 'Book outline'],
+    ['#showTags', 'Study Marks'],
+    ['#showMyData', 'My Data'],
+  ];
+  const toolContextBefore = await evaluate(
+    page,
+    `(() => ({ route: location.href, scrollY, scriptureTop: document.querySelector('#chapterContent')?.getBoundingClientRect().top }))()`,
+  );
+  const toolContextEvidence = [];
+  for (const [selector, expectedName] of visibleChapterTools) {
+    const accessibleName = await evaluate(
+      page,
+      `(() => {
+        const node = document.querySelector(${JSON.stringify(selector)});
+        return node?.getAttribute('aria-label') || node?.querySelector('span:not(.toolbar-icon)')?.textContent.trim() || node?.textContent.trim() || '';
+      })()`,
+    );
+    await evaluate(page, `document.querySelector(${JSON.stringify(selector)}).click()`);
+    await delay(120);
+    const after = await evaluate(
+      page,
+      `(() => ({ route: location.href, scrollY, scriptureTop: document.querySelector('#chapterContent')?.getBoundingClientRect().top, detailTitle: document.querySelector('#detailTitle')?.textContent.trim() || '' }))()`,
+    );
+    toolContextEvidence.push({ selector, accessibleName, after });
+    assert(
+      accessibleName === expectedName && after.route === toolContextBefore.route && after.scrollY === toolContextBefore.scrollY &&
+        Math.abs(after.scriptureTop - toolContextBefore.scriptureTop) <= 1,
+      `Chapter tool semantics or reader context changed for ${selector}: ${JSON.stringify({ toolContextBefore, accessibleName, after })}`,
+    );
+  }
+  qaEvidence.chapterIntro.toolContext = toolContextEvidence;
+  pass("chapter tools preserve route, scroll, and accessible names");
+
+  if (qaDevice !== 'mobile') {
+    const chapterIntroRouteBase = baseUrl.split('#')[0];
+    await navigate(page, `${chapterIntroRouteBase}#/read/bsb/psalms/1`);
+    await waitFor(page, "document.querySelector('#chapterTitle')?.textContent === 'Psalms 1'");
+    const firstBoundary = await evaluate(page, `({ previous: document.querySelector('#prevChapter')?.disabled, next: document.querySelector('#nextChapter')?.disabled })`);
+    await navigate(page, `${chapterIntroRouteBase}#/read/bsb/psalms/150`);
+    await waitFor(page, "document.querySelector('#chapterTitle')?.textContent === 'Psalms 150'");
+    const lastBoundary = await evaluate(page, `({ previous: document.querySelector('#prevChapter')?.disabled, next: document.querySelector('#nextChapter')?.disabled })`);
+    assert(
+      firstBoundary.previous === true && firstBoundary.next === false && lastBoundary.previous === false && lastBoundary.next === true,
+      `Previous and Next chapter boundary states failed: ${JSON.stringify({ firstBoundary, lastBoundary })}`,
+    );
+    await navigate(page, `${chapterIntroRouteBase}#/read/bsb/psalms/23`);
+    await waitFor(page, "document.querySelector('#chapterTitle')?.textContent === 'Psalms 23'");
+    pass("chapter navigation boundaries");
+  }
+  pass("chapter keyboard order and focus visibility");
   const stickyHeaderState = await evaluate(
     page,
     `(() => {
@@ -1506,6 +1842,7 @@ async function runQa(page) {
       window.__staleReaderTagMenu = trigger?.closest('.target-tag-picker-menu');
       trigger?.focus();
     })()`);
+    await page.press(rerenderingStudyTrigger, "Enter");
     await waitForStudyMarksMenuOpen(page, rerenderingStudyTrigger);
     const initialReaderFavoriteAction = await evaluate(
       page,
@@ -1527,6 +1864,7 @@ async function runQa(page) {
       : initialReaderFavoriteAction.replace("Remove ", "Add ");
     const reverseReaderFavoriteSelector = `${rerenderingStudyTrigger} ~ .target-tag-picker-popover .tag-picker-option[aria-label=${JSON.stringify(reverseReaderFavoriteAction)}]`;
     await evaluate(page, `document.querySelector(${JSON.stringify(rerenderingStudyTrigger)})?.focus()`);
+    await page.press(rerenderingStudyTrigger, "Enter");
     await waitForStudyMarksMenuOpen(page, rerenderingStudyTrigger);
     await click(page, reverseReaderFavoriteSelector);
     await waitFor(page, `document.querySelector(${JSON.stringify(rerenderingStudyTrigger)})?.closest('.target-tag-picker-menu')?.dataset.menuOpen !== 'true'`);

@@ -454,6 +454,7 @@ export function createTagsView(ctx) {
     if (!menu.isConnected) return;
     delete menu.dataset.openedFromFocus;
     delete menu.__targetTagPointerStartedFocused;
+    delete menu.__targetTagOpenedFromPointer;
     menu.dataset.menuClosed = "true";
     delete menu.dataset.menuOpen;
     setTargetTagMenuExpanded(menu, false);
@@ -506,10 +507,19 @@ export function createTagsView(ctx) {
       isConnected: () => menu.isConnected && menu.dataset.menuOpen === "true",
       close: (options) => closeTargetTagMenu(menu, options),
     };
-    menu.addEventListener("pointerenter", () => openTargetTagMenu(menu));
+    menu.addEventListener("pointerenter", () => {
+      if (menu.dataset.openOnFocus === "false" && menu.dataset.menuOpen !== "true") {
+        menu.__targetTagOpenedFromPointer = true;
+      }
+      openTargetTagMenu(menu);
+    });
     menu.addEventListener("pointerleave", () => scheduleTargetTagMenuClose(menu));
     menu.addEventListener("focusin", () => {
       if (menu.dataset.restoringFocus === "true") return;
+      if (
+        menu.dataset.openOnFocus === "false" &&
+        document.activeElement === menu.__targetTagTrigger
+      ) return;
       if (menu.dataset.menuOpen !== "true") menu.dataset.openedFromFocus = "true";
       openTargetTagMenu(menu);
     });
@@ -688,6 +698,7 @@ export function createTagsView(ctx) {
       .join(" ");
     if (options.align === "right") menu.dataset.menuAlign = "right";
     if (options.boundary === "detail-pane") menu.dataset.menuBoundary = "detail-pane";
+    if (options.openOnFocus === false) menu.dataset.openOnFocus = "false";
 
     const trigger = options.trigger || document.createElement("button");
     if (trigger.tagName === "BUTTON") trigger.type = "button";
@@ -714,9 +725,14 @@ export function createTagsView(ctx) {
         event.detail > 0 &&
         menu.dataset.openedFromFocus === "true" &&
         menu.__targetTagPointerStartedFocused === false;
+      const keepPointerOpenedMenu =
+        event.detail > 0 &&
+        menu.dataset.openOnFocus === "false" &&
+        menu.__targetTagOpenedFromPointer === true;
       delete menu.__targetTagPointerStartedFocused;
+      delete menu.__targetTagOpenedFromPointer;
       delete menu.dataset.openedFromFocus;
-      if (keepFocusOpenedMenu) return;
+      if (keepFocusOpenedMenu || keepPointerOpenedMenu) return;
       if (menu.dataset.menuOpen === "true") closeTargetTagMenu(menu);
       else openTargetTagMenu(menu);
     });
