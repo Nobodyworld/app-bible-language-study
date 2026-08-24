@@ -591,6 +591,8 @@ button:disabled {
 
 .reader-pane {
   position: relative;
+  container-name: reader-pane;
+  container-type: inline-size;
 }
 
 .reader-pane,
@@ -3531,6 +3533,10 @@ button.target-tag-badge:focus-visible {
   gap: 5px;
 }
 
+.target-tag-picker-menu[data-open-on-focus="false"]:not([data-menu-open="true"]):focus-within > .tag-picker-popover {
+  display: none;
+}
+
 .tag-picker-menu-wrap[data-menu-closed="true"] > .tag-picker-popover,
 .verse-number-menu-wrap[data-menu-closed="true"] .tag-picker-popover {
   display: none;
@@ -4309,7 +4315,7 @@ button.user-data-summary-item {
   }
 }
 
-@media (min-width: 641px) and (max-width: 1380px) {
+@media (min-width: 641px) {
   .chapter-actions .toolbar-button {
     width: 34px;
     min-width: 34px;
@@ -4440,13 +4446,17 @@ button.user-data-summary-item {
   }
 
   .chapter-title {
-    gap: 6px;
+    gap: 4px;
     min-height: 0;
-    padding-block: 8px;
+    padding-block: 4px;
   }
 
   .chapter-heading {
-    gap: 6px;
+    gap: 4px;
+  }
+
+  .chapter-favorite-actions .scope-mark-button {
+    min-height: 44px;
   }
 
   .chapter-stepper {
@@ -4461,14 +4471,18 @@ button.user-data-summary-item {
   .chapter-actions {
     display: grid;
     grid-template-columns: 1fr;
-    gap: 8px;
+    gap: 4px;
   }
 
   .action-group {
     display: grid;
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: 100%;
-    gap: 6px;
+    gap: 4px;
+    padding: 0;
+    border: 0;
+    border-radius: 0;
+    background: transparent;
   }
 
   .action-group:first-child {
@@ -4479,9 +4493,25 @@ button.user-data-summary-item {
     min-width: 0;
     min-height: 44px;
     padding: 4px 3px;
+    border: 1px solid var(--line);
+    background: var(--panel);
     font-size: 11px;
     line-height: 1.1;
     white-space: normal;
+  }
+
+  .chapter-content {
+    padding-top: 16px;
+  }
+
+  .chapter-content > .presentation-block.section_heading:first-child {
+    margin-top: 14px;
+  }
+
+  .chapter-content > .presentation-block.psalm_superscription:first-child,
+  .chapter-content > .presentation-block.section_heading:first-child + .presentation-block.psalm_superscription {
+    margin-top: 14px;
+    margin-bottom: 6px;
   }
 
   .verse-row {
@@ -5173,5 +5203,43 @@ html[data-theme="light"] .hebrew-rtl-note:focus-visible {
     border-color: Highlight !important;
     background: Highlight !important;
     color: HighlightText !important;
+  }
+}
+
+@media (min-width: 641px) and (max-width: 960px) {
+  @container reader-pane (min-width: 550px) {
+    .chapter-actions .toolbar-button {
+      width: auto;
+      min-width: 0;
+      padding: 0 8px;
+    }
+
+    .chapter-actions .toolbar-button > span:not(.toolbar-icon) {
+      position: static;
+      width: auto;
+      height: auto;
+      overflow: visible;
+      clip: auto;
+      white-space: nowrap;
+    }
+  }
+}
+
+@media (min-width: 961px) {
+  @container reader-pane (min-width: 840px) {
+    .chapter-actions .toolbar-button {
+      width: auto;
+      min-width: 0;
+      padding: 0 8px;
+    }
+
+    .chapter-actions .toolbar-button > span:not(.toolbar-icon) {
+      position: static;
+      width: auto;
+      height: auto;
+      overflow: visible;
+      clip: auto;
+      white-space: nowrap;
+    }
   }
 }

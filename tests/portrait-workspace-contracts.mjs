@@ -27,6 +27,10 @@ assert(
   /@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]*?\.reader-controls\s*{[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/.test(css),
   "Portrait desktop reader controls must remain one compact three-column row.",
 );
+assert(
+  /@media\s*\(min-width:\s*641px\)\s*and\s*\(max-width:\s*960px\)[\s\S]*?@container\s+reader-pane\s*\(min-width:\s*550px\)/.test(await readFile(new URL("../app/styles.css", import.meta.url), "utf8")),
+  "Portrait chapter-action labels must appear only when the measured reader pane can keep one action row.",
+);
 
 const widthButtons = index.match(/<button[\s\S]*?data-study-workspace-width-mode="(?:compact|standard|expanded)"[\s\S]*?<\/button>/g) || [];
 assert.equal(widthButtons.length, 3, "The workspace must retain exactly three width controls.");
