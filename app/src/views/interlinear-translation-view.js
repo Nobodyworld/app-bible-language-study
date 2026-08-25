@@ -21,7 +21,11 @@ import { getTokenRenderings, getWorkspaceVerse, setTokenRendering, setVerseDraft
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
 import { createStudyEmptyState } from "../study-empty-state.js";
 import { interlinearTokenIdentity } from "../ui-contracts.js";
-import { createSourceTokenTarget } from "../semantic-targets.js?v=pr13-live-qa-20260711e";
+import {
+  createSourceTokenTarget,
+  normalizeTarget,
+  resolveTextSpanAnchor,
+} from "../semantic-targets.js?v=pr13-live-qa-20260711e";
 
 function normalizeWordMapSpan(raw, bsbVerseText) {
   const start = Number(raw[2] || 0);
@@ -133,17 +137,20 @@ function createTranslationAlignmentPanel(tokens, wordMapLookup, selectedRange) {
   const heading = document.createElement("h4");
   heading.textContent = "Word-by-word alignment";
   const intro = document.createElement("p");
-  intro.textContent = "Hover a source word or BSB span to focus the paired words.";
+  intro.textContent = "Each card pairs a source word with its BSB span, Strong's number, and gloss.";
   panel.append(heading, intro);
 
   const grid = document.createElement("div");
   grid.className = "translation-alignment-grid";
   tokens.forEach((token) => {
     const span = wordMapForToken(token, wordMapLookup);
-    const pair = document.createElement("button");
-    pair.type = "button";
+    const pair = document.createElement("article");
     pair.className = "translation-token-pair";
-    if (rangesOverlap(span, selectedRange)) pair.classList.add("selected-range");
+    pair.setAttribute("role", "group");
+    if (rangesOverlap(span, selectedRange)) {
+      pair.classList.add("selected-range");
+      pair.dataset.selectedRange = "true";
+    }
     pair.dataset.sourceIndex = String(token.token_index ?? "");
 
     const source = document.createElement("span");
@@ -158,11 +165,37 @@ function createTranslationAlignmentPanel(tokens, wordMapLookup, selectedRange) {
     meta.className = "alignment-meta";
     meta.textContent = [token.strong_code, token.gloss].filter(Boolean).join(" - ");
 
+    pair.setAttribute(
+      "aria-label",
+      [token.original, `BSB ${english.textContent}`, token.strong_code, token.gloss].filter(Boolean).join(", "),
+    );
     pair.append(source, english, meta);
     grid.append(pair);
   });
   panel.append(grid);
   return panel;
+}
+
+function createSelectedPhraseSummary(selected, tokens) {
+  const summary = document.createElement("section");
+  summary.className = "language-study-selection-summary";
+  summary.dataset.selectedTextSpan = selected.target.target_id;
+  summary.dataset.charStart = String(selected.resolved.char_start);
+  summary.dataset.charEnd = String(selected.resolved.char_end);
+  const heading = document.createElement("h4");
+  heading.textContent = "Selected English phrase";
+  const phrase = document.createElement("blockquote");
+  phrase.textContent = selected.resolved.text_snapshot;
+  const mapping = document.createElement("p");
+  const mapped = tokens.filter((token) => rangesOverlap(wordMapForToken(token, selected.wordMapLookup), selected.range));
+  mapping.textContent = selected.wordMapLookup
+    ? mapped.length
+      ? `${mapped.length} overlapping source ${mapped.length === 1 ? "token is" : "tokens are"} highlighted below.`
+      : "No source token is mapped exactly to this English phrase; the full phrase remains selected."
+    : "Exact source-token alignment is not available for this translation; the full phrase remains selected.";
+  summary.dataset.overlappingSourceTokens = String(mapped.length);
+  summary.append(heading, phrase, mapping);
+  return summary;
 }
 
 function createVerseGematriaSummary(total, tokens) {
@@ -476,10 +509,38 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     return section;
   }
 
-  async function createInterlinearVerseSection(verse) {
+  async function resolveSelectedPhrase(verse, textSpanTarget) {
+    const target = normalizeTarget(textSpanTarget);
+    const ref = target?.reference || {};
+    if (
+      target?.target_type !== "text_span" ||
+      ref.book_id !== ctx.state.bookId ||
+      String(ref.chapter || "") !== String(ctx.state.chapter) ||
+      String(ref.verse_start || "") !== String(verse)
+    ) {
+      return null;
+    }
+    const verseText = ctx.state.verseBook?.chapters?.[ctx.state.chapter]?.[verse] || "";
+    const resolved = resolveTextSpanAnchor(target, verseText);
+    if (!Number.isInteger(resolved.char_start) || !Number.isInteger(resolved.char_end)) return null;
+    let wordMapLookup = null;
+    if (target.translation_id === "bsb") {
+      const wordMapBook = await fetchWordMapBook("bsb", ctx.state.bookId).catch(() => null);
+      wordMapLookup = createWordMapLookup(wordMapBook?.chapters?.[ctx.state.chapter]?.[verse] || [], verseText);
+    }
+    return {
+      target,
+      resolved,
+      range: { start: resolved.char_start, end: resolved.char_end },
+      wordMapLookup,
+    };
+  }
+
+  async function createInterlinearVerseSection(verse, textSpanTarget = null) {
     const reference = ctx.currentReference(verse);
     const tokens = interlinearTokensForVerse(verse);
     if (!tokens.length) return null;
+    const selected = await resolveSelectedPhrase(verse, textSpanTarget);
 
     const section = document.createElement("section");
     section.className = "interlinear-verse-section";
@@ -490,6 +551,10 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     const verseContext = { reference, verse };
     const wordInfoLookup = createOriginalWordInfoLookup(tokens);
     section.append(heading);
+    if (selected) {
+      section.append(createSelectedPhraseSummary(selected, tokens));
+      section.append(createTranslationAlignmentPanel(tokens, selected.wordMapLookup, selected.range));
+    }
 
     const sourceTexts = await sourceTextsForVerse(tokens, verse, "verse");
     if (sourceTexts.length) {
@@ -526,7 +591,8 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
       );
       return;
     }
-    const initialSection = await createInterlinearVerseSection(verse);
+    const selectedTextSpan = options.textSpanTarget || ctx.getActiveTextSpanTarget?.(verse) || null;
+    const initialSection = await createInterlinearVerseSection(verse, selectedTextSpan);
     if (!initialSection) {
       const empty = document.createElement("div");
       const heading = document.createElement("h3");
@@ -543,13 +609,20 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     wrap.dataset.detailRestore = "interlinear-lazy-reader";
     wrap.append(createVerseContextTabs(ctx, reference, verse, "interlinear", ctx.studyContext?.strong));
     const superscriptionSection = await createSuperscriptionSection(verse);
-    if (superscriptionSection) wrap.append(superscriptionSection);
-    wrap.append(initialSection);
+    if (selectedTextSpan) {
+      wrap.append(initialSection);
+      if (superscriptionSection) wrap.append(superscriptionSection);
+    } else {
+      if (superscriptionSection) wrap.append(superscriptionSection);
+      wrap.append(initialSection);
+    }
     const status = document.createElement("p");
     status.className = "interlinear-lazy-status";
     status.setAttribute("role", "status");
     wrap.append(status);
     setDetail("Language Study", wrap, options);
+    ctx.rehydrateActiveTextSpanSelection?.();
+    window.requestAnimationFrame(() => ctx.rehydrateActiveTextSpanSelection?.());
 
     wrap.addEventListener("language-study:open-strong", async (event) => {
       const detail = event.detail || {};

@@ -23,16 +23,26 @@ import {
   option,
   resetDetail,
   resetDetailForNavigation,
+  setReaderNavigationAvailability,
   setDetailHoverLocked,
   setDetailMessage,
   setStatus,
   sortedNumericKeys,
-  trackReaderLocation,
 } from "./src/dom.js?v=pr13-live-qa-20260711e";
 import { createReferenceButton as makeReferenceButton, referenceKey, refDomId } from "./src/references.js";
 import { buildReferenceContext, referenceContextKey } from "./src/reference-context.js";
-import { createBookTarget, createChapterTarget } from "./src/semantic-targets.js?v=pr13-live-qa-20260711e";
-import { normalizeRoute, parseReaderRoute, writeReaderRoute } from "./src/routing.js";
+import {
+  createBookTarget,
+  createChapterTarget,
+  normalizeTarget,
+  resolveTextSpanAnchor,
+} from "./src/semantic-targets.js?v=pr13-live-qa-20260711e";
+import { normalizeRoute, parseReaderRoute, readerRouteHash, writeReaderRoute } from "./src/routing.js";
+import {
+  createReaderNavigationSnapshot,
+  historyStateWithReaderSnapshot,
+  readerSnapshotFromHistoryState,
+} from "./src/reader-navigation.js";
 import { getTagTargets, initStores, listenForUserDataChanges } from "./src/stores.js?v=pr13-live-qa-20260711e";
 import { createStudyEmptyState, studyUnavailableLabel } from "./src/study-empty-state.js";
 import { chapterSwipeDirection, CONTROL_STATES, resolveControlState } from "./src/ui-contracts.js?v=pr13-live-qa-20260711e";
@@ -69,6 +79,7 @@ const state = {
   userStoreBackend: null,
   userStoreMigration: null,
   activeReferenceContext: null,
+  activeTextSpanTarget: null,
   hoverReferenceContext: null,
   navigationGeneration: 0,
   readerDatasetGeneration: 0,
@@ -278,6 +289,77 @@ function getReferenceContext(overrides = {}) {
   });
 }
 
+function getActiveTextSpanTarget(verse = null) {
+  const target = state.activeTextSpanTarget;
+  if (!target) return null;
+  const ref = target.reference || {};
+  if (
+    target.translation_id !== state.translationId ||
+    ref.book_id !== state.bookId ||
+    String(ref.chapter || "") !== String(state.chapter) ||
+    (verse != null && String(ref.verse_start || "") !== String(verse))
+  ) {
+    return null;
+  }
+  return JSON.parse(JSON.stringify(target));
+}
+
+function resolveActiveTextSpan(verseText, verse) {
+  const target = getActiveTextSpanTarget(verse);
+  if (!target) return null;
+  const resolved = resolveTextSpanAnchor(target, verseText);
+  if (!Number.isInteger(resolved.char_start) || !Number.isInteger(resolved.char_end)) {
+    state.activeTextSpanTarget = null;
+    return null;
+  }
+  return { target, resolved };
+}
+
+function clearActiveTextSpanSelection() {
+  state.activeTextSpanTarget = null;
+  renderer?.clearTextSpanHighlight?.();
+}
+
+function commitTextSpanSelection(target) {
+  const normalized = normalizeTarget(target);
+  const ref = normalized?.reference || {};
+  const verse = String(ref.verse_start || "");
+  const verseText = state.verseBook?.chapters?.[state.chapter]?.[verse] || "";
+  const resolved = normalized?.target_type === "text_span" ? resolveTextSpanAnchor(normalized, verseText) : null;
+  if (
+    normalized?.target_type !== "text_span" ||
+    normalized.translation_id !== state.translationId ||
+    ref.book_id !== state.bookId ||
+    String(ref.chapter || "") !== String(state.chapter) ||
+    !Number.isInteger(resolved?.char_start) ||
+    !Number.isInteger(resolved?.char_end)
+  ) {
+    clearActiveTextSpanSelection();
+    return null;
+  }
+  state.activeTextSpanTarget = normalized;
+  state.activeReferenceContext = buildReferenceContext({
+    translationId: state.translationId,
+    bookId: state.bookId,
+    chapter: state.chapter,
+    verse,
+  });
+  ctx.clearActiveWordContext?.();
+  clearReaderHighlight();
+  renderer?.applyTextSpanHighlight?.(normalized);
+  scheduleReaderSnapshotPersistence();
+  return getActiveTextSpanTarget(verse);
+}
+
+function rehydrateActiveTextSpanSelection() {
+  const target = getActiveTextSpanTarget();
+  if (!target) return false;
+  clearReaderHighlight();
+  const resolved = renderer?.applyTextSpanHighlight?.(target);
+  restoreReaderHighlightFromContext(state.activeReferenceContext);
+  return Boolean(resolved);
+}
+
 function clearReaderHighlight() {
   document.querySelectorAll(".reader-context-verse, .reader-context-word").forEach((node) => {
     node.classList.remove("reader-context-verse", "reader-context-word");
@@ -286,6 +368,14 @@ function clearReaderHighlight() {
 }
 
 function highlightReaderContext(options = {}) {
+  if (!options.commit && state.activeTextSpanTarget && (options.wordElement || options.word)) {
+    state.hoverReferenceContext = getReferenceContext({
+      verse: options.verse || state.activeReferenceContext?.verse,
+      word: options.word || null,
+    });
+    return;
+  }
+  if (options.commit && !options.preserveTextSpan) clearActiveTextSpanSelection();
   clearReaderHighlight();
   const wordElement = options.wordElement || null;
   const segmentId = options.segmentId || wordElement?.dataset?.segmentId || wordElement?.closest?.("[data-segment-id]")?.dataset?.segmentId || null;
@@ -344,6 +434,7 @@ function restoreReaderHighlightFromContext(context) {
     wordElement,
     word,
     commit: true,
+    preserveTextSpan: Boolean(getActiveTextSpanTarget(context.verse)),
   });
 }
 
@@ -360,6 +451,10 @@ const ctx = {
   ensureReaderDataset,
   getCapabilityState,
   getReferenceContext,
+  getActiveTextSpanTarget,
+  resolveActiveTextSpan,
+  commitTextSpanSelection,
+  rehydrateActiveTextSpanSelection,
   readerDatasetCanLoad,
   readerDatasetState,
   referenceContextKey,
@@ -487,6 +582,155 @@ detailViews.showDefaultVerseStudy = async (reference, verse, options = {}) => {
 };
 
 const renderer = createChapterRenderer(ctx);
+
+function captureReaderFocus() {
+  const active = document.activeElement;
+  if (!active || active === document.body || active === document.documentElement) return null;
+  if (active.id) return { kind: "id", id: active.id };
+  const strong = active.closest?.(".strong-token");
+  if (strong) {
+    return {
+      kind: "strong-token",
+      verse: strong.dataset.verse,
+      segmentId: strong.dataset.segmentId,
+      interlinearKey: strong.dataset.interlinearKey,
+      strongCode: strong.dataset.strongCode,
+      tokenIndex: strong.dataset.tokenIndex,
+    };
+  }
+  const verseRow = active.closest?.(".verse-row");
+  if (active.classList?.contains("verse-number") && verseRow) {
+    return { kind: "verse-number", verse: verseRow.dataset.verse };
+  }
+  const reference = active.closest?.(".reference-hover, .link-button[data-verse]");
+  if (reference) {
+    return {
+      kind: "reference",
+      bookId: reference.dataset.bookId,
+      chapter: reference.dataset.chapter,
+      verse: reference.dataset.verse,
+      label: reference.dataset.referenceLabel || reference.textContent,
+    };
+  }
+  return null;
+}
+
+function restoreReaderFocus(focus) {
+  if (!focus) return false;
+  let target = null;
+  if (focus.kind === "id" && focus.id) target = document.getElementById(focus.id);
+  if (focus.kind === "strong-token") {
+    const row = focus.segmentId
+      ? document.querySelector(`[data-segment-id="${CSS.escape(focus.segmentId)}"]`)
+      : document.getElementById(refDomId(referenceKey(state.bookId, state.chapter, focus.verse)));
+    const tokens = [...(row?.querySelectorAll(".strong-token") || [])];
+    target =
+      tokens.find((node) => focus.interlinearKey && node.dataset.interlinearKey === focus.interlinearKey) ||
+      tokens.find(
+        (node) =>
+          focus.strongCode &&
+          node.dataset.strongCode === focus.strongCode &&
+          node.dataset.tokenIndex === String(focus.tokenIndex || ""),
+      ) ||
+      null;
+  }
+  if (focus.kind === "verse-number" && focus.verse) {
+    target = document
+      .getElementById(refDomId(referenceKey(state.bookId, state.chapter, focus.verse)))
+      ?.querySelector(".verse-number");
+  }
+  if (focus.kind === "reference") {
+    const candidates = [...document.querySelectorAll(".reference-hover, .link-button[data-verse]")];
+    target = candidates.find((node) => {
+      const label = String(node.dataset.referenceLabel || node.textContent || "").trim();
+      const sameLabel = !focus.label || label === focus.label;
+      const sameBook = !focus.bookId || node.dataset.bookId === focus.bookId;
+      const sameChapter = !focus.chapter || node.dataset.chapter === focus.chapter;
+      const sameVerse = !focus.verse || node.dataset.verse === focus.verse;
+      return sameLabel && sameBook && sameChapter && sameVerse;
+    });
+  }
+  if (!target?.isConnected || typeof target.focus !== "function") return false;
+  target.focus({ preventScroll: true });
+  return document.activeElement === target;
+}
+
+function captureReaderNavigationSnapshot() {
+  if (!state.verseBook) return null;
+  const route = parseReaderRoute();
+  return createReaderNavigationSnapshot({
+    translationId: state.translationId,
+    bookId: state.bookId,
+    chapter: state.chapter,
+    verse: route.verse || null,
+    pageX: window.scrollX,
+    pageY: window.scrollY,
+    navigationIndex: readerNavigationIndex,
+    navigationMaxIndex: readerNavigationMaxIndex,
+    readerContext: state.activeReferenceContext,
+    textSpanTarget: state.activeTextSpanTarget,
+    focus: captureReaderFocus(),
+  });
+}
+
+function syncReaderNavigationAvailability() {
+  setReaderNavigationAvailability({
+    back: readerNavigationIndex > 0,
+    forward: readerNavigationIndex < readerNavigationMaxIndex,
+  });
+}
+
+function persistCurrentReaderSnapshot() {
+  const snapshot = captureReaderNavigationSnapshot();
+  if (!snapshot) return null;
+  window.history.replaceState(
+    historyStateWithReaderSnapshot(window.history.state, snapshot),
+    "",
+    window.location.href,
+  );
+  syncReaderNavigationAvailability();
+  return snapshot;
+}
+
+const initialReaderNavigationSnapshot = readerSnapshotFromHistoryState(window.history.state);
+let readerNavigationIndex = initialReaderNavigationSnapshot?.navigationIndex || 0;
+let readerNavigationMaxIndex = Math.max(
+  readerNavigationIndex,
+  initialReaderNavigationSnapshot?.navigationMaxIndex || 0,
+);
+let activeReaderRoute = null;
+let readerSnapshotFrame = 0;
+let readerSnapshotSuspendedGeneration = null;
+function scheduleReaderSnapshotPersistence() {
+  if (
+    !state.verseBook ||
+    readerSnapshotFrame ||
+    readerSnapshotSuspendedGeneration === state.navigationGeneration
+  ) return;
+  const scheduledNavigationGeneration = state.navigationGeneration;
+  readerSnapshotFrame = window.requestAnimationFrame(() => {
+    readerSnapshotFrame = 0;
+    if (scheduledNavigationGeneration !== state.navigationGeneration) return;
+    persistCurrentReaderSnapshot();
+  });
+}
+
+function waitForReaderLayout() {
+  return new Promise((resolveLayout) => {
+    window.requestAnimationFrame(() => window.requestAnimationFrame(resolveLayout));
+  });
+}
+
+async function restoreReaderNavigationSnapshot(snapshot) {
+  if (!snapshot) return false;
+  await waitForReaderLayout();
+  if (state.activeTextSpanTarget) renderer.applyTextSpanHighlight(state.activeTextSpanTarget);
+  restoreReaderHighlightFromContext(state.activeReferenceContext);
+  window.scrollTo({ left: snapshot.pageX, top: snapshot.pageY, behavior: "auto" });
+  restoreReaderFocus(snapshot.focus);
+  window.scrollTo({ left: snapshot.pageX, top: snapshot.pageY, behavior: "auto" });
+  return true;
+}
 const OLD_TESTAMENT_BOOK_COUNT = 39;
 
 function setPickerExpanded(button, panel, expanded) {
@@ -540,15 +784,24 @@ function renderBookPicker() {
     list.className = "book-picker-list";
     books.forEach((book) => {
       list.append(
-        createPickerOption(book.name, book.id === state.bookId, () => {
+        createPickerOption(book.name, book.id === state.bookId, async () => {
           closeReaderPickers();
           els.book.value = book.id;
-          void navigateToRoute({
+          const completed = await navigateToRoute({
             translationId: state.translationId,
             bookId: book.id,
             chapter: "1",
             verse: null,
           });
+          if (!completed || state.bookId !== book.id || state.chapter !== "1") return;
+          document.dispatchEvent(new CustomEvent("reader:book-selection-complete", {
+            detail: {
+              translationId: state.translationId,
+              bookId: book.id,
+              bookLabel: book.name,
+              chapter: "1",
+            },
+          }));
         }),
       );
     });
@@ -813,8 +1066,15 @@ async function loadBookData(navigationGeneration, route) {
 }
 
 async function navigateToRoute(route, options = {}) {
+  if (!options.historyTraversal && !options.skipCurrentSnapshot) persistCurrentReaderSnapshot();
   dismissContainedDetailTool("route-change");
   const navigationGeneration = ++state.navigationGeneration;
+  readerSnapshotSuspendedGeneration = navigationGeneration;
+  if (readerSnapshotFrame) {
+    window.cancelAnimationFrame(readerSnapshotFrame);
+    readerSnapshotFrame = 0;
+  }
+  try {
   if (route.home) {
     resetReaderDatasets();
     if (state.manifest) {
@@ -823,25 +1083,73 @@ async function navigateToRoute(route, options = {}) {
     }
     ctx.studyContext = {}; // Clear study context when going home
     showHomePage(options);
-    return;
+    return true;
   }
   clearReaderHighlight();
   const normalized = normalizeRoute(route, state.manifest);
   const canLoad = await translationCanLoadBook(normalized.translationId, normalized.bookId);
-  if (navigationGeneration !== state.navigationGeneration) return;
+  if (navigationGeneration !== state.navigationGeneration) return false;
   const next = {
     ...normalized,
     translationId: canLoad ? normalized.translationId : DEFAULT_ROUTE.translationId,
   };
+  const restorationSnapshot = createReaderNavigationSnapshot(options.restorationSnapshot);
+  const canRestore = Boolean(
+    restorationSnapshot &&
+      restorationSnapshot.translationId === next.translationId &&
+      restorationSnapshot.bookId === next.bookId &&
+      restorationSnapshot.chapter === next.chapter &&
+      String(restorationSnapshot.verse || "") === String(next.verse || ""),
+  );
+  if (options.historyTraversal) {
+    if (restorationSnapshot) {
+      readerNavigationIndex = restorationSnapshot.navigationIndex;
+      readerNavigationMaxIndex = Math.max(
+        readerNavigationMaxIndex,
+        readerNavigationIndex,
+        restorationSnapshot.navigationMaxIndex,
+      );
+    } else if (options.historyEntryCreated) {
+      readerNavigationIndex += 1;
+      readerNavigationMaxIndex = readerNavigationIndex;
+    } else {
+      readerNavigationIndex = 0;
+      readerNavigationMaxIndex = 0;
+    }
+    syncReaderNavigationAvailability();
+  }
+  const previousRouteKey = activeReaderRoute ? readerRouteHash(activeReaderRoute) : null;
+  const nextRouteKey = readerRouteHash(next);
+  const browserTraversalChangedRoute = Boolean(
+    options.historyTraversal && previousRouteKey && previousRouteKey !== nextRouteKey,
+  );
+  const willPush = Boolean(
+    options.writeUrl !== false && !options.replace && window.location.hash !== nextRouteKey,
+  );
+  if (willPush) {
+    readerNavigationMaxIndex = readerNavigationIndex + 1;
+    persistCurrentReaderSnapshot();
+  }
+  const activeTextSpanRef = state.activeTextSpanTarget?.reference || null;
+  if (
+    activeTextSpanRef &&
+    !canRestore &&
+    (next.translationId !== state.translationId ||
+      next.bookId !== state.bookId ||
+      next.chapter !== state.chapter ||
+      (next.verse != null && String(activeTextSpanRef.verse_start || "") !== String(next.verse)))
+  ) {
+    clearActiveTextSpanSelection();
+  }
 
   // Clear study context when navigating to a different location
   const readerDatasetIdentityChanged =
     next.translationId !== state.translationId || next.bookId !== state.bookId;
+  const readerChapterIdentityChanged = readerDatasetIdentityChanged || next.chapter !== state.chapter;
   if (
-    next.translationId !== state.translationId ||
-    next.bookId !== state.bookId ||
-    next.chapter !== state.chapter
+    readerChapterIdentityChanged || browserTraversalChangedRoute
   ) {
+    clearActiveTextSpanSelection();
     ctx.studyContext = {};
     setDetailHoverLocked(false);
     detailViews.clearStrongPin();
@@ -852,39 +1160,53 @@ async function navigateToRoute(route, options = {}) {
   state.translationId = next.translationId;
   state.bookId = next.bookId;
   state.chapter = next.chapter;
-  state.pendingScrollVerse = next.verse || null;
-  state.activeReferenceContext = buildReferenceContext({
-    translationId: state.translationId,
-    bookId: state.bookId,
-    chapter: state.chapter,
-    verse: next.verse,
-  });
+  state.pendingScrollVerse = canRestore ? null : next.verse || null;
+  state.activeTextSpanTarget = canRestore
+    ? normalizeTarget(restorationSnapshot.textSpanTarget)
+    : state.activeTextSpanTarget;
+  state.activeReferenceContext = canRestore
+    ? buildReferenceContext(restorationSnapshot.readerContext)
+    : state.activeTextSpanTarget
+      ? state.activeReferenceContext
+      : buildReferenceContext({
+          translationId: state.translationId,
+          bookId: state.bookId,
+          chapter: state.chapter,
+          verse: next.verse,
+        });
 
   fillTranslationOptions();
   fillBookOptions();
 
   if (options.writeUrl !== false) {
+    if (willPush) {
+      readerNavigationIndex = readerNavigationMaxIndex;
+      syncReaderNavigationAvailability();
+    }
     writeReaderRoute(next, { replace: Boolean(options.replace) });
   }
 
   const loaded = await loadBookData(navigationGeneration, next);
-  if (!loaded || navigationGeneration !== state.navigationGeneration) return;
+  if (!loaded || navigationGeneration !== state.navigationGeneration) return false;
 
-  // Track this location in reader history
-  trackReaderLocation({
-    bookId: next.bookId,
-    chapter: next.chapter,
-    verse: next.verse || null,
-  });
+  activeReaderRoute = { ...next };
+  if (canRestore) await restoreReaderNavigationSnapshot(restorationSnapshot);
+  persistCurrentReaderSnapshot();
+  return true;
+  } finally {
+    if (navigationGeneration === state.navigationGeneration) {
+      readerSnapshotSuspendedGeneration = null;
+    }
+  }
 }
 
-async function goToLocation(bookId, chapter, verse) {
+async function goToLocation(bookId, chapter, verse, options = {}) {
   await navigateToRoute({
     translationId: state.translationId,
     bookId,
     chapter: String(chapter || 1),
     verse: verse == null ? null : String(verse),
-  });
+  }, options);
 }
 
 async function goToChapter(delta) {
@@ -902,6 +1224,7 @@ async function goToChapter(delta) {
 }
 
 function bindEvents() {
+  if ("scrollRestoration" in window.history) window.history.scrollRestoration = "manual";
   bindStudyWorkspaceWidthControls({
     root: document.documentElement,
     controls: studyWorkspaceWidthControls,
@@ -1047,21 +1370,18 @@ function bindEvents() {
   els.showTags.addEventListener("click", clearStudyContextAndCall(detailViews.showTagIndex));
   els.showMyData.addEventListener("click", clearStudyContextAndCall(detailViews.showMyData));
   els.detailBack.addEventListener("click", () => {
+    persistCurrentReaderSnapshot();
     detailViews.clearStrongPin();
-    const restoredLocation = goBackDetail();
-    if (restoredLocation) {
-      void goToLocation(restoredLocation.bookId, restoredLocation.chapter, restoredLocation.verse);
-    }
+    if (!goBackDetail() && readerNavigationIndex > 0) window.history.back();
   });
   els.detailForward.addEventListener("click", () => {
+    persistCurrentReaderSnapshot();
     detailViews.clearStrongPin();
-    const restoredLocation = goForwardDetail();
-    if (restoredLocation) {
-      void goToLocation(restoredLocation.bookId, restoredLocation.chapter, restoredLocation.verse);
-    }
+    if (!goForwardDetail() && readerNavigationIndex < readerNavigationMaxIndex) window.history.forward();
   });
   els.clearDetail.addEventListener("click", () => {
     detailViews.clearStrongPin();
+    clearActiveTextSpanSelection();
     clearReaderHighlight();
     state.activeReferenceContext = getReferenceContext({ verse: null, word: null });
     resetDetail();
@@ -1196,6 +1516,7 @@ function bindEvents() {
       if (!panelToken) return;
       clearPanelTokenHighlight();
       panelToken.classList.add("interlinear-hover");
+      if (state.activeTextSpanTarget) return;
       highlightReaderContext({
         verse: readerToken.dataset.verse,
         wordElement: readerToken,
@@ -1215,6 +1536,7 @@ function bindEvents() {
       const readerToken = findExactMatch(readerTokens(), panelToken);
       clearPanelTokenHighlight();
       panelToken.classList.add("interlinear-hover");
+      if (state.activeTextSpanTarget) return;
       highlightReaderContext({
         verse: panelToken.dataset.verse,
         wordElement: readerToken,
@@ -1232,15 +1554,39 @@ function bindEvents() {
   setupInterlinearInteraction();
 
   els.detail?.addEventListener("detail:restore", (event) => {
+    if (state.activeTextSpanTarget) {
+      rehydrateActiveTextSpanSelection();
+      return;
+    }
     restoreReaderHighlightFromContext(event.detail?.readerContext);
   });
 
-  const handleRouteChange = () => {
+  window.addEventListener("scroll", scheduleReaderSnapshotPersistence, { passive: true });
+  els.detail?.addEventListener("scroll", scheduleReaderSnapshotPersistence, { passive: true });
+  document.addEventListener("focusin", scheduleReaderSnapshotPersistence);
+
+  let popstateHashToIgnore = null;
+  const handlePopState = (event) => {
+    popstateHashToIgnore = window.location.hash;
     const route = parseReaderRoute();
-    void navigateToRoute(route, { writeUrl: false });
+    const restorationSnapshot = readerSnapshotFromHistoryState(event.state);
+    void navigateToRoute(route, {
+      writeUrl: false,
+      historyTraversal: true,
+      historyEntryCreated: !restorationSnapshot,
+      restorationSnapshot,
+    });
   };
-  window.addEventListener("popstate", handleRouteChange);
-  window.addEventListener("hashchange", handleRouteChange);
+  const handleHashChange = () => {
+    if (popstateHashToIgnore === window.location.hash) {
+      popstateHashToIgnore = null;
+      return;
+    }
+    const route = parseReaderRoute();
+    void navigateToRoute(route, { writeUrl: false, historyTraversal: true, historyEntryCreated: true });
+  };
+  window.addEventListener("popstate", handlePopState);
+  window.addEventListener("hashchange", handleHashChange);
 }
 
 async function init() {

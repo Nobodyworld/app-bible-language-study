@@ -1571,6 +1571,14 @@ button:disabled {
     0 0 0 2px rgba(37, 99, 95, 0.15);
 }
 
+.reader-context-phrase-verse {
+  border-radius: 7px;
+  background: rgba(37, 99, 95, 0.12);
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    0 0 0 2px rgba(37, 99, 95, 0.15);
+}
+
 .reader-context-word {
   border-radius: 3px;
   outline: 2px solid rgba(37, 99, 95, 0.55);
@@ -2363,6 +2371,83 @@ button:disabled {
   font-weight: 700;
   line-height: 1.2;
   overflow-wrap: anywhere;
+}
+
+.reader-context-phrase {
+  border-radius: 3px;
+  outline: 2px solid rgba(37, 99, 95, 0.55);
+  background: rgba(255, 220, 120, 0.62);
+  color: var(--accent-dark);
+  box-shadow: 0 1px 0 rgba(37, 99, 95, 0.28);
+}
+
+.language-study-selection-summary {
+  margin: 0.7rem 0;
+  padding: 0.65rem 0.75rem;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: var(--panel-alt);
+}
+
+.language-study-selection-summary h4,
+.translation-alignment h4 {
+  margin: 0 0 0.35rem;
+}
+
+.language-study-selection-summary blockquote {
+  margin: 0;
+  font: inherit;
+  font-weight: 700;
+}
+
+.language-study-selection-summary p,
+.translation-alignment > p {
+  margin: 0.35rem 0 0;
+  color: var(--muted);
+}
+
+.translation-alignment {
+  margin: 0.8rem 0;
+}
+
+.translation-alignment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+  gap: 0.45rem;
+  margin-top: 0.55rem;
+}
+
+.translation-token-pair {
+  display: grid;
+  gap: 0.2rem;
+  min-width: 0;
+  padding: 0.55rem;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
+  text-align: start;
+}
+
+.translation-token-pair.selected-range {
+  border-color: var(--accent);
+  background: var(--panel-alt);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.alignment-source {
+  font-size: 1.12rem;
+  font-weight: 700;
+}
+
+.alignment-english,
+.alignment-meta {
+  overflow-wrap: anywhere;
+}
+
+.alignment-meta {
+  color: var(--muted);
+  font-size: 0.76rem;
 }
 
 .strong-source-word .language-word-hover,
@@ -4940,6 +5025,13 @@ button {
     0 0 0 1px rgba(148, 163, 184, 0.16) !important;
 }
 
+:root[data-theme="dark"] .reader-context-phrase-verse {
+  background: rgba(148, 163, 184, 0.08) !important;
+  box-shadow:
+    inset 2px 0 0 rgba(148, 163, 184, 0.62),
+    0 0 0 1px rgba(148, 163, 184, 0.16) !important;
+}
+
 :root[data-theme="dark"] .reader-context-word {
   background: rgba(180, 145, 92, 0.18) !important;
   outline-color: rgba(180, 145, 92, 0.42) !important;
@@ -5154,6 +5246,11 @@ html[data-theme="light"] .word-meaning-menu {
   background: var(--panel) !important;
   border-color: var(--line) !important;
   color: var(--text) !important;
+}
+
+:root[data-theme="dark"] .reader-context-phrase {
+  background: rgba(180, 145, 92, 0.18) !important;
+  outline-color: rgba(180, 145, 92, 0.42) !important;
 }
 
 /* Strong's source-language polish: preserve full hit targets while refining

@@ -6,6 +6,13 @@ import {
   referenceContextKey,
   testamentForBook,
 } from "../app/src/reference-context.js";
+import {
+  createReaderNavigationSnapshot,
+  historyStateWithReaderSnapshot,
+  readerNavigationLocationKey,
+  readerSnapshotFromHistoryState,
+} from "../app/src/reader-navigation.js";
+import { createTextSpanTarget } from "../app/src/semantic-targets.js";
 
 assert.equal(testamentForBook("genesis"), "old");
 assert.equal(testamentForBook("john"), "new");
@@ -68,11 +75,71 @@ assert.deepEqual(
   },
 );
 
+const phraseTarget = createTextSpanTarget(
+  { translation_id: "bsb", book_id: "psalms", chapter: 23, verse: 1 },
+  { char_start: 0, char_end: 24, text_snapshot: "The LORD is my shepherd;" },
+);
+const navigationSnapshot = createReaderNavigationSnapshot({
+  translationId: "bsb",
+  bookId: "psalms",
+  chapter: "23",
+  verse: null,
+  pageX: 0,
+  pageY: 0,
+  navigationIndex: 0,
+  navigationMaxIndex: 1,
+  detailScrollTop: 184.5,
+  detailTitle: "Language Study",
+  detailLocked: true,
+  readerContext: { translationId: "bsb", bookId: "psalms", chapter: 23, verse: 1 },
+  textSpanTarget: phraseTarget,
+  focus: { kind: "strong-token", verse: 1, interlinearKey: "1:2:H3068" },
+});
+assert.equal(navigationSnapshot.pageY, 0, "A top-of-document snapshot must remain an exact zero.");
+assert.equal(navigationSnapshot.verse, null, "Route verse must remain separate from committed reader context.");
+assert.equal(navigationSnapshot.readerContext.verse, 1);
+assert.equal(navigationSnapshot.textSpanTarget.anchor.text_snapshot, "The LORD is my shepherd;");
+assert.equal(navigationSnapshot.navigationIndex, 0);
+assert.equal(navigationSnapshot.navigationMaxIndex, 1);
+assert.equal("detailTitle" in navigationSnapshot, false, "Browser Reader history must not claim detail reconstruction.");
+assert.equal("detailScrollTop" in navigationSnapshot, false, "Detail scroll belongs only to in-app Detail history.");
+assert.equal(readerNavigationLocationKey(navigationSnapshot), "bsb:psalms:23:");
+const historyState = historyStateWithReaderSnapshot({ retained: "value" }, navigationSnapshot);
+const restoredSnapshot = readerSnapshotFromHistoryState(historyState);
+assert.equal(historyState.retained, "value");
+assert.deepEqual(restoredSnapshot, navigationSnapshot);
+assert.equal(createReaderNavigationSnapshot(null), null, "Missing browser-history state must not throw or create a snapshot.");
+assert.equal(
+  createReaderNavigationSnapshot({ ...navigationSnapshot, version: 999 }),
+  null,
+  "Unknown reader-navigation snapshot versions must fail closed.",
+);
+assert.equal(
+  createReaderNavigationSnapshot({
+    ...navigationSnapshot,
+    readerContext: { ...navigationSnapshot.readerContext, book_id: "john" },
+  }),
+  null,
+  "A stale reader context from another location must invalidate the snapshot.",
+);
+assert.equal(
+  createReaderNavigationSnapshot({
+    ...navigationSnapshot,
+    textSpanTarget: {
+      ...navigationSnapshot.textSpanTarget,
+      reference: { ...navigationSnapshot.textSpanTarget.reference, book_id: "john" },
+    },
+  }),
+  null,
+  "A stale text-span context from another location must invalidate the snapshot.",
+);
+assert.equal(JSON.stringify(restoredSnapshot).includes("HTML"), false, "Reader snapshots must remain serializable application data.");
+
 console.log(
   JSON.stringify(
     {
       status: "ok",
-      assertions: 17,
+      assertions: 34,
       verse_key: referenceContextKey(context, "verse"),
       word_key: referenceContextKey(context, "word"),
     },

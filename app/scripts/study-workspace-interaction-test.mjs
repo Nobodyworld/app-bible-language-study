@@ -1150,13 +1150,16 @@ async function exerciseClearAndRouteCleanup(page, baseUrl) {
   await page.locator(selectors.meaning).click();
   await waitForToolOpen(page, ".word-meaning-other");
   await page.locator("#clearDetail").click();
-  await page.waitForFunction(() =>
-    document.querySelector("#detailToolSurface")?.hidden &&
-    document.querySelector("#detailTitle")?.textContent === "Details" &&
-    document.querySelector(".detail-pane")?.dataset.panelMode === "follow" &&
-    document.querySelector("#detailBack")?.disabled &&
-    document.querySelector("#detailForward")?.disabled,
-  );
+  await page.waitForFunction(() => {
+    const snapshot = history.state?.bibleAppReaderNavigation;
+    const index = snapshot?.navigationIndex || 0;
+    const maxIndex = Math.max(index, snapshot?.navigationMaxIndex || 0);
+    return document.querySelector("#detailToolSurface")?.hidden &&
+      document.querySelector("#detailTitle")?.textContent === "Details" &&
+      document.querySelector(".detail-pane")?.dataset.panelMode === "follow" &&
+      document.querySelector("#detailBack")?.disabled === !(index > 0) &&
+      document.querySelector("#detailForward")?.disabled === !(index < maxIndex);
+  });
   await waitForToolClosed(page);
 
   await openLanguageStudy(page);

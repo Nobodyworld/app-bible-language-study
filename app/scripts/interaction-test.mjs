@@ -154,6 +154,16 @@ async function launchBrowser() {
     async emulateMedia(options) {
       await playwrightPage.emulateMedia(options);
     },
+    async delayNextRequest(urlPattern, delayMs) {
+      await playwrightPage.route(
+        urlPattern,
+        async (route) => {
+          await delay(delayMs);
+          await route.continue();
+        },
+        { times: 1 },
+      );
+    },
     async setViewportSize(viewport) {
       await playwrightPage.setViewportSize(viewport);
     },
@@ -213,6 +223,90 @@ async function waitFor(page, expression, timeoutMs = 10000) {
     await delay(150);
   }
   throw new Error(`Timed out waiting for: ${expression}`);
+}
+
+async function waitForStableReaderGeometry(
+  page,
+  { label = "Reader geometry", timeoutMs = 5000, threshold = 0.25, stableSamples = 3 } = {},
+) {
+  return evaluate(
+    page,
+    `(async () => {
+      const label = ${JSON.stringify(label)};
+      const timeoutMs = ${JSON.stringify(timeoutMs)};
+      const threshold = ${JSON.stringify(threshold)};
+      const requiredStableSamples = ${JSON.stringify(stableSamples)};
+      const numericKeys = [
+        'chapterContentTop',
+        'chapterAreaBottom',
+        'chapterAreaHeight',
+        'readerPaneWidth',
+        'viewportWidth',
+        'viewportHeight'
+      ];
+      const readGeometry = () => {
+        const chapterContent = document.querySelector('#chapterContent')?.getBoundingClientRect();
+        const chapterArea = document.querySelector('.chapter-title')?.getBoundingClientRect();
+        const readerPane = document.querySelector('.reader-pane')?.getBoundingClientRect();
+        return {
+          chapterContentTop: chapterContent?.top ?? null,
+          chapterAreaBottom: chapterArea?.bottom ?? null,
+          chapterAreaHeight: chapterArea?.height ?? null,
+          readerPaneWidth: readerPane?.width ?? null,
+          viewportWidth: innerWidth,
+          viewportHeight: innerHeight,
+          workspaceMode: document.documentElement.dataset.studyWorkspaceWidth || ''
+        };
+      };
+      const isFiniteGeometry = (sample) =>
+        numericKeys.every((key) => Number.isFinite(sample[key])) && Boolean(sample.workspaceMode);
+      const samplesMatch = (previous, current) =>
+        previous.workspaceMode === current.workspaceMode &&
+        numericKeys.every((key) => Math.abs(current[key] - previous[key]) <= threshold);
+      const startedAt = performance.now();
+      const recentSamples = [];
+      let previous = null;
+      let consecutiveStableSamples = 0;
+      let sampleCount = 0;
+
+      while (performance.now() - startedAt <= timeoutMs) {
+        await new Promise(requestAnimationFrame);
+        const current = readGeometry();
+        sampleCount += 1;
+        recentSamples.push(current);
+        if (recentSamples.length > 12) recentSamples.shift();
+
+        if (!isFiniteGeometry(current)) {
+          consecutiveStableSamples = 0;
+        } else if (previous && isFiniteGeometry(previous) && samplesMatch(previous, current)) {
+          consecutiveStableSamples += 1;
+        } else {
+          consecutiveStableSamples = 1;
+        }
+
+        if (consecutiveStableSamples >= requiredStableSamples) {
+          return {
+            ...current,
+            sampleCount,
+            consecutiveStableSamples,
+            threshold,
+            elapsedMs: performance.now() - startedAt
+          };
+        }
+        previous = current;
+      }
+
+      throw new Error(
+        'Timed out waiting for stable ' + label + ': ' + JSON.stringify({
+          timeoutMs,
+          threshold,
+          requiredStableSamples,
+          sampleCount,
+          recentSamples
+        })
+      );
+    })()`,
+  );
 }
 
 async function studyMarksFocusDiagnostics(page, triggerSelector) {
@@ -823,9 +917,9 @@ async function runQa(page) {
     for (const profile of labelProfiles) {
       await page.setViewportSize({ width: profile.width, height: profile.height });
       await evaluate(page, `document.documentElement.dataset.studyWorkspaceWidth = ${JSON.stringify(profile.mode)}`);
-      await delay(100);
+      const settledGeometry = await waitForStableReaderGeometry(page, { label: profile.name });
       const measurement = await measureChapterIntro();
-      labelEvidence.push({ ...profile, measurement });
+      labelEvidence.push({ ...profile, settledGeometry, measurement });
       assert(
         measurement.labels.every((label) => label.visible === profile.labelsVisible && !label.clipped) &&
           measurement.actionRows === (profile.width <= 640 ? 2 : 1) &&
@@ -843,24 +937,33 @@ async function runQa(page) {
     qaEvidence.chapterIntro.labelThreshold = labelEvidence;
     await page.setViewportSize({ width: 1280, height: 720 });
     await evaluate(page, "document.documentElement.dataset.studyWorkspaceWidth = 'standard'");
-    await delay(100);
+    qaEvidence.chapterIntro.toolContextResetGeometry = await waitForStableReaderGeometry(page, {
+      label: '1280 standard tool-context reset',
+    });
     pass("reader-pane action-label thresholds and mobile-width geometry");
   }
 
   const visibleChapterTools = [
-    ['#showSearch', 'Search this book'],
-    ...(qaDevice === 'mobile' ? [['#openStudyPanel', 'Study panel']] : []),
-    ['#showInterlinear', 'Language Study'],
-    ['#showOutline', 'Book outline'],
-    ['#showTags', 'Study Marks'],
-    ['#showMyData', 'My Data'],
+    { selector: '#showSearch', accessibleName: 'Search this book', detailTitle: 'Search' },
+    ...(qaDevice === 'mobile'
+      ? [{ selector: '#openStudyPanel', accessibleName: 'Study panel', detailState: 'visible locked study panel' }]
+      : []),
+    { selector: '#showInterlinear', accessibleName: 'Language Study', detailTitle: 'Language Study' },
+    { selector: '#showOutline', accessibleName: 'Book outline', detailTitle: 'Outline' },
+    { selector: '#showTags', accessibleName: 'Study Marks', detailTitle: 'Study Marks' },
+    { selector: '#showMyData', accessibleName: 'My Data', detailTitle: 'My Data' },
   ];
+  const toolContextBaselineGeometry = await waitForStableReaderGeometry(page, {
+    label: 'chapter-tool baseline',
+  });
   const toolContextBefore = await evaluate(
     page,
-    `(() => ({ route: location.href, scrollY, scriptureTop: document.querySelector('#chapterContent')?.getBoundingClientRect().top }))()`,
+    `(() => ({ route: location.href, scrollY }))()`,
   );
+  toolContextBefore.geometry = toolContextBaselineGeometry;
+  qaEvidence.chapterIntro.toolContextBaseline = toolContextBefore;
   const toolContextEvidence = [];
-  for (const [selector, expectedName] of visibleChapterTools) {
+  for (const { selector, accessibleName: expectedName, detailTitle, detailState } of visibleChapterTools) {
     const accessibleName = await evaluate(
       page,
       `(() => {
@@ -869,20 +972,44 @@ async function runQa(page) {
       })()`,
     );
     await evaluate(page, `document.querySelector(${JSON.stringify(selector)}).click()`);
-    await delay(120);
+    if (detailTitle) {
+      await waitFor(
+        page,
+        `document.querySelector('#detailTitle')?.textContent.trim() === ${JSON.stringify(detailTitle)}`,
+      );
+    } else {
+      await waitFor(
+        page,
+        "document.querySelector('.detail-pane')?.classList.contains('visible') && document.querySelector('.detail-pane')?.dataset.hoverLocked === 'true'",
+      );
+    }
+    const settledGeometry = await waitForStableReaderGeometry(page, {
+      label: `${selector} chapter-tool result`,
+    });
     const after = await evaluate(
       page,
-      `(() => ({ route: location.href, scrollY, scriptureTop: document.querySelector('#chapterContent')?.getBoundingClientRect().top, detailTitle: document.querySelector('#detailTitle')?.textContent.trim() || '' }))()`,
+      `(() => ({
+        route: location.href,
+        scrollY,
+        detailTitle: document.querySelector('#detailTitle')?.textContent.trim() || '',
+        detailVisible: document.querySelector('.detail-pane')?.classList.contains('visible') || false,
+        detailHoverLocked: document.querySelector('.detail-pane')?.dataset.hoverLocked || ''
+      }))()`,
     );
-    toolContextEvidence.push({ selector, accessibleName, after });
+    after.geometry = settledGeometry;
+    const reachedExpectedDetail = detailTitle
+      ? after.detailTitle === detailTitle
+      : detailState === 'visible locked study panel' && after.detailVisible && after.detailHoverLocked === 'true';
+    toolContextEvidence.push({ selector, accessibleName, expectedDetail: detailTitle || detailState, after });
     assert(
       accessibleName === expectedName && after.route === toolContextBefore.route && after.scrollY === toolContextBefore.scrollY &&
-        Math.abs(after.scriptureTop - toolContextBefore.scriptureTop) <= 1,
-      `Chapter tool semantics or reader context changed for ${selector}: ${JSON.stringify({ toolContextBefore, accessibleName, after })}`,
+        reachedExpectedDetail &&
+        Math.abs(after.geometry.chapterContentTop - toolContextBefore.geometry.chapterContentTop) <= 1,
+      `Chapter tool semantics, destination, or reader context changed for ${selector}: ${JSON.stringify({ toolContextBefore, accessibleName, expectedName, expectedDetail: detailTitle || detailState, after })}`,
     );
   }
   qaEvidence.chapterIntro.toolContext = toolContextEvidence;
-  pass("chapter tools preserve route, scroll, and accessible names");
+  pass("chapter tools preserve route, scroll, stable geometry, accessible names, and Detail destinations");
 
   if (qaDevice !== 'mobile') {
     const chapterIntroRouteBase = baseUrl.split('#')[0];
@@ -1064,23 +1191,63 @@ async function runQa(page) {
       bookPickerState.scrollableColumns >= 1,
     `book picker should expose two scrollable testament columns: ${JSON.stringify(bookPickerState)}`,
   );
+  await page.delayNextRequest("**/data/verses/bsb/proverbs.json", 450);
   await clickButtonByText(page, "Proverbs", { scope: "#bookPickerPanel" });
+  await delay(120);
+  const delayedBookHandoff = await evaluate(
+    page,
+    `(() => ({
+      route: location.hash,
+      chapterExpanded: document.querySelector('#chapterPickerButton')?.getAttribute('aria-expanded'),
+      chapter: document.querySelector('#chapterSelect')?.value,
+      focused: document.activeElement === document.querySelector('#chapterPickerButton')
+    }))()`,
+  );
+  assert(
+    delayedBookHandoff.chapterExpanded === "false" && !delayedBookHandoff.focused,
+    `Chapter opened before delayed Book navigation completed: ${JSON.stringify(delayedBookHandoff)}`,
+  );
   await waitFor(
     page,
-    "location.hash.includes('/read/bsb/proverbs/1') && document.querySelector('#chapterPickerButton')?.getAttribute('aria-expanded') === 'true'",
+    `(() => {
+      const active = document.querySelector('#chapterPickerPanel .reader-picker-option.active');
+      return location.hash === '#/read/bsb/proverbs/1' &&
+        document.querySelector('#bookSelect')?.value === 'proverbs' &&
+        document.querySelector('#chapterSelect')?.value === '1' &&
+        document.querySelector('#bookPickerButton')?.getAttribute('aria-label') === 'Book: Proverbs' &&
+        document.querySelector('#chapterPickerButton')?.getAttribute('aria-label') === 'Chapter: 1' &&
+        active?.textContent.trim() === '1' && active?.getAttribute('aria-pressed') === 'true' &&
+        document.querySelector('#chapterPickerButton')?.getAttribute('aria-expanded') === 'true' &&
+        document.activeElement === document.querySelector('#chapterPickerButton') &&
+        document.querySelector('#chapterTitle')?.textContent === 'Proverbs 1' &&
+        Boolean(document.querySelector('#chapterContent .verse-row[data-verse="1"]'));
+    })()`,
   );
   const bookToChapterState = await evaluate(
     page,
     `(() => ({
       book: document.querySelector('#bookSelect')?.value,
       chapter: document.querySelector('#chapterSelect')?.value,
+      bookName: document.querySelector('#bookPickerButton')?.getAttribute('aria-label'),
       chapterName: document.querySelector('#chapterPickerButton')?.getAttribute('aria-label'),
-      focused: document.activeElement === document.querySelector('#chapterPickerButton')
+      activeChapter: document.querySelector('#chapterPickerPanel .reader-picker-option.active')?.textContent.trim(),
+      activePressed: document.querySelector('#chapterPickerPanel .reader-picker-option.active')?.getAttribute('aria-pressed'),
+      expanded: document.querySelector('#chapterPickerButton')?.getAttribute('aria-expanded'),
+      focused: document.activeElement === document.querySelector('#chapterPickerButton'),
+      title: document.querySelector('#chapterTitle')?.textContent,
+      renderedVerseOne: Boolean(document.querySelector('#chapterContent .verse-row[data-verse="1"]'))
     }))()`,
   );
   assert(
     bookToChapterState.book === "proverbs" && bookToChapterState.chapter === "1" &&
-      bookToChapterState.chapterName === "Chapter: 1" && bookToChapterState.focused,
+      bookToChapterState.bookName === "Book: Proverbs" &&
+      bookToChapterState.chapterName === "Chapter: 1" &&
+      bookToChapterState.activeChapter === "1" &&
+      bookToChapterState.activePressed === "true" &&
+      bookToChapterState.expanded === "true" &&
+      bookToChapterState.focused &&
+      bookToChapterState.title === "Proverbs 1" &&
+      bookToChapterState.renderedVerseOne,
     `Book selection must hand off to the synchronized Chapter picker: ${JSON.stringify(bookToChapterState)}`,
   );
   await page.press("#chapterPickerButton", "Escape");
@@ -1163,13 +1330,14 @@ async function runQa(page) {
     };
 
     await page.setViewportSize({ width: 1280, height: 720 });
+    await waitForStableReaderGeometry(page, { label: 'Book picker wide baseline' });
     await openPicker("book");
     const bookWideBefore = await measurePicker("book");
     await page.setViewportSize({ width: 390, height: 844 });
-    await delay(450);
+    await waitForStableReaderGeometry(page, { label: 'Book picker narrow resize' });
     const bookNarrow = await measurePicker("book");
     await page.setViewportSize({ width: 1280, height: 720 });
-    await delay(450);
+    await waitForStableReaderGeometry(page, { label: 'Book picker wide restoration' });
     const bookWideAfter = await measurePicker("book");
     await closePicker("book");
     await openPicker("book");
@@ -1196,10 +1364,10 @@ async function runQa(page) {
     await openPicker("chapter");
     const chapterWideBefore = await measurePicker("chapter");
     await page.setViewportSize({ width: 390, height: 844 });
-    await delay(450);
+    await waitForStableReaderGeometry(page, { label: 'Chapter picker narrow resize' });
     const chapterNarrow = await measurePicker("chapter");
     await page.setViewportSize({ width: 1280, height: 720 });
-    await delay(450);
+    await waitForStableReaderGeometry(page, { label: 'Chapter picker wide restoration' });
     const chapterWideAfter = await measurePicker("chapter");
     await closePicker("chapter");
     await openPicker("chapter");
