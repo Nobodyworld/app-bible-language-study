@@ -20,7 +20,6 @@ import {
   goBackDetail,
   goForwardDetail,
   isDetailIntentCurrent,
-  isDetailHoverLocked,
   option,
   resetDetail,
   resetDetailForNavigation,
