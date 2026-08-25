@@ -74,17 +74,14 @@ let detailPanelMode = PANEL_MODES.follow;
 let currentDetailReaderContext = null;
 let detailIntentGeneration = 0;
 
-// Reader location history for tracking book/chapter/verse navigation
-let readerLocationHistory = [];
-let readerLocationForwardHistory = [];
-let lastTrackedLocation = null;
+let readerNavigationAvailability = { back: false, forward: false };
 
 function updateDetailHistoryButtons() {
   if (els.detailBack) {
-    els.detailBack.disabled = detailHistory.length === 0 && readerLocationHistory.length === 0;
+    els.detailBack.disabled = detailHistory.length === 0 && !readerNavigationAvailability.back;
   }
   if (els.detailForward) {
-    els.detailForward.disabled = detailForwardHistory.length === 0 && readerLocationForwardHistory.length === 0;
+    els.detailForward.disabled = detailForwardHistory.length === 0 && !readerNavigationAvailability.forward;
   }
   const locked = detailPanelMode === PANEL_MODES.locked;
   if (els.detailPane) {
@@ -137,6 +134,7 @@ function snapshotDetail() {
     contextHidden: els.detailContext ? els.detailContext.hidden : true,
     nodes: [...els.detail.childNodes],
     readerContext: cloneReaderContext(currentDetailReaderContext) || snapshotReaderContextFromDom(),
+    scrollTop: els.detail?.scrollTop || 0,
   };
 }
 
@@ -159,6 +157,9 @@ function restoreDetail(snapshot) {
   els.detail.replaceChildren(...snapshot.nodes);
   currentDetailReaderContext = cloneReaderContext(snapshot.readerContext);
   notifyDetailRestored(snapshot);
+  window.requestAnimationFrame(() => {
+    if (els.detail) els.detail.scrollTop = Number(snapshot.scrollTop) || 0;
+  });
 }
 
 function extractContextNode(node, options = {}) {
@@ -275,25 +276,10 @@ export function goBackDetail() {
     detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
     restoreDetail(previousDetail);
     updateDetailHistoryButtons();
-    return;
+    return true;
   }
-
-  const previousLocation = readerLocationHistory.pop();
-
-  if (!previousLocation) {
-    updateDetailHistoryButtons();
-    return;
-  }
-
-  if (lastTrackedLocation) readerLocationForwardHistory.push(lastTrackedLocation);
-
-  transientBase = null;
-  currentDetailTransient = false;
-  detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
-
-  lastTrackedLocation = { ...previousLocation };
   updateDetailHistoryButtons();
-  return previousLocation;
+  return false;
 }
 
 export function goForwardDetail() {
@@ -308,25 +294,10 @@ export function goForwardDetail() {
     detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
     restoreDetail(nextDetail);
     updateDetailHistoryButtons();
-    return;
+    return true;
   }
-
-  const nextLocation = readerLocationForwardHistory.pop();
-
-  if (!nextLocation) {
-    updateDetailHistoryButtons();
-    return;
-  }
-
-  if (lastTrackedLocation) readerLocationHistory.push(lastTrackedLocation);
-
-  transientBase = null;
-  currentDetailTransient = false;
-  detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
-
-  lastTrackedLocation = { ...nextLocation };
   updateDetailHistoryButtons();
-  return nextLocation;
+  return false;
 }
 
 function resetDetailContent(title, message) {
@@ -350,23 +321,11 @@ export function resetDetailForNavigation(title = "Details", message = defaultDet
 }
 
 export function resetDetail(title = "Details", message = defaultDetailText) {
-  readerLocationHistory.length = 0;
-  readerLocationForwardHistory.length = 0;
-  lastTrackedLocation = null;
   resetDetailContent(title, message);
 }
 
-// Track reader location changes for back/forward navigation
-export function trackReaderLocation(location) {
-  if (!location) return;
-  const locationKey = `${location.bookId}:${location.chapter}:${location.verse || ''}`;
-  const lastKey = lastTrackedLocation ? `${lastTrackedLocation.bookId}:${lastTrackedLocation.chapter}:${lastTrackedLocation.verse || ''}` : null;
-
-  if (locationKey !== lastKey && lastTrackedLocation) {
-    readerLocationHistory.push({ ...lastTrackedLocation });
-    readerLocationForwardHistory.length = 0;
-  }
-  lastTrackedLocation = { ...location };
+export function setReaderNavigationAvailability({ back = false, forward = false } = {}) {
+  readerNavigationAvailability = { back: back === true, forward: forward === true };
   updateDetailHistoryButtons();
 }
 

@@ -185,7 +185,11 @@ function actionForTool(ctx, tool, reference, verse, active, wordContext) {
       dataAvailable: hasInterlinear(ctx, verse) || datasetMayLoad(ctx, "interlinear"),
       unavailableKey: "interlinear",
       dataUnavailableMessage: `Language Study data is not available for ${reference}.`,
-      run: () => void ctx.detailViews.showInterlinearVerse(reference, verse, { history: "replace", lock: true }),
+      run: ({ textSpanTarget = null } = {}) => void ctx.detailViews.showInterlinearVerse(reference, verse, {
+        history: "replace",
+        lock: true,
+        textSpanTarget,
+      }),
     };
   }
 
@@ -242,12 +246,15 @@ function appendActionButton(ctx, controls, action, reference, verse, wordContext
 
   if (action.run && (!action.current || reactivatableCurrent)) {
     button.addEventListener("click", () => {
+      const textSpanTarget = action.scope === "verse" ? ctx.getActiveTextSpanTarget?.(verse) || null : null;
       if (!action.skipReaderHighlight) {
         ctx.highlightReaderContext?.(
-          action.scope === "word" ? wordHighlightOptions(wordContext, verse) : { verse, commit: true },
+          action.scope === "word"
+            ? wordHighlightOptions(wordContext, verse)
+            : { verse, commit: true, preserveTextSpan: Boolean(textSpanTarget) },
         );
       }
-      action.run();
+      action.run({ textSpanTarget });
     });
   }
   controls.append(button);

@@ -42,7 +42,11 @@ export function createChapterRenderer(ctx) {
       button.title = `Footnote ${event.marker}`;
       button.dataset.tooltip = `Footnote ${event.marker}: ${event.note?.text || ""}`;
       button.addEventListener("click", () => {
-        ctx.highlightReaderContext?.({ verse: event.verse, commit: true });
+        ctx.highlightReaderContext?.({
+          verse: event.verse,
+          commit: true,
+          preserveTextSpan: Boolean(ctx.getActiveTextSpanTarget?.(event.verse)),
+        });
         ctx.detailViews.showFootnote(event.note, event.reference, { verse: event.verse });
       });
       parent.append(button);
@@ -457,8 +461,12 @@ export function createChapterRenderer(ctx) {
     study.type = "button";
     study.textContent = "Study";
     study.addEventListener("click", () => {
+      const committedTarget = ctx.commitTextSpanSelection?.(target) || target;
       clearSelection();
-      void ctx.detailViews.showInterlinearVerse(reference, verse, { forceHistory: true });
+      void ctx.detailViews.showInterlinearVerse(reference, verse, {
+        forceHistory: true,
+        textSpanTarget: committedTarget,
+      });
     });
 
     menu.append(marks, study, red);
@@ -510,9 +518,12 @@ export function createChapterRenderer(ctx) {
     return primaryTagId ? tagColorForId(primaryTagId) : null;
   }
 
-  function markTextSegment(span, start, end, taggedTargets) {
+  function markTextSegment(span, start, end, taggedTargets, activeRange = null) {
     span.dataset.verseCharStart = String(start);
     span.dataset.verseCharEnd = String(end);
+    if (activeRange?.char_start < end && activeRange?.char_end > start) {
+      span.classList.add("reader-context-phrase");
+    }
     if (!taggedTargets.length) return;
     span.classList.add("tagged-text-span");
     span.dataset.taggedTargetCount = String(taggedTargets.length);
@@ -520,11 +531,11 @@ export function createChapterRenderer(ctx) {
     if (tagColor) span.style.setProperty("--tag-color", tagColor);
   }
 
-  function appendTextSegment(parent, text, isRed, start, end, taggedTargets) {
+  function appendTextSegment(parent, text, isRed, start, end, taggedTargets, activeRange = null) {
     const span = document.createElement("span");
     span.className = isRed ? "reader-text-segment red-letter" : "reader-text-segment";
     span.textContent = text;
-    markTextSegment(span, start, end, taggedTargets);
+    markTextSegment(span, start, end, taggedTargets, activeRange);
     parent.append(span);
   }
 
@@ -556,6 +567,7 @@ export function createChapterRenderer(ctx) {
     redRanges,
     taggedTargets,
     reference,
+    activeRange = null,
   ) {
     const inserted = new Set();
     const boundaries = new Set([start, end]);
@@ -578,6 +590,10 @@ export function createChapterRenderer(ctx) {
       boundaries.add(Math.max(start, resolved.char_start));
       boundaries.add(Math.min(end, resolved.char_end));
     });
+    if (activeRange?.char_end > start && activeRange?.char_start < end) {
+      boundaries.add(Math.max(start, activeRange.char_start));
+      boundaries.add(Math.min(end, activeRange.char_end));
+    }
 
     const points = [...boundaries].sort((a, b) => a - b);
     for (let index = 0; index < points.length - 1; index += 1) {
@@ -599,7 +615,7 @@ export function createChapterRenderer(ctx) {
         ({ resolved }) => resolved.char_start < next && resolved.char_end > point,
       );
       if (!tokenRange) {
-        appendTextSegment(parent, text, isRed, point, next, segmentTargets);
+        appendTextSegment(parent, text, isRed, point, next, segmentTargets, activeRange);
         appendTargetBadges(parent, taggedTargets, next, reference);
         continue;
       }
@@ -614,7 +630,7 @@ export function createChapterRenderer(ctx) {
       token.dataset.strongCode = tokenRange.token.strong_code || "";
       token.dataset.verse = String(tokenRange.verseContext?.verse || "");
       token.dataset.segmentId = String(tokenRange.verseContext?.segmentId || "");
-      markTextSegment(token, point, next, segmentTargets);
+      markTextSegment(token, point, next, segmentTargets, activeRange);
       token.dataset.interlinearKey = interlinearTokenIdentity({
         verse: token.dataset.segmentId || token.dataset.verse,
         tokenIndex: token.dataset.tokenIndex,
@@ -687,6 +703,7 @@ export function createChapterRenderer(ctx) {
         [],
         [],
         reference,
+        null,
       );
     } else {
       label.textContent = block.text;
@@ -706,6 +723,7 @@ export function createChapterRenderer(ctx) {
           ctx.highlightReaderContext?.({
             verse: note.anchor?.verse || block.verse,
             commit: true,
+            preserveTextSpan: Boolean(ctx.getActiveTextSpanTarget?.(note.anchor?.verse || block.verse)),
           });
           ctx.detailViews.showFootnote(note, reference, { verse: note.anchor?.verse || block.verse });
         });
@@ -764,6 +782,9 @@ export function createChapterRenderer(ctx) {
     row.id = refDomId(key);
     row.dataset.refKey = key;
     row.dataset.verse = verse;
+    const activeTextSpan = ctx.resolveActiveTextSpan?.(verseText, verse) || null;
+    const activeRange = activeTextSpan?.resolved || null;
+    if (activeRange) row.classList.add("reader-context-phrase-verse");
 
     const number = document.createElement("button");
     number.type = "button";
@@ -849,6 +870,7 @@ export function createChapterRenderer(ctx) {
           redRanges,
           taggedTextTargets,
           reference,
+          activeRange,
         );
         body.append(lineNode);
       });
@@ -876,8 +898,18 @@ export function createChapterRenderer(ctx) {
     studyButton.textContent = "⋯";
     studyButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      ctx.highlightReaderContext?.({ verse, commit: true });
-      void ctx.detailViews.showDefaultVerseStudy(reference, verse, { verse, forceHistory: true });
+      const textSpanTarget = ctx.getActiveTextSpanTarget?.(verse) || null;
+      ctx.highlightReaderContext?.({
+        verse,
+        commit: true,
+        preserveTextSpan: Boolean(textSpanTarget),
+      });
+      void ctx.detailViews.showDefaultVerseStudy(reference, verse, {
+        verse,
+        forceHistory: true,
+        preserveTextSpan: Boolean(textSpanTarget),
+        textSpanTarget,
+      });
     });
 
     const verseActions = document.createElement("div");
@@ -969,7 +1001,65 @@ export function createChapterRenderer(ctx) {
     }
   }
 
+  function clearTextSpanHighlight() {
+    document.querySelectorAll("[data-reader-phrase-wrapper]").forEach((wrapper) => {
+      const parent = wrapper.parentNode;
+      wrapper.replaceWith(document.createTextNode(wrapper.textContent || ""));
+      parent?.normalize?.();
+    });
+    document.querySelectorAll(".reader-context-phrase, .reader-context-phrase-verse").forEach((node) => {
+      node.classList.remove("reader-context-phrase", "reader-context-phrase-verse");
+    });
+  }
+
+  function applyTextSpanHighlight(target) {
+    clearTextSpanHighlight();
+    const ref = target?.reference || {};
+    const verse = String(ref.verse_start || "");
+    if (
+      target?.target_type !== "text_span" ||
+      target.translation_id !== ctx.state.translationId ||
+      ref.book_id !== ctx.state.bookId ||
+      String(ref.chapter || "") !== String(ctx.state.chapter) ||
+      !verse
+    ) {
+      return null;
+    }
+    const verseText = ctx.state.verseBook?.chapters?.[ctx.state.chapter]?.[verse];
+    const resolved = resolveTextSpanAnchor(target, verseText);
+    if (!Number.isInteger(resolved.char_start) || !Number.isInteger(resolved.char_end)) return null;
+    const row = document.getElementById(refDomId(referenceKey(ctx.state.bookId, ctx.state.chapter, verse)));
+    if (!row) return null;
+    row.classList.add("reader-context-phrase-verse");
+    row.querySelectorAll("[data-verse-char-start][data-verse-char-end]").forEach((segment) => {
+      const start = Number(segment.dataset.verseCharStart);
+      const end = Number(segment.dataset.verseCharEnd);
+      const overlapStart = Math.max(start, resolved.char_start);
+      const overlapEnd = Math.min(end, resolved.char_end);
+      if (overlapEnd <= overlapStart) return;
+      if (overlapStart === start && overlapEnd === end) {
+        segment.classList.add("reader-context-phrase");
+        return;
+      }
+      const text = segment.textContent || "";
+      const localStart = Math.max(0, overlapStart - start);
+      const localEnd = Math.min(text.length, overlapEnd - start);
+      const fragment = document.createDocumentFragment();
+      if (localStart > 0) fragment.append(document.createTextNode(text.slice(0, localStart)));
+      const highlight = document.createElement("span");
+      highlight.className = "reader-context-phrase";
+      highlight.dataset.readerPhraseWrapper = "true";
+      highlight.textContent = text.slice(localStart, localEnd);
+      fragment.append(highlight);
+      if (localEnd < text.length) fragment.append(document.createTextNode(text.slice(localEnd)));
+      segment.replaceChildren(fragment);
+    });
+    return resolved;
+  }
+
   return {
+    applyTextSpanHighlight,
+    clearTextSpanHighlight,
     renderChapter,
   };
 }
