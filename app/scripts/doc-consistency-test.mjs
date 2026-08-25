@@ -21,6 +21,7 @@ const DOCUMENT_CLASSIFICATIONS = new Set([
 
 const DOCUMENT_MODEL = Object.freeze([
   { path: ".github/PULL_REQUEST_TEMPLATE.md", classification: "maintained", roles: ["policy"] },
+  { path: "AGENTS.md", classification: "maintained", roles: ["policy"] },
   { path: "CHANGELOG.md", classification: "maintained", roles: ["current-status", "release-history"] },
   { path: "CONTRIBUTING.md", classification: "maintained", roles: ["policy", "runtime-facing"] },
   { path: "LICENSE", classification: "maintained", roles: ["legal"] },
