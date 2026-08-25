@@ -86,6 +86,8 @@ const navigationSnapshot = createReaderNavigationSnapshot({
   verse: null,
   pageX: 0,
   pageY: 0,
+  navigationIndex: 0,
+  navigationMaxIndex: 1,
   detailScrollTop: 184.5,
   detailTitle: "Language Study",
   detailLocked: true,
@@ -97,6 +99,10 @@ assert.equal(navigationSnapshot.pageY, 0, "A top-of-document snapshot must remai
 assert.equal(navigationSnapshot.verse, null, "Route verse must remain separate from committed reader context.");
 assert.equal(navigationSnapshot.readerContext.verse, 1);
 assert.equal(navigationSnapshot.textSpanTarget.anchor.text_snapshot, "The LORD is my shepherd;");
+assert.equal(navigationSnapshot.navigationIndex, 0);
+assert.equal(navigationSnapshot.navigationMaxIndex, 1);
+assert.equal("detailTitle" in navigationSnapshot, false, "Browser Reader history must not claim detail reconstruction.");
+assert.equal("detailScrollTop" in navigationSnapshot, false, "Detail scroll belongs only to in-app Detail history.");
 assert.equal(readerNavigationLocationKey(navigationSnapshot), "bsb:psalms:23:");
 const historyState = historyStateWithReaderSnapshot({ retained: "value" }, navigationSnapshot);
 const restoredSnapshot = readerSnapshotFromHistoryState(historyState);
@@ -133,7 +139,7 @@ console.log(
   JSON.stringify(
     {
       status: "ok",
-      assertions: 30,
+      assertions: 34,
       verse_key: referenceContextKey(context, "verse"),
       word_key: referenceContextKey(context, "word"),
     },

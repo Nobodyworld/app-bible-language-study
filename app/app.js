@@ -24,11 +24,11 @@ import {
   option,
   resetDetail,
   resetDetailForNavigation,
+  setReaderNavigationAvailability,
   setDetailHoverLocked,
   setDetailMessage,
   setStatus,
   sortedNumericKeys,
-  trackReaderLocation,
 } from "./src/dom.js?v=pr13-live-qa-20260711e";
 import { createReferenceButton as makeReferenceButton, referenceKey, refDomId } from "./src/references.js";
 import { buildReferenceContext, referenceContextKey } from "./src/reference-context.js";
@@ -38,7 +38,7 @@ import {
   normalizeTarget,
   resolveTextSpanAnchor,
 } from "./src/semantic-targets.js?v=pr13-live-qa-20260711e";
-import { normalizeRoute, parseReaderRoute, writeReaderRoute } from "./src/routing.js";
+import { normalizeRoute, parseReaderRoute, readerRouteHash, writeReaderRoute } from "./src/routing.js";
 import {
   createReaderNavigationSnapshot,
   historyStateWithReaderSnapshot,
@@ -666,28 +666,40 @@ function captureReaderNavigationSnapshot() {
     verse: route.verse || null,
     pageX: window.scrollX,
     pageY: window.scrollY,
-    detailScrollTop: els.detail?.scrollTop || 0,
-    detailTitle: els.detailTitle?.textContent || null,
-    detailLocked: isDetailHoverLocked(),
-    detailVisible: els.detailPane?.classList.contains("visible") || false,
+    navigationIndex: readerNavigationIndex,
+    navigationMaxIndex: readerNavigationMaxIndex,
     readerContext: state.activeReferenceContext,
     textSpanTarget: state.activeTextSpanTarget,
     focus: captureReaderFocus(),
   });
 }
 
-function persistCurrentReaderSnapshot({ trackInternal = true } = {}) {
+function syncReaderNavigationAvailability() {
+  setReaderNavigationAvailability({
+    back: readerNavigationIndex > 0,
+    forward: readerNavigationIndex < readerNavigationMaxIndex,
+  });
+}
+
+function persistCurrentReaderSnapshot() {
   const snapshot = captureReaderNavigationSnapshot();
   if (!snapshot) return null;
-  if (trackInternal) trackReaderLocation(snapshot, { replace: trackInternal === "replace" });
   window.history.replaceState(
     historyStateWithReaderSnapshot(window.history.state, snapshot),
     "",
     window.location.href,
   );
+  syncReaderNavigationAvailability();
   return snapshot;
 }
 
+const initialReaderNavigationSnapshot = readerSnapshotFromHistoryState(window.history.state);
+let readerNavigationIndex = initialReaderNavigationSnapshot?.navigationIndex || 0;
+let readerNavigationMaxIndex = Math.max(
+  readerNavigationIndex,
+  initialReaderNavigationSnapshot?.navigationMaxIndex || 0,
+);
+let activeReaderRoute = null;
 let readerSnapshotFrame = 0;
 let readerSnapshotSuspendedGeneration = null;
 function scheduleReaderSnapshotPersistence() {
@@ -713,12 +725,6 @@ function waitForReaderLayout() {
 async function restoreReaderNavigationSnapshot(snapshot) {
   if (!snapshot) return false;
   await waitForReaderLayout();
-  const sameDetail = snapshot.detailTitle && snapshot.detailTitle === els.detailTitle?.textContent;
-  if (sameDetail && els.detail) els.detail.scrollTop = snapshot.detailScrollTop;
-  if (sameDetail) {
-    setDetailHoverLocked(snapshot.detailLocked);
-    els.detailPane?.classList.toggle("visible", snapshot.detailVisible);
-  }
   if (state.activeTextSpanTarget) renderer.applyTextSpanHighlight(state.activeTextSpanTarget);
   restoreReaderHighlightFromContext(state.activeReferenceContext);
   window.scrollTo({ left: snapshot.pageX, top: snapshot.pageY, behavior: "auto" });
@@ -779,15 +785,24 @@ function renderBookPicker() {
     list.className = "book-picker-list";
     books.forEach((book) => {
       list.append(
-        createPickerOption(book.name, book.id === state.bookId, () => {
+        createPickerOption(book.name, book.id === state.bookId, async () => {
           closeReaderPickers();
           els.book.value = book.id;
-          void navigateToRoute({
+          const completed = await navigateToRoute({
             translationId: state.translationId,
             bookId: book.id,
             chapter: "1",
             verse: null,
           });
+          if (!completed || state.bookId !== book.id || state.chapter !== "1") return;
+          document.dispatchEvent(new CustomEvent("reader:book-selection-complete", {
+            detail: {
+              translationId: state.translationId,
+              bookId: book.id,
+              bookLabel: book.name,
+              chapter: "1",
+            },
+          }));
         }),
       );
     });
@@ -1069,12 +1084,12 @@ async function navigateToRoute(route, options = {}) {
     }
     ctx.studyContext = {}; // Clear study context when going home
     showHomePage(options);
-    return;
+    return true;
   }
   clearReaderHighlight();
   const normalized = normalizeRoute(route, state.manifest);
   const canLoad = await translationCanLoadBook(normalized.translationId, normalized.bookId);
-  if (navigationGeneration !== state.navigationGeneration) return;
+  if (navigationGeneration !== state.navigationGeneration) return false;
   const next = {
     ...normalized,
     translationId: canLoad ? normalized.translationId : DEFAULT_ROUTE.translationId,
@@ -1087,6 +1102,35 @@ async function navigateToRoute(route, options = {}) {
       restorationSnapshot.chapter === next.chapter &&
       String(restorationSnapshot.verse || "") === String(next.verse || ""),
   );
+  if (options.historyTraversal) {
+    if (restorationSnapshot) {
+      readerNavigationIndex = restorationSnapshot.navigationIndex;
+      readerNavigationMaxIndex = Math.max(
+        readerNavigationMaxIndex,
+        readerNavigationIndex,
+        restorationSnapshot.navigationMaxIndex,
+      );
+    } else if (options.historyEntryCreated) {
+      readerNavigationIndex += 1;
+      readerNavigationMaxIndex = readerNavigationIndex;
+    } else {
+      readerNavigationIndex = 0;
+      readerNavigationMaxIndex = 0;
+    }
+    syncReaderNavigationAvailability();
+  }
+  const previousRouteKey = activeReaderRoute ? readerRouteHash(activeReaderRoute) : null;
+  const nextRouteKey = readerRouteHash(next);
+  const browserTraversalChangedRoute = Boolean(
+    options.historyTraversal && previousRouteKey && previousRouteKey !== nextRouteKey,
+  );
+  const willPush = Boolean(
+    options.writeUrl !== false && !options.replace && window.location.hash !== nextRouteKey,
+  );
+  if (willPush) {
+    readerNavigationMaxIndex = readerNavigationIndex + 1;
+    persistCurrentReaderSnapshot();
+  }
   const activeTextSpanRef = state.activeTextSpanTarget?.reference || null;
   if (
     activeTextSpanRef &&
@@ -1102,10 +1146,9 @@ async function navigateToRoute(route, options = {}) {
   // Clear study context when navigating to a different location
   const readerDatasetIdentityChanged =
     next.translationId !== state.translationId || next.bookId !== state.bookId;
+  const readerChapterIdentityChanged = readerDatasetIdentityChanged || next.chapter !== state.chapter;
   if (
-    next.translationId !== state.translationId ||
-    next.bookId !== state.bookId ||
-    next.chapter !== state.chapter
+    readerChapterIdentityChanged || browserTraversalChangedRoute
   ) {
     clearActiveTextSpanSelection();
     ctx.studyContext = {};
@@ -1137,14 +1180,20 @@ async function navigateToRoute(route, options = {}) {
   fillBookOptions();
 
   if (options.writeUrl !== false) {
+    if (willPush) {
+      readerNavigationIndex = readerNavigationMaxIndex;
+      syncReaderNavigationAvailability();
+    }
     writeReaderRoute(next, { replace: Boolean(options.replace) });
   }
 
   const loaded = await loadBookData(navigationGeneration, next);
-  if (!loaded || navigationGeneration !== state.navigationGeneration) return;
+  if (!loaded || navigationGeneration !== state.navigationGeneration) return false;
 
+  activeReaderRoute = { ...next };
   if (canRestore) await restoreReaderNavigationSnapshot(restorationSnapshot);
-  persistCurrentReaderSnapshot({ trackInternal: options.historyTraversal ? "replace" : true });
+  persistCurrentReaderSnapshot();
+  return true;
   } finally {
     if (navigationGeneration === state.navigationGeneration) {
       readerSnapshotSuspendedGeneration = null;
@@ -1324,24 +1373,12 @@ function bindEvents() {
   els.detailBack.addEventListener("click", () => {
     persistCurrentReaderSnapshot();
     detailViews.clearStrongPin();
-    const restoredLocation = goBackDetail();
-    if (restoredLocation) {
-      void goToLocation(restoredLocation.bookId, restoredLocation.chapter, restoredLocation.verse, {
-        restorationSnapshot: restoredLocation,
-        skipCurrentSnapshot: true,
-      });
-    }
+    if (!goBackDetail() && readerNavigationIndex > 0) window.history.back();
   });
   els.detailForward.addEventListener("click", () => {
     persistCurrentReaderSnapshot();
     detailViews.clearStrongPin();
-    const restoredLocation = goForwardDetail();
-    if (restoredLocation) {
-      void goToLocation(restoredLocation.bookId, restoredLocation.chapter, restoredLocation.verse, {
-        restorationSnapshot: restoredLocation,
-        skipCurrentSnapshot: true,
-      });
-    }
+    if (!goForwardDetail() && readerNavigationIndex < readerNavigationMaxIndex) window.history.forward();
   });
   els.clearDetail.addEventListener("click", () => {
     detailViews.clearStrongPin();
@@ -1533,10 +1570,12 @@ function bindEvents() {
   const handlePopState = (event) => {
     popstateHashToIgnore = window.location.hash;
     const route = parseReaderRoute();
+    const restorationSnapshot = readerSnapshotFromHistoryState(event.state);
     void navigateToRoute(route, {
       writeUrl: false,
       historyTraversal: true,
-      restorationSnapshot: readerSnapshotFromHistoryState(event.state),
+      historyEntryCreated: !restorationSnapshot,
+      restorationSnapshot,
     });
   };
   const handleHashChange = () => {
@@ -1545,7 +1584,7 @@ function bindEvents() {
       return;
     }
     const route = parseReaderRoute();
-    void navigateToRoute(route, { writeUrl: false, historyTraversal: true });
+    void navigateToRoute(route, { writeUrl: false, historyTraversal: true, historyEntryCreated: true });
   };
   window.addEventListener("popstate", handlePopState);
   window.addEventListener("hashchange", handleHashChange);

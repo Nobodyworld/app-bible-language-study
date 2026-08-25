@@ -74,17 +74,14 @@ let detailPanelMode = PANEL_MODES.follow;
 let currentDetailReaderContext = null;
 let detailIntentGeneration = 0;
 
-// Reader location history for tracking book/chapter/verse navigation
-let readerLocationHistory = [];
-let readerLocationForwardHistory = [];
-let lastTrackedLocation = null;
+let readerNavigationAvailability = { back: false, forward: false };
 
 function updateDetailHistoryButtons() {
   if (els.detailBack) {
-    els.detailBack.disabled = detailHistory.length === 0 && readerLocationHistory.length === 0;
+    els.detailBack.disabled = detailHistory.length === 0 && !readerNavigationAvailability.back;
   }
   if (els.detailForward) {
-    els.detailForward.disabled = detailForwardHistory.length === 0 && readerLocationForwardHistory.length === 0;
+    els.detailForward.disabled = detailForwardHistory.length === 0 && !readerNavigationAvailability.forward;
   }
   const locked = detailPanelMode === PANEL_MODES.locked;
   if (els.detailPane) {
@@ -128,10 +125,6 @@ function snapshotReaderContextFromDom() {
 
 function cloneReaderContext(context) {
   return context ? JSON.parse(JSON.stringify(context)) : null;
-}
-
-function cloneReaderLocation(location) {
-  return location ? JSON.parse(JSON.stringify(location)) : null;
 }
 
 function snapshotDetail() {
@@ -283,25 +276,10 @@ export function goBackDetail() {
     detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
     restoreDetail(previousDetail);
     updateDetailHistoryButtons();
-    return;
+    return true;
   }
-
-  const previousLocation = readerLocationHistory.pop();
-
-  if (!previousLocation) {
-    updateDetailHistoryButtons();
-    return;
-  }
-
-  if (lastTrackedLocation) readerLocationForwardHistory.push(cloneReaderLocation(lastTrackedLocation));
-
-  transientBase = null;
-  currentDetailTransient = false;
-  detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
-
-  lastTrackedLocation = cloneReaderLocation(previousLocation);
   updateDetailHistoryButtons();
-  return previousLocation;
+  return false;
 }
 
 export function goForwardDetail() {
@@ -316,25 +294,10 @@ export function goForwardDetail() {
     detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
     restoreDetail(nextDetail);
     updateDetailHistoryButtons();
-    return;
+    return true;
   }
-
-  const nextLocation = readerLocationForwardHistory.pop();
-
-  if (!nextLocation) {
-    updateDetailHistoryButtons();
-    return;
-  }
-
-  if (lastTrackedLocation) readerLocationHistory.push(cloneReaderLocation(lastTrackedLocation));
-
-  transientBase = null;
-  currentDetailTransient = false;
-  detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
-
-  lastTrackedLocation = cloneReaderLocation(nextLocation);
   updateDetailHistoryButtons();
-  return nextLocation;
+  return false;
 }
 
 function resetDetailContent(title, message) {
@@ -358,25 +321,11 @@ export function resetDetailForNavigation(title = "Details", message = defaultDet
 }
 
 export function resetDetail(title = "Details", message = defaultDetailText) {
-  readerLocationHistory.length = 0;
-  readerLocationForwardHistory.length = 0;
-  lastTrackedLocation = null;
   resetDetailContent(title, message);
 }
 
-// Track reader location changes for back/forward navigation
-export function trackReaderLocation(location, options = {}) {
-  if (!location) return;
-  const locationKey = `${location.translationId || ''}:${location.bookId}:${location.chapter}:${location.verse || ''}`;
-  const lastKey = lastTrackedLocation
-    ? `${lastTrackedLocation.translationId || ''}:${lastTrackedLocation.bookId}:${lastTrackedLocation.chapter}:${lastTrackedLocation.verse || ''}`
-    : null;
-
-  if (!options.replace && locationKey !== lastKey && lastTrackedLocation) {
-    readerLocationHistory.push(cloneReaderLocation(lastTrackedLocation));
-    readerLocationForwardHistory.length = 0;
-  }
-  lastTrackedLocation = cloneReaderLocation(location);
+export function setReaderNavigationAvailability({ back = false, forward = false } = {}) {
+  readerNavigationAvailability = { back: back === true, forward: forward === true };
   updateDetailHistoryButtons();
 }
 

@@ -42,7 +42,11 @@ export function createChapterRenderer(ctx) {
       button.title = `Footnote ${event.marker}`;
       button.dataset.tooltip = `Footnote ${event.marker}: ${event.note?.text || ""}`;
       button.addEventListener("click", () => {
-        ctx.highlightReaderContext?.({ verse: event.verse, commit: true });
+        ctx.highlightReaderContext?.({
+          verse: event.verse,
+          commit: true,
+          preserveTextSpan: Boolean(ctx.getActiveTextSpanTarget?.(event.verse)),
+        });
         ctx.detailViews.showFootnote(event.note, event.reference, { verse: event.verse });
       });
       parent.append(button);
@@ -719,6 +723,7 @@ export function createChapterRenderer(ctx) {
           ctx.highlightReaderContext?.({
             verse: note.anchor?.verse || block.verse,
             commit: true,
+            preserveTextSpan: Boolean(ctx.getActiveTextSpanTarget?.(note.anchor?.verse || block.verse)),
           });
           ctx.detailViews.showFootnote(note, reference, { verse: note.anchor?.verse || block.verse });
         });
@@ -893,8 +898,18 @@ export function createChapterRenderer(ctx) {
     studyButton.textContent = "⋯";
     studyButton.addEventListener("click", (event) => {
       event.stopPropagation();
-      ctx.highlightReaderContext?.({ verse, commit: true });
-      void ctx.detailViews.showDefaultVerseStudy(reference, verse, { verse, forceHistory: true });
+      const textSpanTarget = ctx.getActiveTextSpanTarget?.(verse) || null;
+      ctx.highlightReaderContext?.({
+        verse,
+        commit: true,
+        preserveTextSpan: Boolean(textSpanTarget),
+      });
+      void ctx.detailViews.showDefaultVerseStudy(reference, verse, {
+        verse,
+        forceHistory: true,
+        preserveTextSpan: Boolean(textSpanTarget),
+        textSpanTarget,
+      });
     });
 
     const verseActions = document.createElement("div");

@@ -294,9 +294,14 @@ assert(
 );
 assert(
   /openChapterPickerAfterBookSelection/.test(pickerFlow) &&
-    /#bookPickerPanel \.reader-picker-option/.test(pickerFlow) &&
+    /reader:book-selection-complete/.test(app) &&
+    /reader:book-selection-complete/.test(pickerFlow) &&
+    /bookSelect\?\.value === selection\.bookId/.test(pickerFlow) &&
+    /chapterSelect\?\.value === selection\.chapter/.test(pickerFlow) &&
+    /activeChapter\?\.getAttribute\("aria-pressed"\) === "true"/.test(pickerFlow) &&
+    /chapterTitle\?\.textContent\?\.trim\(\) === `\$\{selection\.bookLabel\} \$\{selection\.chapter\}`/.test(pickerFlow) &&
     /setPickerExpanded\(chapterButton, chapterPanel, true\)/.test(pickerFlow),
-  "Selecting a book in the app-owned picker must open chapter selection after navigation.",
+  "Selecting a book must open Chapter only after route, native controls, active option, and rendered content converge.",
 );
 assert(
   /frozenReaderContext/.test(pickerFlow) &&
@@ -486,26 +491,43 @@ assert(
 assert(
   /createSelectedPhraseSummary/.test(interlinearView) &&
     /createTranslationAlignmentPanel\(tokens, selected\.wordMapLookup, selected\.range\)/.test(interlinearView) &&
-    /pair\.dataset\.selectedRange = "true"/.test(interlinearView),
-  "Language Study must summarize the exact phrase and mark every overlap in the existing alignment model.",
+    /pair\.dataset\.selectedRange = "true"/.test(interlinearView) &&
+    /document\.createElement\("article"\)/.test(interlinearView) &&
+    /pair\.setAttribute\("role", "group"\)/.test(interlinearView) &&
+    !/pair\.type = "button"/.test(interlinearView),
+  "Language Study must summarize the phrase and expose alignment pairs as selected informational groups, not no-op buttons.",
 );
 assert(
   /READER_NAVIGATION_SNAPSHOT_VERSION = 1/.test(readerNavigation) &&
     /textSpanTarget/.test(readerNavigation) &&
+    /navigationIndex/.test(readerNavigation) &&
+    /navigationMaxIndex/.test(readerNavigation) &&
+    !/detailTitle|detailLocked|detailVisible|detailScrollTop/.test(readerNavigation) &&
     /historyStateWithReaderSnapshot/.test(readerNavigation) &&
     /readerSnapshotFromHistoryState/.test(readerNavigation) &&
     !/HTMLElement|Range\(|Event\(/.test(readerNavigation),
   "Reader restoration state must remain one versioned serializable snapshot without DOM objects.",
 );
 assert(
-  /historyTraversal: true,[\s\S]*?restorationSnapshot: readerSnapshotFromHistoryState\(event\.state\)/.test(app) &&
+  /const restorationSnapshot = readerSnapshotFromHistoryState\(event\.state\);[\s\S]*?historyTraversal: true,[\s\S]*?restorationSnapshot,/.test(app) &&
     /popstateHashToIgnore/.test(app) &&
     /history\.scrollRestoration = "manual"/.test(app) &&
     /String\(restorationSnapshot\.verse \|\| ""\) === String\(next\.verse \|\| ""\)/.test(app) &&
     /state\.pendingScrollVerse = canRestore \? null/.test(app) &&
     /window\.scrollTo\(\{ left: snapshot\.pageX, top: snapshot\.pageY, behavior: "auto" \}\)/.test(app) &&
-    /scrollTop: els\.detail\?\.scrollTop \|\| 0/.test(dom),
-  "Browser/detail history must restore exact reader and detail positions without target-verse centering or duplicate route handling.",
+    /setReaderNavigationAvailability/.test(dom) &&
+    !/readerLocationHistory|readerLocationForwardHistory/.test(dom) &&
+    /readerNavigationMaxIndex = Math\.max\(\s*readerNavigationMaxIndex,\s*readerNavigationIndex,\s*restorationSnapshot\.navigationMaxIndex/.test(app) &&
+    /if \(willPush\) \{\s*readerNavigationMaxIndex = readerNavigationIndex \+ 1;\s*persistCurrentReaderSnapshot\(\);\s*\}[\s\S]*?const activeTextSpanRef = state\.activeTextSpanTarget/.test(app) &&
+    /!goBackDetail\(\) && readerNavigationIndex > 0\) window\.history\.back\(\)/.test(app) &&
+    /!goForwardDetail\(\) && readerNavigationIndex < readerNavigationMaxIndex\) window\.history\.forward\(\)/.test(app),
+  "Browser history must own Reader routes while in-app Detail history remains panel-only and button states use the monotonic index.",
+);
+assert(
+  /const textSpanTarget = action\.scope === "verse"/.test(await readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8")) &&
+    /preserveTextSpan: Boolean\(textSpanTarget\)/.test(await readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8")) &&
+    /action\.run\(\{ textSpanTarget \}\)/.test(await readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8")),
+  "Same-verse contextual tools must capture and explicitly preserve the active phrase before changing detail content.",
 );
 assert(
   /readerSnapshotSuspendedGeneration === state\.navigationGeneration/.test(app) &&
@@ -514,4 +536,4 @@ assert(
   "Deferred scroll and focus snapshots from an earlier navigation must not contaminate the current Reader history stack.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 75 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 76 }, null, 2));

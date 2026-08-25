@@ -158,6 +158,12 @@ async function readerState(page) {
     }),
     phraseVerseCount: document.querySelectorAll(".reader-context-phrase-verse").length,
     historyReaderContext: history.state?.bibleAppReaderNavigation?.readerContext || null,
+    historyNavigationIndex: history.state?.bibleAppReaderNavigation?.navigationIndex ?? null,
+    historyNavigationMaxIndex: history.state?.bibleAppReaderNavigation?.navigationMaxIndex ?? null,
+    detailLocked: document.querySelector(".detail-pane")?.dataset.hoverLocked === "true",
+    detailVisible: document.querySelector(".detail-pane")?.classList.contains("visible") || false,
+    detailBackDisabled: document.querySelector("#detailBack")?.disabled ?? null,
+    detailForwardDisabled: document.querySelector("#detailForward")?.disabled ?? null,
     horizontalOverflow: document.documentElement.scrollWidth - document.documentElement.clientWidth,
   }));
 }
@@ -282,6 +288,42 @@ async function main() {
     nodeAssert.equal(persistentPhrase.scrollY, beforeStudy.scrollY, "Opening Language Study moved the document.");
     assert(persistentPhrase.horizontalOverflow <= 0, "Exact phrase state introduced horizontal overflow.");
 
+    const phraseThroughTools = [];
+    await clickWithPointer(page, '#detailContext [data-panel-action="refs"]');
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Cross References");
+    phraseThroughTools.push({ activation: "pointer", tool: "references", state: await readerState(page) });
+    await page.locator('#detailContext [data-panel-action="commentary"]').press("Enter");
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Commentary");
+    phraseThroughTools.push({ activation: "Enter", tool: "commentary", state: await readerState(page) });
+    await page.locator('#detailContext [data-panel-action="par"]').press("Space");
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Parallel");
+    phraseThroughTools.push({ activation: "Space", tool: "parallel", state: await readerState(page) });
+    await clickWithPointer(page, '#detailContext [data-panel-action="interlinear"]');
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study");
+    await waitFor(page, () => Boolean(document.querySelector(".language-study-selection-summary")));
+    phraseThroughTools.push({ activation: "pointer", tool: "language-study-reactivation", state: await readerState(page) });
+    phraseThroughTools.forEach(({ activation, tool, state: toolState }) => {
+      nodeAssert.equal(toolState.phraseText, phrase, `${activation} ${tool} activation cleared the exact phrase.`);
+      nodeAssert.equal(toolState.scrollY, beforeStudy.scrollY, `${activation} ${tool} activation moved the Reader.`);
+    });
+    const alignmentSemantics = await page.evaluate(() => ({
+      cards: document.querySelectorAll(".translation-token-pair").length,
+      groups: document.querySelectorAll('.translation-token-pair[role="group"]').length,
+      buttons: document.querySelectorAll("button.translation-token-pair").length,
+      tabbable: [...document.querySelectorAll(".translation-token-pair")].filter((node) => node.tabIndex >= 0).length,
+      labeled: [...document.querySelectorAll(".translation-token-pair")].every((node) => Boolean(node.getAttribute("aria-label"))),
+      selected: document.querySelectorAll(".translation-token-pair.selected-range").length,
+    }));
+    assert(
+      alignmentSemantics.cards > 0 &&
+        alignmentSemantics.groups === alignmentSemantics.cards &&
+        alignmentSemantics.buttons === 0 &&
+        alignmentSemantics.tabbable === 0 &&
+        alignmentSemantics.labeled &&
+        alignmentSemantics.selected === afterStudy.overlapCount,
+      `Alignment cards exposed dishonest or incomplete semantics: ${JSON.stringify(alignmentSemantics)}`,
+    );
+
     await page.evaluate(() => document.querySelector("#chapterSelect")?.dispatchEvent(new Event("change", { bubbles: true })));
     await waitFor(page, () => [...document.querySelectorAll(".reader-context-phrase")].map((node) => node.textContent || "").join("") === "The LORD is my shepherd;");
     nodeAssert.equal((await readerState(page)).phraseText, phrase, "A same-location chapter rerender cleared the exact phrase.");
@@ -334,6 +376,15 @@ async function main() {
     }
     await page.emulateMedia({ reducedMotion: "no-preference" });
 
+    await selectExactPhrase(page, phrase);
+    await waitFor(page, () => !document.querySelector(".selection-action-menu")?.hidden);
+    await page.locator(".selection-action-menu button", { hasText: "Study" }).click();
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study");
+    await waitFor(page, () => Boolean(document.querySelector(".language-study-selection-summary")));
+    await clickWithPointer(page, '.verse-row[data-verse="1"] .verse-study-button');
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent !== "Language Study");
+    nodeAssert.equal((await readerState(page)).phraseText, phrase, "The supplemental verse Study control cleared the exact phrase.");
+
     await page.goto(`${url}/?case=history#/read/bsb/psalms/23`, { waitUntil: "load" });
     await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 23");
     await clickWithPointer(page, "reader-token");
@@ -385,13 +436,24 @@ async function main() {
       await crossReference.evaluate((node) => document.activeElement === node),
       "Browser Back did not restore focus to the originating cross-reference.",
     );
+    nodeAssert.equal(browserBack.historyNavigationIndex, 0, "Browser Back did not restore the origin navigation index.");
+    nodeAssert.equal(browserBack.historyNavigationMaxIndex, 1, "Browser Back lost the known forward bound.");
+    nodeAssert.equal(browserBack.detailBackDisabled, true, "Detail Back retained a duplicate Psalm location after Browser Back.");
+    nodeAssert.equal(browserBack.detailForwardDisabled, false, "Detail Forward did not expose the browser-owned Ezekiel entry.");
+    nodeAssert.equal(browserBack.detailTitle, "Details", "Browser Back retained stale Strong's content instead of resetting detail truthfully.");
+    nodeAssert.equal(browserBack.detailScrollTop, 0, "Browser Back retained unsupported detail scroll state.");
+    nodeAssert.equal(browserBack.detailLocked, false, "Browser Back retained an unsupported locked detail state.");
+    nodeAssert.equal(browserBack.detailVisible, false, "Browser Back retained an unsupported visible drawer state.");
 
-    await page.goForward();
+    await page.evaluate(() => document.querySelector("#detailBack")?.click());
+    await delay(100);
+    nodeAssert.equal((await readerState(page)).route, browserBack.route, "Disabled Detail Back caused a same-route no-op rerender.");
+
+    await clickWithPointer(page, "#detailForward");
     await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Ezekiel 34");
     await waitFor(page, () => document.querySelector('.reader-context-verse[data-verse="11"]'));
-    await waitFor(page, () => !document.querySelector("#detailBack")?.disabled);
-    const browserForward = await readerState(page);
-    assert(browserForward.route.includes("/ezekiel/34/11"), "Browser Forward did not restore the destination route.");
+    const detailForward = await readerState(page);
+    assert(detailForward.route.includes("/ezekiel/34/11"), "Detail Forward did not use browser history for the destination route.");
 
     await clickWithPointer(page, "#detailBack");
     await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 23");
@@ -399,21 +461,66 @@ async function main() {
     const detailBack = await readerState(page);
     assert(Math.abs(detailBack.scrollY - 275) <= 1, `Detail Back restored ${detailBack.scrollY}px instead of 275px.`);
     assert(detailBack.wordKeys.includes(wordIdentity), "Detail Back did not restore the committed word highlight.");
-    await clickWithPointer(page, "#detailForward");
+
+    await page.goForward();
     await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Ezekiel 34");
     await waitFor(page, () => document.querySelector('.reader-context-verse[data-verse="11"]'));
     await waitFor(page, () => window.history.state?.bibleAppReaderNavigation?.bookId === "ezekiel");
-    const detailForward = await readerState(page);
-    assert(detailForward.route.includes("/ezekiel/34/11"), "Detail Forward did not restore the destination route.");
+    const browserForward = await readerState(page);
+    assert(browserForward.route.includes("/ezekiel/34/11"), "Browser Forward did not restore the destination route.");
     assert(
       Math.abs(detailForward.scrollY - browserForward.scrollY) <= 1,
       `Detail Forward restored ${detailForward.scrollY}px instead of ${browserForward.scrollY}px.`,
     );
     assert(
-      detailForward.historyReaderContext?.book_id === "ezekiel" &&
-        Number(detailForward.historyReaderContext?.verse) === 11,
-      "Detail Forward did not restore the destination Reader context.",
+      browserForward.historyReaderContext?.book_id === "ezekiel" &&
+        Number(browserForward.historyReaderContext?.verse) === 11,
+      "Browser Forward did not restore the destination Reader context.",
     );
+
+    await page.goBack();
+    await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 23");
+    await page.goForward();
+    await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Ezekiel 34");
+    await clickWithPointer(page, "#detailBack");
+    await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 23");
+    nodeAssert.equal((await readerState(page)).route, "#/read/bsb/psalms/23", "Browser Forward followed by Detail Back diverged from browser history.");
+
+    await page.goto(`${url}/?case=multi-history#/read/bsb/psalms/23`, { waitUntil: "load" });
+    await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 23");
+    await clickWithPointer(page, "#nextChapter");
+    await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 24");
+    await clickWithPointer(page, "#nextChapter");
+    await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 25");
+    await page.goBack();
+    await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 24");
+    await page.goBack();
+    await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 23");
+    await page.goForward();
+    await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 24");
+    await page.goForward();
+    await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 25");
+    const multiHistory = await readerState(page);
+    nodeAssert.deepEqual(
+      [multiHistory.historyNavigationIndex, multiHistory.historyNavigationMaxIndex],
+      [2, 2],
+      "Multiple Browser Back/Forward operations lost the monotonic Reader history bounds.",
+    );
+
+    await page.goto(`${url}/?case=same-chapter-verse#/read/bsb/psalms/23`, { waitUntil: "load" });
+    await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 23");
+    await page.evaluate(() => { window.location.hash = "#/read/bsb/psalms/23/1"; });
+    await waitFor(page, () => window.location.hash === "#/read/bsb/psalms/23/1" && history.state?.bibleAppReaderNavigation?.verse === "1");
+    const sameChapterVerse = await readerState(page);
+    nodeAssert.deepEqual(
+      [sameChapterVerse.historyNavigationIndex, sameChapterVerse.historyNavigationMaxIndex],
+      [1, 1],
+      "A same-chapter different-verse entry did not receive a distinct monotonic history index.",
+    );
+    await page.goBack();
+    await waitFor(page, () => window.location.hash === "#/read/bsb/psalms/23");
+    await page.goForward();
+    await waitFor(page, () => window.location.hash === "#/read/bsb/psalms/23/1");
 
     await page.goto(`${url}/?case=long-chapter#/read/bsb/psalms/119`, { waitUntil: "load" });
     await waitFor(page, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 119");
@@ -462,6 +569,12 @@ async function main() {
     await waitFor(touchPage, () => document.querySelector(".language-study-selection-summary"));
     const touchPhrase = await readerState(touchPage);
     nodeAssert.equal(touchPhrase.phraseText, phrase, "Touch activation did not preserve the exact phrase.");
+    await touchPage.locator('#detailContext [data-panel-action="refs"]').tap();
+    await waitFor(touchPage, () => document.querySelector("#detailTitle")?.textContent === "Cross References");
+    nodeAssert.equal((await readerState(touchPage)).phraseText, phrase, "Touch References activation cleared the exact phrase.");
+    await touchPage.locator('#detailContext [data-panel-action="interlinear"]').tap();
+    await waitFor(touchPage, () => document.querySelector("#detailTitle")?.textContent === "Language Study");
+    await waitFor(touchPage, () => Boolean(document.querySelector(".language-study-selection-summary")));
     const touchHideReopen = await touchPage.evaluate(() => {
       const pane = document.querySelector(".detail-pane");
       const before = window.scrollY;
@@ -480,6 +593,18 @@ async function main() {
         touchHideReopen.phrase === phrase,
       `Touch drawer hide/reopen changed Reader context: ${JSON.stringify(touchHideReopen)}`,
     );
+    await touchPage.evaluate(() => document.querySelector(".detail-pane")?.classList.remove("visible"));
+    const touchCrossReference = touchPage.locator(".presentation-block .reference-hover", { hasText: "Ezekiel 34" }).first();
+    await touchCrossReference.tap();
+    await waitFor(touchPage, () => document.querySelector("#chapterTitle")?.textContent === "Ezekiel 34");
+    await touchPage.goBack();
+    await waitFor(touchPage, () => document.querySelector("#chapterTitle")?.textContent === "Psalms 23");
+    const touchBrowserRestore = await readerState(touchPage);
+    nodeAssert.equal(touchBrowserRestore.phraseText, phrase, "Mobile Browser Back lost the exact phrase.");
+    nodeAssert.equal(touchBrowserRestore.detailTitle, "Details", "Mobile Browser Back retained stale Language Study content.");
+    nodeAssert.equal(touchBrowserRestore.detailVisible, false, "Mobile Browser Back reopened a previously hidden drawer.");
+    nodeAssert.equal(touchBrowserRestore.detailLocked, false, "Mobile Browser Back retained stale locked detail state.");
+    nodeAssert.equal(touchBrowserRestore.detailScrollTop, 0, "Mobile Browser Back retained stale detail scroll.");
     await touchContext.close();
 
     nodeAssert.deepEqual(consoleErrors, [], `Console errors: ${JSON.stringify(consoleErrors)}`);
@@ -489,11 +614,11 @@ async function main() {
 
     console.log(JSON.stringify({
       status: "ok",
-      assertions: 46,
-      phrase: { beforeStudy, afterStudy, persistentPhrase },
-      history: { zeroBack, browserBack, browserForward, detailBack, detailForward },
+      assertions: 70,
+      phrase: { beforeStudy, afterStudy, persistentPhrase, phraseThroughTools, alignmentSemantics },
+      history: { zeroBack, browserBack, browserForward, detailBack, detailForward, multiHistory, sameChapterVerse },
       containedScroll: { deepBefore, deepAfter },
-      touch: { touchPhrase, touchHideReopen },
+      touch: { touchPhrase, touchHideReopen, touchBrowserRestore },
       browser: { executablePath: findEdgePath(), version: browser.version() },
     }, null, 2));
   } finally {

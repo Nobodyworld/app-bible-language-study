@@ -137,16 +137,16 @@ function createTranslationAlignmentPanel(tokens, wordMapLookup, selectedRange) {
   const heading = document.createElement("h4");
   heading.textContent = "Word-by-word alignment";
   const intro = document.createElement("p");
-  intro.textContent = "Hover a source word or BSB span to focus the paired words.";
+  intro.textContent = "Each card pairs a source word with its BSB span, Strong's number, and gloss.";
   panel.append(heading, intro);
 
   const grid = document.createElement("div");
   grid.className = "translation-alignment-grid";
   tokens.forEach((token) => {
     const span = wordMapForToken(token, wordMapLookup);
-    const pair = document.createElement("button");
-    pair.type = "button";
+    const pair = document.createElement("article");
     pair.className = "translation-token-pair";
+    pair.setAttribute("role", "group");
     if (rangesOverlap(span, selectedRange)) {
       pair.classList.add("selected-range");
       pair.dataset.selectedRange = "true";
@@ -165,6 +165,10 @@ function createTranslationAlignmentPanel(tokens, wordMapLookup, selectedRange) {
     meta.className = "alignment-meta";
     meta.textContent = [token.strong_code, token.gloss].filter(Boolean).join(" - ");
 
+    pair.setAttribute(
+      "aria-label",
+      [token.original, `BSB ${english.textContent}`, token.strong_code, token.gloss].filter(Boolean).join(", "),
+    );
     pair.append(source, english, meta);
     grid.append(pair);
   });

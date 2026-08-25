@@ -154,6 +154,16 @@ async function launchBrowser() {
     async emulateMedia(options) {
       await playwrightPage.emulateMedia(options);
     },
+    async delayNextRequest(urlPattern, delayMs) {
+      await playwrightPage.route(
+        urlPattern,
+        async (route) => {
+          await delay(delayMs);
+          await route.continue();
+        },
+        { times: 1 },
+      );
+    },
     async setViewportSize(viewport) {
       await playwrightPage.setViewportSize(viewport);
     },
@@ -1064,23 +1074,63 @@ async function runQa(page) {
       bookPickerState.scrollableColumns >= 1,
     `book picker should expose two scrollable testament columns: ${JSON.stringify(bookPickerState)}`,
   );
+  await page.delayNextRequest("**/data/verses/bsb/proverbs.json", 450);
   await clickButtonByText(page, "Proverbs", { scope: "#bookPickerPanel" });
+  await delay(120);
+  const delayedBookHandoff = await evaluate(
+    page,
+    `(() => ({
+      route: location.hash,
+      chapterExpanded: document.querySelector('#chapterPickerButton')?.getAttribute('aria-expanded'),
+      chapter: document.querySelector('#chapterSelect')?.value,
+      focused: document.activeElement === document.querySelector('#chapterPickerButton')
+    }))()`,
+  );
+  assert(
+    delayedBookHandoff.chapterExpanded === "false" && !delayedBookHandoff.focused,
+    `Chapter opened before delayed Book navigation completed: ${JSON.stringify(delayedBookHandoff)}`,
+  );
   await waitFor(
     page,
-    "location.hash.includes('/read/bsb/proverbs/1') && document.querySelector('#chapterPickerButton')?.getAttribute('aria-expanded') === 'true'",
+    `(() => {
+      const active = document.querySelector('#chapterPickerPanel .reader-picker-option.active');
+      return location.hash === '#/read/bsb/proverbs/1' &&
+        document.querySelector('#bookSelect')?.value === 'proverbs' &&
+        document.querySelector('#chapterSelect')?.value === '1' &&
+        document.querySelector('#bookPickerButton')?.getAttribute('aria-label') === 'Book: Proverbs' &&
+        document.querySelector('#chapterPickerButton')?.getAttribute('aria-label') === 'Chapter: 1' &&
+        active?.textContent.trim() === '1' && active?.getAttribute('aria-pressed') === 'true' &&
+        document.querySelector('#chapterPickerButton')?.getAttribute('aria-expanded') === 'true' &&
+        document.activeElement === document.querySelector('#chapterPickerButton') &&
+        document.querySelector('#chapterTitle')?.textContent === 'Proverbs 1' &&
+        Boolean(document.querySelector('#chapterContent .verse-row[data-verse="1"]'));
+    })()`,
   );
   const bookToChapterState = await evaluate(
     page,
     `(() => ({
       book: document.querySelector('#bookSelect')?.value,
       chapter: document.querySelector('#chapterSelect')?.value,
+      bookName: document.querySelector('#bookPickerButton')?.getAttribute('aria-label'),
       chapterName: document.querySelector('#chapterPickerButton')?.getAttribute('aria-label'),
-      focused: document.activeElement === document.querySelector('#chapterPickerButton')
+      activeChapter: document.querySelector('#chapterPickerPanel .reader-picker-option.active')?.textContent.trim(),
+      activePressed: document.querySelector('#chapterPickerPanel .reader-picker-option.active')?.getAttribute('aria-pressed'),
+      expanded: document.querySelector('#chapterPickerButton')?.getAttribute('aria-expanded'),
+      focused: document.activeElement === document.querySelector('#chapterPickerButton'),
+      title: document.querySelector('#chapterTitle')?.textContent,
+      renderedVerseOne: Boolean(document.querySelector('#chapterContent .verse-row[data-verse="1"]'))
     }))()`,
   );
   assert(
     bookToChapterState.book === "proverbs" && bookToChapterState.chapter === "1" &&
-      bookToChapterState.chapterName === "Chapter: 1" && bookToChapterState.focused,
+      bookToChapterState.bookName === "Book: Proverbs" &&
+      bookToChapterState.chapterName === "Chapter: 1" &&
+      bookToChapterState.activeChapter === "1" &&
+      bookToChapterState.activePressed === "true" &&
+      bookToChapterState.expanded === "true" &&
+      bookToChapterState.focused &&
+      bookToChapterState.title === "Proverbs 1" &&
+      bookToChapterState.renderedVerseOne,
     `Book selection must hand off to the synchronized Chapter picker: ${JSON.stringify(bookToChapterState)}`,
   );
   await page.press("#chapterPickerButton", "Escape");

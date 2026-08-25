@@ -2422,6 +2422,10 @@ button:disabled {
   gap: 0.2rem;
   min-width: 0;
   padding: 0.55rem;
+  border: 2px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--text);
   text-align: start;
 }
 

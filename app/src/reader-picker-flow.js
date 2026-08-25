@@ -244,17 +244,33 @@ function waitForPickerOptions(panel, isReady, callback) {
   window.requestAnimationFrame(check);
 }
 
-function openChapterPickerAfterBookSelection(selectedBookLabel) {
+function openChapterPickerAfterBookSelection(selection) {
   const bookButton = document.getElementById("bookPickerButton");
   const bookPanel = document.getElementById("bookPickerPanel");
   const chapterButton = document.getElementById("chapterPickerButton");
   const chapterPanel = document.getElementById("chapterPickerPanel");
+  const bookSelect = document.getElementById("bookSelect");
+  const chapterSelect = document.getElementById("chapterSelect");
+  const chapterTitle = document.getElementById("chapterTitle");
+  const expectedHash = `#/read/${selection.translationId}/${selection.bookId}/${selection.chapter}`;
 
   waitForPickerOptions(
     chapterPanel,
-    () =>
-      bookButton?.textContent?.trim() === selectedBookLabel &&
-      chapterButton?.textContent?.trim() === "1",
+    () => {
+      const activeChapter = chapterPanel?.querySelector(ACTIVE_OPTION_SELECTOR);
+      return (
+        window.location.hash === expectedHash &&
+        bookSelect?.value === selection.bookId &&
+        chapterSelect?.value === selection.chapter &&
+        bookButton?.textContent?.trim() === selection.bookLabel &&
+        chapterButton?.textContent?.trim() === selection.chapter &&
+        chapterButton?.getAttribute("aria-label") === `Chapter: ${selection.chapter}` &&
+        activeChapter?.textContent?.trim() === selection.chapter &&
+        activeChapter?.getAttribute("aria-pressed") === "true" &&
+        chapterTitle?.textContent?.trim() === `${selection.bookLabel} ${selection.chapter}` &&
+        Boolean(document.querySelector(`#chapterContent .verse-row[data-verse="1"]`))
+      );
+    },
     () => {
       setPickerExpanded(bookButton, bookPanel, false);
       setPickerExpanded(chapterButton, chapterPanel, true);
@@ -423,7 +439,6 @@ function handleReaderPickerClick(event) {
 
   const selectedBook = target.closest("#bookPickerPanel .reader-picker-option");
   if (selectedBook) {
-    openChapterPickerAfterBookSelection(selectedBook.textContent.trim());
     clearFrozenReaderHighlight({ removeClasses: false });
     return;
   }
@@ -485,6 +500,10 @@ function bindNavigationReset(selector, eventName) {
 
 document.addEventListener("click", capturePickerContextBeforeOpen, true);
 document.addEventListener("click", handleReaderPickerClick);
+document.addEventListener("reader:book-selection-complete", (event) => {
+  if (!event.detail?.translationId || !event.detail?.bookId || !event.detail?.chapter) return;
+  openChapterPickerAfterBookSelection(event.detail);
+});
 document.addEventListener("pointerdown", handleReaderFreezePointerDown, true);
 document.addEventListener("keydown", handleFrozenHighlightKeydown, true);
 bindNavigationReset("#translationSelect", "change");

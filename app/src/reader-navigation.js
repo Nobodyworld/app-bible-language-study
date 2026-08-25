@@ -9,6 +9,11 @@ function finiteScroll(value) {
   return Number.isFinite(number) && number >= 0 ? number : 0;
 }
 
+function finiteIndex(value) {
+  const number = Number(value);
+  return Number.isSafeInteger(number) && number >= 0 ? number : 0;
+}
+
 function clean(value) {
   return String(value || "").trim();
 }
@@ -53,6 +58,8 @@ export function createReaderNavigationSnapshot(input = {}) {
     ? buildReferenceContext(input.readerContext)
     : buildReferenceContext({ translationId, bookId, chapter, verse: input.verse });
   const textSpanTarget = normalizeTarget(input.textSpanTarget);
+  const navigationIndex = finiteIndex(input.navigationIndex);
+  const navigationMaxIndex = Math.max(navigationIndex, finiteIndex(input.navigationMaxIndex));
   const hasRouteVerse = Object.prototype.hasOwnProperty.call(input, "verse");
   if (
     readerContext.translation_id !== translationId ||
@@ -80,10 +87,8 @@ export function createReaderNavigationSnapshot(input = {}) {
     verse: clean(hasRouteVerse ? input.verse : readerContext.verse) || null,
     pageX: finiteScroll(input.pageX),
     pageY: finiteScroll(input.pageY),
-    detailScrollTop: finiteScroll(input.detailScrollTop),
-    detailTitle: clean(input.detailTitle) || null,
-    detailLocked: input.detailLocked === true,
-    detailVisible: input.detailVisible === true,
+    navigationIndex,
+    navigationMaxIndex,
     readerContext: cloneSerializable(readerContext),
     textSpanTarget: textSpanTarget?.target_type === "text_span" ? cloneSerializable(textSpanTarget) : null,
     focus: normalizeFocus(input.focus),
