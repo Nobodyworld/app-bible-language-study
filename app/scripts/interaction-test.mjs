@@ -737,8 +737,154 @@ async function runQa(page) {
     })()`,
   );
 
+  const measureReaderTargets = () => evaluate(
+    page,
+    `(() => {
+      const round = (value) => Math.round(value * 1000) / 1000;
+      const rect = (node) => {
+        if (!node) return null;
+        const bounds = node.getBoundingClientRect();
+        return { left: round(bounds.left), right: round(bounds.right), top: round(bounds.top), bottom: round(bounds.bottom), width: round(bounds.width), height: round(bounds.height) };
+      };
+      const pseudoRect = (node, pseudo) => {
+        if (!node) return null;
+        const bounds = node.getBoundingClientRect();
+        const style = getComputedStyle(node, pseudo);
+        const width = Number.parseFloat(style.width);
+        const height = Number.parseFloat(style.height);
+        if (!Number.isFinite(width) || !Number.isFinite(height)) return null;
+        const left = bounds.left + (bounds.width - width) / 2;
+        const top = bounds.top + (bounds.height - height) / 2;
+        return { left: round(left), right: round(left + width), top: round(top), bottom: round(top + height), width: round(width), height: round(height) };
+      };
+      const ownsPoint = (node, x, y) => {
+        const hit = document.elementFromPoint(x, y);
+        return hit === node || node?.contains?.(hit) || hit?.closest?.('.fn-marker, .reference-hover') === node;
+      };
+      const hitMap = (node, bounds) => {
+        if (!node || !bounds) return [];
+        const inset = 2;
+        const xs = [bounds.left + inset, bounds.left + bounds.width / 2, bounds.right - inset];
+        const ys = [bounds.top + inset, bounds.top + bounds.height / 2, bounds.bottom - inset];
+        return ys.flatMap((y) => xs.map((x) => ({ x: round(x), y: round(y), owned: ownsPoint(node, x, y) })));
+      };
+      const precedingWordOwnership = (marker) => {
+        const sibling = marker?.previousSibling;
+        if (!sibling) return null;
+        let bounds = null;
+        if (sibling.nodeType === Node.TEXT_NODE && sibling.data) {
+          const match = sibling.data.match(/\\S+\\s*$/u);
+          if (match) {
+            const range = document.createRange();
+            const start = Math.max(0, sibling.data.length - match[0].length);
+            range.setStart(sibling, start);
+            range.setEnd(sibling, sibling.data.length);
+            bounds = range.getBoundingClientRect();
+          }
+        } else if (sibling.nodeType === Node.ELEMENT_NODE) {
+          bounds = sibling.getBoundingClientRect();
+        }
+        if (!bounds || !bounds.width || !bounds.height) return null;
+        const x = bounds.left + bounds.width * 0.35;
+        const y = bounds.top + bounds.height / 2;
+        return { x: round(x), y: round(y), capturedByMarker: ownsPoint(marker, x, y) };
+      };
+      const focusState = (node, pseudo = null) => {
+        if (!node) return null;
+        const previous = document.activeElement;
+        node.focus({ preventScroll: true });
+        const style = getComputedStyle(node, pseudo);
+        const result = { outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth, outlineColor: style.outlineColor, outlineOffset: style.outlineOffset };
+        node.blur();
+        if (previous instanceof HTMLElement && previous !== document.body) previous.focus({ preventScroll: true });
+        return result;
+      };
+      const footnote = document.querySelector('.fn-marker');
+      const reference = document.querySelector('.presentation-block .cross-links .reference-hover');
+      const numbers = [...document.querySelectorAll('.verse-number')];
+      const numberSamples = {};
+      for (const digits of [1, 2, 3]) {
+        const number = numbers.find((node) => node.textContent.trim().length === digits);
+        numberSamples[digits] = number ? { text: number.textContent.trim(), rect: rect(number) } : null;
+      }
+      const previousArrow = document.querySelector('#prevChapterFloat');
+      const nextArrow = document.querySelector('#nextChapterFloat');
+      const verseBodies = [...document.querySelectorAll('.verse-body')];
+      const bodyLeft = verseBodies.length ? Math.min(...verseBodies.map((node) => node.getBoundingClientRect().left)) : null;
+      const bodyRight = verseBodies.length ? Math.max(...verseBodies.map((node) => node.getBoundingClientRect().right)) : null;
+      const previousRect = previousArrow?.getBoundingClientRect();
+      const nextRect = nextArrow?.getBoundingClientRect();
+      const footnoteTarget = pseudoRect(footnote, '::before');
+      const referenceTarget = pseudoRect(reference, '::before');
+      const firstVerse = document.querySelector('.verse-row')?.getBoundingClientRect();
+      return {
+        viewport: { width: innerWidth, height: innerHeight, coarse: matchMedia('(pointer: coarse)').matches, hoverNone: matchMedia('(hover: none)').matches, touchPoints: navigator.maxTouchPoints },
+        chapter: document.querySelector('#chapterTitle')?.textContent.trim() || '',
+        firstVerseTop: firstVerse ? round(firstVerse.top) : null,
+        footnote: footnote ? { visual: rect(footnote), target: footnoteTarget, hitMap: hitMap(footnote, footnoteTarget), precedingWord: precedingWordOwnership(footnote), focus: focusState(footnote, '::before') } : null,
+        numberSamples,
+        numberFocus: focusState(numbers[0]),
+        reference: reference ? { visual: rect(reference), target: referenceTarget, hitMap: hitMap(reference, referenceTarget), focus: focusState(reference, '::before') } : null,
+        arrows: {
+          previous: rect(previousArrow),
+          next: rect(nextArrow),
+          previousIntrusion: previousRect && bodyLeft !== null ? round(Math.max(0, previousRect.right - bodyLeft)) : null,
+          nextIntrusion: nextRect && bodyRight !== null ? round(Math.max(0, bodyRight - nextRect.left)) : null,
+          previousHitMap: hitMap(previousArrow, rect(previousArrow)),
+          nextHitMap: hitMap(nextArrow, rect(nextArrow)),
+          previousFocus: focusState(previousArrow, '::before'),
+          nextFocus: focusState(nextArrow, '::before'),
+        },
+        verseGridColumns: getComputedStyle(document.querySelector('.verse-row')).gridTemplateColumns,
+        chapterContentScrollHeight: document.querySelector('#chapterContent')?.scrollHeight || 0,
+        documentScrollHeight: document.documentElement.scrollHeight,
+        horizontalOverflow: Math.max(0, document.documentElement.scrollWidth - document.documentElement.clientWidth),
+        footnoteCount: document.querySelectorAll('.fn-marker').length,
+        verseCount: numbers.length,
+      };
+    })()`,
+  );
+
+  const assertReaderTargets = (measurement, label) => {
+    const touch = measurement.viewport.coarse || measurement.viewport.hoverNone || measurement.viewport.touchPoints > 0;
+    const footnoteMinimum = touch ? 43.5 : 27.5;
+    const numberWidthMinimum = touch ? 39.5 : 31.5;
+    const numberHeightMinimum = touch ? 43.5 : 35.5;
+    const referenceHeightMinimum = touch ? 43.5 : 35.5;
+    assert(
+      measurement.footnote?.target.width >= footnoteMinimum && measurement.footnote?.target.height >= footnoteMinimum &&
+        measurement.footnote.hitMap.every((sample) => sample.owned) && measurement.footnote.precedingWord?.capturedByMarker === false,
+      `${label} footnote target or adjacent-word ownership failed: ${JSON.stringify(measurement.footnote)}`,
+    );
+    const visibleNumberSamples = Object.values(measurement.numberSamples).filter(Boolean);
+    assert(
+      visibleNumberSamples.length > 0 && visibleNumberSamples.every((sample) => sample.rect.width >= numberWidthMinimum && sample.rect.height >= numberHeightMinimum),
+      `${label} verse-number target dimensions failed: ${JSON.stringify(measurement.numberSamples)}`,
+    );
+    assert(
+      measurement.reference?.target.height >= referenceHeightMinimum && measurement.reference.hitMap.every((sample) => sample.owned),
+      `${label} cross-reference target failed: ${JSON.stringify(measurement.reference)}`,
+    );
+    assert(
+      measurement.arrows.previous.width >= 39.5 && measurement.arrows.next.width >= 39.5 &&
+        measurement.arrows.previousIntrusion <= 0.5 && measurement.arrows.nextIntrusion <= 0.5 &&
+        measurement.arrows.previousHitMap.every((sample) => sample.owned) && measurement.arrows.nextHitMap.every((sample) => sample.owned),
+      `${label} floating chapter-arrow target or scripture intrusion failed: ${JSON.stringify(measurement.arrows)}`,
+    );
+    assert(
+      measurement.footnote.focus.outlineStyle === 'solid' && measurement.numberFocus.outlineStyle === 'solid' &&
+        measurement.reference.focus.outlineStyle === 'solid' && measurement.arrows.previousFocus.outlineStyle === 'solid' &&
+        measurement.horizontalOverflow === 0,
+      `${label} target focus visibility or containment failed: ${JSON.stringify(measurement)}`,
+    );
+    if (measurement.viewport.width <= 390) {
+      assert(measurement.firstVerseTop <= 480.5, `${label} moved the first Psalm 23 verse too low: ${measurement.firstVerseTop}`);
+    }
+  };
+
   let chapterIntroContract = await measureChapterIntro();
   qaEvidence.chapterIntro = { initial: chapterIntroContract };
+  const readerTargetProfiles = [];
   assert(
     chapterIntroContract.presentation.some((block) => block.className.includes('section_heading') && block.text === 'The LORD Is My Shepherd' && block.crossReferences === 2) &&
       chapterIntroContract.presentation.some((block) => block.className.includes('psalm_superscription') && block.text === 'A Psalm of David.') &&
@@ -862,6 +1008,9 @@ async function runQa(page) {
   pass('Book and Chapter menu pointer, keyboard, touch, and Escape lifecycle');
 
   if (qaDevice === "mobile") {
+    const mobileReaderTargets = await measureReaderTargets();
+    assertReaderTargets(mobileReaderTargets, "390x844 touch/mobile");
+    readerTargetProfiles.push({ name: "390x844 touch/mobile", measurement: mobileReaderTargets });
     const requiredMobileTargets = Object.entries(chapterIntroContract.targets).filter(([, bounds]) => bounds);
     assert(
       requiredMobileTargets.every(([, bounds]) => bounds.width >= 43.5 && bounds.height >= 43.5) &&
@@ -920,6 +1069,12 @@ async function runQa(page) {
       const settledGeometry = await waitForStableReaderGeometry(page, { label: profile.name });
       const measurement = await measureChapterIntro();
       labelEvidence.push({ ...profile, settledGeometry, measurement });
+      if (["1440 standard", "1280 standard", "960 standard", "820 standard", "390 desktop"].includes(profile.name)) {
+        await delay(180);
+        const readerTargets = await measureReaderTargets();
+        assertReaderTargets(readerTargets, profile.name);
+        readerTargetProfiles.push({ name: profile.name, measurement: readerTargets });
+      }
       assert(
         measurement.labels.every((label) => label.visible === profile.labelsVisible && !label.clipped) &&
           measurement.actionRows === (profile.width <= 640 ? 2 : 1) &&
@@ -942,6 +1097,36 @@ async function runQa(page) {
     });
     pass("reader-pane action-label thresholds and mobile-width geometry");
   }
+
+  const readerTargetRouteBase = baseUrl.split('#')[0];
+  const readerTargetChapters = [];
+  for (const fixture of [
+    { hash: '#/read/bsb/romans/8', title: 'Romans 8', minimumFootnotes: 5 },
+    { hash: '#/read/bsb/psalms/119', title: 'Psalms 119', numberDigits: [1, 2, 3] },
+  ]) {
+    await navigate(page, `${readerTargetRouteBase}${fixture.hash}`);
+    await waitFor(page, `document.querySelector('#chapterTitle')?.textContent === ${JSON.stringify(fixture.title)}`);
+    const measurement = await measureReaderTargets();
+    if (fixture.minimumFootnotes) {
+      assert(measurement.footnoteCount >= fixture.minimumFootnotes, `${fixture.title} no longer provides the several-footnote baseline: ${JSON.stringify(measurement)}`);
+    }
+    if (fixture.numberDigits) {
+      assert(
+        fixture.numberDigits.every((digits) => measurement.numberSamples[digits]),
+        `${fixture.title} must retain one-, two-, and three-digit target evidence: ${JSON.stringify(measurement.numberSamples)}`,
+      );
+      const touch = measurement.viewport.coarse || measurement.viewport.hoverNone || measurement.viewport.touchPoints > 0;
+      assert(
+        Object.values(measurement.numberSamples).every((sample) => sample.rect.width >= (touch ? 39.5 : 31.5) && sample.rect.height >= (touch ? 43.5 : 35.5)),
+        `${fixture.title} dense verse-number target dimensions failed: ${JSON.stringify(measurement.numberSamples)}`,
+      );
+    }
+    readerTargetChapters.push({ ...fixture, measurement });
+  }
+  await navigate(page, `${readerTargetRouteBase}#/read/bsb/psalms/23`);
+  await waitFor(page, "document.querySelector('#chapterTitle')?.textContent === 'Psalms 23'");
+  qaEvidence.readerTargets = { profiles: readerTargetProfiles, chapters: readerTargetChapters };
+  pass("inline reader target geometry, hit testing, dense chapter coverage, and floating-arrow gutters");
 
   const visibleChapterTools = [
     { selector: '#showSearch', accessibleName: 'Search this book', detailTitle: 'Search' },
@@ -1132,6 +1317,14 @@ async function runQa(page) {
     page,
     `(() => {
       const selectors = ['#translationSelect', '#bookPickerButton', '#chapterPickerButton', '#themeToggle'];
+      const inlineFocus = (selector, pseudo = null) => {
+        const node = document.querySelector(selector);
+        node?.focus({ preventScroll: true });
+        const style = node ? getComputedStyle(node, pseudo) : null;
+        const result = style ? { selector, pseudo, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth, outlineColor: style.outlineColor } : null;
+        node?.blur();
+        return result;
+      };
       return {
         matches: matchMedia('(forced-colors: active)').matches,
         controls: selectors.map((selector) => {
@@ -1139,14 +1332,20 @@ async function runQa(page) {
           const bounds = node.getBoundingClientRect();
           const style = getComputedStyle(node);
           return { selector, width: bounds.width, height: bounds.height, borderStyle: style.borderTopStyle, color: style.color };
-        })
+        }),
+        inlineTargets: [
+          inlineFocus('.fn-marker', '::before'),
+          inlineFocus('.verse-number'),
+          inlineFocus('.presentation-block .cross-links .reference-hover', '::before'),
+          inlineFocus('#prevChapterFloat', '::before')
+        ]
       };
     })()`,
   );
   assert(
     forcedColorsTopState.matches && forcedColorsTopState.controls.every(
       (control) => control.width > 0 && control.height >= 36 && control.borderStyle !== "none" && control.color,
-    ),
+    ) && forcedColorsTopState.inlineTargets.every((target) => target?.outlineStyle === 'solid' && parseFloat(target.outlineWidth) >= 3),
     `forced-colors reader controls must remain visible and operable: ${JSON.stringify(forcedColorsTopState)}`,
   );
   await page.emulateMedia({ reducedMotion: "no-preference", forcedColors: "none" });
@@ -2068,7 +2267,9 @@ async function runQa(page) {
       const result = { borderTopWidth: style.borderTopWidth, backgroundColor: style.backgroundColor, color: style.color, textColor: textStyle.color, detailColor: getComputedStyle(detailMarker).color };
       marker.focus();
       result.focusColor = getComputedStyle(marker).color;
-      result.focusOutline = getComputedStyle(marker).outlineStyle;
+      result.focusOutline = getComputedStyle(marker, '::before').outlineStyle;
+      result.focusTargetWidth = getComputedStyle(marker, '::before').width;
+      result.focusTargetHeight = getComputedStyle(marker, '::before').height;
       marker.blur();
       return result;
     })()`,
@@ -2086,7 +2287,9 @@ async function runQa(page) {
       const result = { theme: document.documentElement.getAttribute('data-theme'), color: style.color, detailColor: getComputedStyle(detailMarker).color };
       marker.focus();
       result.focusColor = getComputedStyle(marker).color;
-      result.focusOutline = getComputedStyle(marker).outlineStyle;
+      result.focusOutline = getComputedStyle(marker, '::before').outlineStyle;
+      result.focusTargetWidth = getComputedStyle(marker, '::before').width;
+      result.focusTargetHeight = getComputedStyle(marker, '::before').height;
       marker.blur();
       return result;
     })()`,

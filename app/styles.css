@@ -797,16 +797,18 @@ button:disabled {
   position: relative;
   display: grid;
   place-items: center;
-  width: 20px;
-  min-width: 20px;
+  width: 40px;
+  min-width: 40px;
   height: 56px;
   min-height: 56px;
+  margin-top: -6px;
   padding: 0;
-  border-radius: 0 12px 12px 0;
-  background: rgba(255, 255, 255, 0.84);
-  box-shadow: 0 4px 14px rgba(16, 24, 40, 0.12);
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
   color: var(--accent-dark);
-  font-size: 18px;
+  font-size: 0;
   font-weight: 800;
   line-height: 1;
   opacity: 0.54;
@@ -824,7 +826,6 @@ button:disabled {
 
 .reader-nav-arrow.next-chapter {
   right: -10px;
-  border-radius: 12px 0 0 12px;
   transform: none;
 }
 
@@ -838,14 +839,60 @@ button:disabled {
   }
 }
 
+.reader-nav-arrow::before,
 .reader-nav-arrow::after {
-  content: none;
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  display: grid;
+  place-items: center;
+  width: 20px;
+  border-radius: 0 12px 12px 0;
+  pointer-events: none;
+}
+
+.reader-nav-arrow::before {
+  background: rgba(255, 255, 255, 0.84);
+  box-shadow: 0 4px 14px rgba(16, 24, 40, 0.12);
+  content: "";
+}
+
+.reader-nav-arrow::after {
+  content: "‹";
+  font-size: 18px;
+  line-height: 1;
+}
+
+.reader-nav-arrow.next-chapter::before,
+.reader-nav-arrow.next-chapter::after {
+  right: 0;
+  left: auto;
+  border-radius: 12px 0 0 12px;
+}
+
+.reader-nav-arrow.next-chapter::after {
+  content: "›";
 }
 
 .reader-nav-arrow:hover,
 .reader-nav-arrow:focus-visible {
-  background: rgba(255, 255, 255, 0.94);
+  background: transparent;
   opacity: 1;
+}
+
+.reader-nav-arrow:hover::before,
+.reader-nav-arrow:focus-visible::before {
+  background: rgba(255, 255, 255, 0.94);
+}
+
+.reader-nav-arrow:focus-visible {
+  outline: none;
+}
+
+.reader-nav-arrow:focus-visible::before {
+  outline: 3px solid var(--accent);
+  outline-offset: -3px;
 }
 
 .reader-nav-arrow.previous-chapter:hover,
@@ -1040,7 +1087,22 @@ button:disabled {
 }
 
 .presentation-block .cross-links .reference-hover {
+  position: relative;
   font-size: 12px;
+  touch-action: manipulation;
+}
+
+.presentation-block .cross-links .reference-hover::before {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  right: 0;
+  left: 0;
+  height: 36px;
+  border-radius: 6px;
+  content: "";
+  pointer-events: auto;
+  transform: translateY(-50%);
 }
 
 .presentation-block .cross-links .reference-hover:hover,
@@ -1049,6 +1111,11 @@ button:disabled {
   text-decoration: underline;
   outline: none;
   box-shadow: none;
+}
+
+.presentation-block .cross-links .reference-hover:focus-visible::before {
+  outline: 3px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .verse-row {
@@ -1076,9 +1143,16 @@ button:disabled {
 }
 
 .verse-number {
-  min-height: 0;
+  display: inline-flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+  box-sizing: border-box;
+  width: 32px;
+  min-width: 32px;
+  min-height: 36px;
   padding: 0;
   border: 0;
+  border-radius: 6px;
   background: transparent;
   color: var(--muted);
   font-size: 12px;
@@ -1087,12 +1161,17 @@ button:disabled {
   -webkit-user-select: none;
   user-select: none;
   cursor: pointer;
+  touch-action: manipulation;
 }
 
 .verse-number:hover,
 .verse-number:focus-visible {
   color: var(--accent-dark);
-  outline: none;
+}
+
+.verse-number:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: -2px;
 }
 
 .verse-study-button {
@@ -1409,6 +1488,7 @@ button:disabled {
 
 .fn-marker {
   position: relative;
+  z-index: 2;
   min-width: 0;
   min-height: 0;
   height: auto;
@@ -1422,13 +1502,37 @@ button:disabled {
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
+  isolation: isolate;
+  touch-action: manipulation;
   vertical-align: super;
+}
+
+.fn-marker::before {
+  position: absolute;
+  z-index: 1;
+  top: 50%;
+  left: 50%;
+  width: 28px;
+  height: 28px;
+  border-radius: 4px;
+  content: "";
+  pointer-events: auto;
+  transform: translate(-50%, -50%);
 }
 
 .fn-marker:hover,
 .fn-marker:focus-visible {
   color: #1232c8;
   text-decoration: underline;
+}
+
+.fn-marker:focus-visible {
+  outline: none;
+}
+
+.fn-marker:focus-visible::before {
+  outline: 3px solid #2347fb;
+  outline-offset: -2px;
 }
 
 .strong-token {
@@ -4608,6 +4712,23 @@ button.user-data-summary-item {
   }
 }
 
+@media (hover: none), (pointer: coarse) {
+  .fn-marker::before {
+    width: 44px;
+    height: 44px;
+  }
+
+  .verse-number {
+    width: 40px;
+    min-width: 40px;
+    min-height: 44px;
+  }
+
+  .presentation-block .cross-links .reference-hover::before {
+    height: 44px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -4642,6 +4763,22 @@ button.user-data-summary-item {
     outline: 3px solid Highlight;
     outline-offset: 2px;
   }
+
+  .verse-number:focus-visible {
+    outline: 3px solid Highlight !important;
+    outline-offset: -4px;
+  }
+
+  .fn-marker:focus-visible {
+    outline: none !important;
+  }
+
+  .fn-marker:focus-visible::before,
+  .reader-nav-arrow:focus-visible::before,
+  .presentation-block .cross-links .reference-hover:focus-visible::before {
+    outline: 3px solid Highlight !important;
+    outline-offset: -2px;
+  }
 }
 
 /* Improved focus styles for accessibility */
@@ -4652,14 +4789,25 @@ button.user-data-summary-item {
 
 /* Dark mode CSS overrides for hardcoded colors */
 :root[data-theme="dark"] .reader-nav-arrow {
-  background: rgba(26, 26, 24, 0.48) !important;
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
   color: var(--accent-dark) !important;
+}
+
+:root[data-theme="dark"] .reader-nav-arrow::before {
+  background: rgba(26, 26, 24, 0.48) !important;
 }
 
 :root[data-theme="dark"] .reader-nav-arrow:hover,
 :root[data-theme="dark"] .reader-nav-arrow:focus-visible {
+  border: 0 !important;
+  background: transparent !important;
+}
+
+:root[data-theme="dark"] .reader-nav-arrow:hover::before,
+:root[data-theme="dark"] .reader-nav-arrow:focus-visible::before {
   background: rgba(39, 38, 31, 0.94) !important;
-  border-color: rgba(78, 205, 193, 0.22) !important;
 }
 
 :root[data-theme="dark"] .detail-nav-arrow {
@@ -4990,12 +5138,15 @@ button {
 
 :root[data-theme="dark"] .fn-marker:focus-visible {
   border: 0 !important;
-  outline: 2px solid #9eafff !important;
-  outline-offset: 2px;
+  outline: none !important;
   background: transparent !important;
   box-shadow: none !important;
   color: #f0f2ff !important;
   text-decoration: underline;
+}
+
+:root[data-theme="dark"] .fn-marker:focus-visible::before {
+  outline-color: #9eafff;
 }
 
 :root[data-theme="dark"] .footnote-detail-marker {
@@ -5199,6 +5350,24 @@ html[data-theme="light"] h6 {
   color: var(--text) !important;
 }
 
+html[data-theme="light"] .reader-nav-arrow,
+html[data-theme="light"] .reader-nav-arrow:hover,
+html[data-theme="light"] .reader-nav-arrow:focus-visible {
+  border: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--accent-dark) !important;
+}
+
+html[data-theme="light"] .reader-nav-arrow::before {
+  background: rgba(255, 255, 255, 0.84) !important;
+}
+
+html[data-theme="light"] .reader-nav-arrow:hover::before,
+html[data-theme="light"] .reader-nav-arrow:focus-visible::before {
+  background: rgba(255, 255, 255, 0.94) !important;
+}
+
 html[data-theme="light"] .fn-marker {
   border: 0 !important;
   background: transparent !important;
@@ -5215,12 +5384,15 @@ html[data-theme="light"] .fn-marker:hover {
 
 html[data-theme="light"] .fn-marker:focus-visible {
   border: 0 !important;
-  outline: 2px solid #2347fb !important;
-  outline-offset: 2px;
+  outline: none !important;
   background: transparent !important;
   box-shadow: none !important;
   color: #0b238f !important;
   text-decoration: underline;
+}
+
+html[data-theme="light"] .fn-marker:focus-visible::before {
+  outline-color: #2347fb;
 }
 
 html[data-theme="light"] .footnote-detail-marker {
@@ -5277,6 +5449,15 @@ html[data-theme="light"] .hebrew-rtl-note:focus-visible {
 }
 
 @media (forced-colors: active) {
+  :root[data-theme] .reader-nav-arrow::before {
+    border: 1px solid ButtonText;
+    background: Canvas !important;
+  }
+
+  :root[data-theme] .reader-nav-arrow::after {
+    color: LinkText !important;
+  }
+
   :root[data-theme] .strong-source-word,
   :root[data-theme] .strong-source-word .language-word-hover,
   :root[data-theme] .strong-source-word .language-letter-hover {

@@ -87,6 +87,14 @@ function checkCss(css) {
   assert(/@media\s*\(hover:\s*none\)/.test(css), "Touch-only mode must expose hover-dependent controls.");
   assert(/@media\s*\(prefers-reduced-motion:\s*reduce\)/.test(css), "Reduced-motion media query is required.");
   assert(/@media\s*\(forced-colors:\s*active\)/.test(css), "Forced-colors high-contrast media query is required.");
+  assert(
+    /\.verse-number:focus-visible\s*{[\s\S]*?outline:\s*3px solid var\(--accent\)/.test(css) &&
+      /\.fn-marker:focus-visible::before\s*{[\s\S]*?outline:\s*3px solid #2347fb/.test(css) &&
+      /\.reader-nav-arrow:focus-visible::before\s*{[\s\S]*?outline:\s*3px solid var\(--accent\)/.test(css) &&
+      /\.reference-hover:focus-visible::before\s*{[\s\S]*?outline:\s*3px solid var\(--accent\)/.test(css) &&
+      /@media\s*\(forced-colors:\s*active\)[\s\S]*?\.fn-marker:focus-visible::before,[\s\S]*?\.reference-hover:focus-visible::before\s*{[\s\S]*?outline:\s*3px solid Highlight\s*!important;/.test(css),
+    "Inline reader targets need full-target focus indicators in normal and forced-colors modes.",
+  );
   assert(/\.rtl-text\s*{[\s\S]*direction:\s*rtl/.test(css), "RTL text class must set right-to-left direction.");
   assert(/\.token-original\.rtl-token\s*{[\s\S]*direction:\s*rtl/.test(css), "RTL token class must set right-to-left direction.");
   assert(/data-tooltip\]:focus-visible::after/.test(css), "Tooltip content must be available from keyboard focus.");

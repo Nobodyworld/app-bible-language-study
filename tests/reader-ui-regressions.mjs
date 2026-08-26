@@ -162,7 +162,12 @@ assert(
 );
 assert(/:root\[data-theme="dark"\] \.parallel-verse\.active\s*{[\s\S]*?background:\s*rgba\(148,\s*163,\s*184,\s*0\.12\)/.test(css), "Dark parallel selection must not use a white background.");
 assert(/:root\[data-theme="dark"\] \.reader-context-verse\s*{[\s\S]*?background:\s*rgba\(148,\s*163,\s*184,\s*0\.08\)/.test(css), "Dark reader selection must use the calm slate highlight.");
-assert(/\.reader-nav-arrow\s*{[\s\S]*?width:\s*20px;[\s\S]*?min-height:\s*56px;/.test(css), "Chapter navigation must remain edge-sliver sized.");
+assert(
+  /\.reader-nav-arrow\s*{[\s\S]*?width:\s*40px;[\s\S]*?min-width:\s*40px;[\s\S]*?min-height:\s*56px;/.test(css) &&
+    /\.reader-nav-arrow::before,[\s\S]*?\.reader-nav-arrow::after\s*{[\s\S]*?width:\s*20px;[\s\S]*?pointer-events:\s*none;/.test(css) &&
+    /\.reader-nav-arrow:focus-visible\s*{[\s\S]*?outline:\s*none;[\s\S]*?\.reader-nav-arrow:focus-visible::before\s*{[\s\S]*?outline:\s*3px solid var\(--accent\);[\s\S]*?outline-offset:\s*-3px;/.test(css),
+  "Floating chapter navigation must keep its edge placement while exposing a real 40px target and contained focus ring.",
+);
 assert(/\.reader-floating-nav\s*{[\s\S]*?top:\s*176px;/.test(css), "Floating chapter navigation must sit below the reader header.");
 assert(/\.detail-floating-nav\s*{[\s\S]*?top:\s*18px;[\s\S]*?margin:\s*0 24px 0 0;/.test(css), "Detail history controls must sit slightly lower and left of the panel edge.");
 assert(
@@ -235,16 +240,25 @@ assert(
 );
 assert(/\.fn-marker\s*{[\s\S]*?color:\s*#2347fb;/.test(css), "Footnote markers must use the requested blue.");
 assert(
+  /\.fn-marker::before\s*{[\s\S]*?width:\s*28px;[\s\S]*?height:\s*28px;[\s\S]*?pointer-events:\s*auto;/.test(css) &&
+    /\.verse-number\s*{[\s\S]*?width:\s*32px;[\s\S]*?min-height:\s*36px;/.test(css) &&
+    /\.presentation-block \.cross-links \.reference-hover::before\s*{[\s\S]*?height:\s*36px;[\s\S]*?pointer-events:\s*auto;/.test(css) &&
+    /@media\s*\(hover:\s*none\),\s*\(pointer:\s*coarse\)\s*{[\s\S]*?\.fn-marker::before\s*{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;[\s\S]*?\.verse-number\s*{[\s\S]*?width:\s*40px;[\s\S]*?min-height:\s*44px;[\s\S]*?\.reference-hover::before\s*{[\s\S]*?height:\s*44px;/.test(css),
+  "Inline reader targets must provide fine-pointer and touch dimensions without widening the scripture grid.",
+);
+assert(
   /:root\[data-theme="dark"\] \.fn-marker\s*{[\s\S]*?color:\s*#9eafff\s*!important;/.test(css) &&
     /:root\[data-theme="dark"\] \.fn-marker:hover\s*{[\s\S]*?color:\s*#c5ceff\s*!important;/.test(css) &&
-    /:root\[data-theme="dark"\] \.fn-marker:focus-visible\s*{[\s\S]*?outline:\s*2px solid #9eafff[\s\S]*?color:\s*#f0f2ff\s*!important;/.test(css),
-  "Dark footnotes must use lighter default, hover, and keyboard-focus colors with a visible focus outline.",
+    /:root\[data-theme="dark"\] \.fn-marker:focus-visible\s*{[\s\S]*?outline:\s*none\s*!important;[\s\S]*?color:\s*#f0f2ff\s*!important;/.test(css) &&
+    /:root\[data-theme="dark"\] \.fn-marker:focus-visible::before\s*{[\s\S]*?outline-color:\s*#9eafff;/.test(css),
+  "Dark footnotes must use lighter default and hover colors with a full-target keyboard-focus outline.",
 );
 assert(
   /html\[data-theme="light"\] \.fn-marker\s*{[\s\S]*?color:\s*#2347fb\s*!important;/.test(css) &&
     /html\[data-theme="light"\] \.fn-marker:hover\s*{[\s\S]*?color:\s*#1232c8\s*!important;/.test(css) &&
-    /html\[data-theme="light"\] \.fn-marker:focus-visible\s*{[\s\S]*?outline:\s*2px solid #2347fb[\s\S]*?color:\s*#0b238f\s*!important;/.test(css),
-  "Light-theme footnote contrast and keyboard focus treatment must remain explicit.",
+    /html\[data-theme="light"\] \.fn-marker:focus-visible\s*{[\s\S]*?outline:\s*none\s*!important;[\s\S]*?color:\s*#0b238f\s*!important;/.test(css) &&
+    /html\[data-theme="light"\] \.fn-marker:focus-visible::before\s*{[\s\S]*?outline-color:\s*#2347fb;/.test(css),
+  "Light-theme footnote contrast and full-target keyboard focus treatment must remain explicit.",
 );
 assert(
   /reader-picker-flow\.js\?v=pr13-live-qa-20260711e/.test(index),
