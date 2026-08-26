@@ -3,9 +3,10 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
-const [index, css, runtime, pickerFlow, contextTabs] = await Promise.all([
+const [index, css, readerCss, runtime, pickerFlow, contextTabs] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
   readFile(new URL("../app/styles-portrait.css", import.meta.url), "utf8"),
+  readFile(new URL("../app/styles.css", import.meta.url), "utf8"),
   readFile(new URL("../app/src/portrait-workspace.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/reader-picker-flow.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8"),
@@ -28,7 +29,7 @@ assert(
   "Portrait desktop reader controls must remain one compact three-column row.",
 );
 assert(
-  /@media\s*\(min-width:\s*641px\)\s*and\s*\(max-width:\s*960px\)[\s\S]*?@container\s+reader-pane\s*\(min-width:\s*550px\)/.test(await readFile(new URL("../app/styles.css", import.meta.url), "utf8")),
+  /@media\s*\(min-width:\s*641px\)\s*and\s*\(max-width:\s*960px\)[\s\S]*?@container\s+reader-pane\s*\(min-width:\s*550px\)/.test(readerCss),
   "Portrait chapter-action labels must appear only when the measured reader pane can keep one action row.",
 );
 
@@ -161,4 +162,9 @@ assert(
   "Meaning must remain visually neutral while closed and highlight only during interaction or expansion.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 23 }, null, 2));
+assert(
+  /@media\s*\(hover:\s*none\),\s*\(pointer:\s*coarse\)\s*{[\s\S]*?\.fn-marker::before\s*{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;[\s\S]*?\.verse-number\s*{[\s\S]*?width:\s*40px;[\s\S]*?min-height:\s*44px;[\s\S]*?\.reference-hover::before\s*{[\s\S]*?height:\s*44px;/.test(readerCss),
+  "Portrait touch layouts must retain the enlarged inline reader targets without changing the reader columns.",
+);
+
+console.log(JSON.stringify({ status: "ok", assertions: 24 }, null, 2));
