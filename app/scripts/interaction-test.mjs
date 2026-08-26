@@ -309,6 +309,112 @@ async function waitForStableReaderGeometry(
   );
 }
 
+async function waitForStablePickerContext(
+  page,
+  { label = "picker context", timeoutMs = 5000, stableSamples = 3 } = {},
+) {
+  return evaluate(
+    page,
+    `(async () => {
+      const label = ${JSON.stringify(label)};
+      const timeoutMs = ${JSON.stringify(timeoutMs)};
+      const requiredStableSamples = ${JSON.stringify(stableSamples)};
+      const readContext = () => {
+        const context = window.__readerTopPickerContext?.() || '';
+        let parsed = null;
+        try {
+          parsed = JSON.parse(context);
+        } catch {
+          parsed = null;
+        }
+        return {
+          context,
+          parsed,
+          viewport: { width: innerWidth, height: innerHeight },
+          workspaceMode: document.documentElement.dataset.studyWorkspaceWidth || ''
+        };
+      };
+      const isValidContext = (sample) => {
+        const value = sample.parsed;
+        return Boolean(
+          sample.context && sample.workspaceMode && value &&
+          typeof value.route === 'string' &&
+          Array.isArray(value.values) && value.values.length === 3 &&
+          Number.isFinite(value.pageScroll) &&
+          Number.isFinite(value.chapterScroll) &&
+          Number.isFinite(value.detailScroll) &&
+          typeof value.detailTitle === 'string' &&
+          typeof value.backDisabled === 'boolean' &&
+          typeof value.forwardDisabled === 'boolean' &&
+          Array.isArray(value.context)
+        );
+      };
+      const startedAt = performance.now();
+      const recentSamples = [];
+      let previous = null;
+      let consecutiveStableSamples = 0;
+      let sampleCount = 0;
+
+      while (performance.now() - startedAt <= timeoutMs) {
+        await new Promise(requestAnimationFrame);
+        const current = readContext();
+        sampleCount += 1;
+        recentSamples.push(current);
+        if (recentSamples.length > 12) recentSamples.shift();
+
+        if (!isValidContext(current)) {
+          consecutiveStableSamples = 0;
+        } else if (previous && isValidContext(previous) && previous.context === current.context) {
+          consecutiveStableSamples += 1;
+        } else {
+          consecutiveStableSamples = 1;
+        }
+
+        if (consecutiveStableSamples >= requiredStableSamples) {
+          return {
+            ...current,
+            sampleCount,
+            consecutiveStableSamples,
+            elapsedMs: performance.now() - startedAt,
+            recentSamples
+          };
+        }
+        previous = current;
+      }
+
+      throw new Error(
+        'Timed out waiting for stable ' + label + ': ' + JSON.stringify({
+          timeoutMs,
+          requiredStableSamples,
+          sampleCount,
+          recentSamples
+        })
+      );
+    })()`,
+  );
+}
+
+function pickerContextDifferences(expected, actual) {
+  const expectedContext = JSON.parse(expected);
+  const actualContext = JSON.parse(actual);
+  const fields = [
+    "route",
+    "values",
+    "pageScroll",
+    "chapterScroll",
+    "detailScroll",
+    "detailTitle",
+    "backDisabled",
+    "forwardDisabled",
+    "context",
+  ];
+  return Object.fromEntries(
+    fields
+      .filter((field) => JSON.stringify(expectedContext[field]) !== JSON.stringify(actualContext[field]))
+      .map((field) => [field, { expected: expectedContext[field], actual: actualContext[field] }]),
+  );
+}
+
 async function studyMarksFocusDiagnostics(page, triggerSelector) {
   return evaluate(
     page,
@@ -1517,7 +1623,6 @@ async function runQa(page) {
       })()`,
     );
   if (qaDevice !== "mobile") {
-    const contextBeforeResize = await evaluate(page, "window.__readerTopPickerContext()");
     const openPicker = async (kind) => {
       await evaluate(page, `document.querySelector('#${kind}PickerButton').click()`);
       await waitFor(page, `document.querySelector('#${kind}PickerPanel')?.hidden === false`);
@@ -1528,20 +1633,66 @@ async function runQa(page) {
       await waitFor(page, `document.querySelector('#${kind}PickerPanel')?.hidden === true`);
     };
 
+    const contextBeforeWideReset = await evaluate(page, "window.__readerTopPickerContext()");
     await page.setViewportSize({ width: 1280, height: 720 });
-    await waitForStableReaderGeometry(page, { label: 'Book picker wide baseline' });
+    await evaluate(page, "document.documentElement.dataset.studyWorkspaceWidth = 'standard'");
+    const contextAfterWideReset = await evaluate(page, "window.__readerTopPickerContext()");
+    const bookWideBaselineGeometry = await waitForStableReaderGeometry(page, { label: 'Book picker wide baseline' });
+    const contextAfterWideGeometry = await evaluate(page, "window.__readerTopPickerContext()");
+    const bookWideBaselineStability = await waitForStablePickerContext(page, { label: 'Book picker wide baseline context' });
+    const contextBeforeResize = bookWideBaselineStability.context;
+
     await openPicker("book");
+    const bookWideBeforeStability = await waitForStablePickerContext(page, { label: 'Book picker wide-before context' });
     const bookWideBefore = await measurePicker("book");
     await page.setViewportSize({ width: 390, height: 844 });
-    await waitForStableReaderGeometry(page, { label: 'Book picker narrow resize' });
+    const bookNarrowGeometry = await waitForStableReaderGeometry(page, { label: 'Book picker narrow resize' });
+    const bookNarrowStability = await waitForStablePickerContext(page, { label: 'Book picker narrow context' });
     const bookNarrow = await measurePicker("book");
     await page.setViewportSize({ width: 1280, height: 720 });
-    await waitForStableReaderGeometry(page, { label: 'Book picker wide restoration' });
+    const bookWideAfterGeometry = await waitForStableReaderGeometry(page, { label: 'Book picker wide restoration' });
+    const bookWideAfterStability = await waitForStablePickerContext(page, { label: 'Book picker wide-after context' });
     const bookWideAfter = await measurePicker("book");
     await closePicker("book");
     await openPicker("book");
+    const bookWideReopenedStability = await waitForStablePickerContext(page, { label: 'Book picker reopened-wide context' });
     const bookWideReopened = await measurePicker("book");
     await closePicker("book");
+    const bookContextDifferences = Object.fromEntries(
+      Object.entries({ bookWideBefore, bookNarrow, bookWideAfter, bookWideReopened })
+        .map(([name, state]) => [name, pickerContextDifferences(contextBeforeResize, state.context)]),
+    );
+    const bookMaximumContextDivergence = Math.max(
+      0,
+      ...Object.values(bookContextDifferences).map((differences) => Object.keys(differences).length),
+    );
+    const bookFailureDiagnostics = {
+      runtimeVersion: process.version,
+      contextBeforeWideReset,
+      contextAfterWideReset,
+      contextAfterWideGeometry,
+      contextBeforeResize,
+      bookWideBefore,
+      bookNarrow,
+      bookWideAfter,
+      bookWideReopened,
+      geometry: {
+        wideBaseline: bookWideBaselineGeometry,
+        narrow: bookNarrowGeometry,
+        wideAfter: bookWideAfterGeometry,
+      },
+      stability: {
+        wideBaseline: bookWideBaselineStability,
+        wideBefore: bookWideBeforeStability,
+        narrow: bookNarrowStability,
+        wideAfter: bookWideAfterStability,
+        wideReopened: bookWideReopenedStability,
+      },
+      contextDifferences: bookContextDifferences,
+      maximumContextDivergence: bookMaximumContextDivergence,
+      viewport: bookWideBaselineStability.viewport,
+      workspaceMode: bookWideBaselineStability.workspaceMode,
+    };
     assert(
       bookWideBefore.width >= 500 && bookWideBefore.columns === 2 &&
         bookNarrow.width <= 370.5 && bookNarrow.columns === 1 &&
@@ -1552,26 +1703,55 @@ async function runQa(page) {
         [bookWideBefore, bookNarrow, bookWideAfter, bookWideReopened].every(
           (state) => state.activeVisible && state.context === contextBeforeResize,
         ),
-      `Book picker natural width must recover across one live wide-narrow-wide page: ${JSON.stringify({
-        bookWideBefore,
-        bookNarrow,
-        bookWideAfter,
-        bookWideReopened,
-      })}`,
+      `Book picker natural width must recover across one live wide-narrow-wide page: ${JSON.stringify(bookFailureDiagnostics)}`,
     );
 
     await openPicker("chapter");
+    const chapterWideBeforeStability = await waitForStablePickerContext(page, { label: 'Chapter picker wide-before context' });
     const chapterWideBefore = await measurePicker("chapter");
     await page.setViewportSize({ width: 390, height: 844 });
-    await waitForStableReaderGeometry(page, { label: 'Chapter picker narrow resize' });
+    const chapterNarrowGeometry = await waitForStableReaderGeometry(page, { label: 'Chapter picker narrow resize' });
+    const chapterNarrowStability = await waitForStablePickerContext(page, { label: 'Chapter picker narrow context' });
     const chapterNarrow = await measurePicker("chapter");
     await page.setViewportSize({ width: 1280, height: 720 });
-    await waitForStableReaderGeometry(page, { label: 'Chapter picker wide restoration' });
+    const chapterWideAfterGeometry = await waitForStableReaderGeometry(page, { label: 'Chapter picker wide restoration' });
+    const chapterWideAfterStability = await waitForStablePickerContext(page, { label: 'Chapter picker wide-after context' });
     const chapterWideAfter = await measurePicker("chapter");
     await closePicker("chapter");
     await openPicker("chapter");
+    const chapterWideReopenedStability = await waitForStablePickerContext(page, { label: 'Chapter picker reopened-wide context' });
     const chapterWideReopened = await measurePicker("chapter");
     await closePicker("chapter");
+    const chapterContextDifferences = Object.fromEntries(
+      Object.entries({ chapterWideBefore, chapterNarrow, chapterWideAfter, chapterWideReopened })
+        .map(([name, state]) => [name, pickerContextDifferences(contextBeforeResize, state.context)]),
+    );
+    const chapterMaximumContextDivergence = Math.max(
+      0,
+      ...Object.values(chapterContextDifferences).map((differences) => Object.keys(differences).length),
+    );
+    const chapterFailureDiagnostics = {
+      runtimeVersion: process.version,
+      contextBeforeResize,
+      chapterWideBefore,
+      chapterNarrow,
+      chapterWideAfter,
+      chapterWideReopened,
+      geometry: {
+        narrow: chapterNarrowGeometry,
+        wideAfter: chapterWideAfterGeometry,
+      },
+      stability: {
+        wideBefore: chapterWideBeforeStability,
+        narrow: chapterNarrowStability,
+        wideAfter: chapterWideAfterStability,
+        wideReopened: chapterWideReopenedStability,
+      },
+      contextDifferences: chapterContextDifferences,
+      maximumContextDivergence: chapterMaximumContextDivergence,
+      viewport: chapterWideBeforeStability.viewport,
+      workspaceMode: chapterWideBeforeStability.workspaceMode,
+    };
     assert(
       chapterWideBefore.width > 0 && chapterNarrow.width > 0 &&
         chapterNarrow.left >= 8 && chapterNarrow.right <= chapterNarrow.viewportWidth - 8 &&
@@ -1580,16 +1760,34 @@ async function runQa(page) {
         [chapterWideBefore, chapterNarrow, chapterWideAfter, chapterWideReopened].every(
           (state) => state.activeVisible && state.context === contextBeforeResize,
         ),
-      `Chapter picker natural width must recover across one live wide-narrow-wide page: ${JSON.stringify({
-        chapterWideBefore,
-        chapterNarrow,
-        chapterWideAfter,
-        chapterWideReopened,
-      })}`,
+      `Chapter picker natural width must recover across one live wide-narrow-wide page: ${JSON.stringify(chapterFailureDiagnostics)}`,
     );
     qaEvidence.readerPickerResize = {
-      book: { wideBefore: bookWideBefore, narrow: bookNarrow, wideAfter: bookWideAfter, wideReopened: bookWideReopened },
-      chapter: { wideBefore: chapterWideBefore, narrow: chapterNarrow, wideAfter: chapterWideAfter, wideReopened: chapterWideReopened },
+      runtimeVersion: process.version,
+      contextBeforeWideReset,
+      contextAfterWideReset,
+      contextAfterWideGeometry,
+      contextBeforeResize,
+      book: {
+        wideBefore: bookWideBefore,
+        narrow: bookNarrow,
+        wideAfter: bookWideAfter,
+        wideReopened: bookWideReopened,
+        geometry: bookFailureDiagnostics.geometry,
+        stability: bookFailureDiagnostics.stability,
+        contextDifferences: bookContextDifferences,
+        maximumContextDivergence: bookMaximumContextDivergence,
+      },
+      chapter: {
+        wideBefore: chapterWideBefore,
+        narrow: chapterNarrow,
+        wideAfter: chapterWideAfter,
+        wideReopened: chapterWideReopened,
+        geometry: chapterFailureDiagnostics.geometry,
+        stability: chapterFailureDiagnostics.stability,
+        contextDifferences: chapterContextDifferences,
+        maximumContextDivergence: chapterMaximumContextDivergence,
+      },
     };
     pass("live wide-narrow-wide picker natural-width restoration");
   }
