@@ -19,6 +19,7 @@ import {
 } from "../strongs.js?v=pr13-live-qa-20260711e";
 import { getTokenRenderings, getWorkspaceVerse, setTokenRendering, setVerseDraft } from "../stores.js?v=pr13-live-qa-20260711e";
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
+import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
 import { createStudyEmptyState } from "../study-empty-state.js";
 import { interlinearTokenIdentity } from "../ui-contracts.js";
 import {
@@ -580,6 +581,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
 
   async function showInterlinearVerse(reference, verse, options = {}) {
     stopInterlinearLazyLoad();
+    const viewOptions = { ...options, viewId: DETAIL_VIEW_IDS.languageStudy };
     if (!ctx.canUseCapability?.("interlinear")) {
       setDetail(
         "Language Study",
@@ -587,7 +589,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
           reference,
           capabilityIds: ["interlinear"],
         }),
-        options,
+        viewOptions,
       );
       return;
     }
@@ -599,15 +601,19 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
       heading.textContent = reference;
       const message = document.createElement("p");
       message.textContent = `No Language Study data found for ${reference}.`;
-      empty.append(heading, createVerseContextTabs(ctx, reference, verse, "interlinear", ctx.studyContext?.strong), message);
-      setDetail("Language Study", empty, options);
+      empty.append(
+        heading,
+        createVerseContextTabs(ctx, reference, verse, DETAIL_VIEW_IDS.languageStudy, ctx.studyContext?.strong),
+        message,
+      );
+      setDetail("Language Study", empty, viewOptions);
       return;
     }
 
     const wrap = document.createElement("div");
     wrap.className = "interlinear-lazy-reader";
     wrap.dataset.detailRestore = "interlinear-lazy-reader";
-    wrap.append(createVerseContextTabs(ctx, reference, verse, "interlinear", ctx.studyContext?.strong));
+    wrap.append(createVerseContextTabs(ctx, reference, verse, DETAIL_VIEW_IDS.languageStudy, ctx.studyContext?.strong));
     const superscriptionSection = await createSuperscriptionSection(verse);
     if (selectedTextSpan) {
       wrap.append(initialSection);
@@ -620,7 +626,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     status.className = "interlinear-lazy-status";
     status.setAttribute("role", "status");
     wrap.append(status);
-    setDetail("Language Study", wrap, options);
+    setDetail("Language Study", wrap, viewOptions);
     ctx.rehydrateActiveTextSpanSelection?.();
     window.requestAnimationFrame(() => ctx.rehydrateActiveTextSpanSelection?.());
 
@@ -704,19 +710,20 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
 
   function showInterlinearChapter(options = {}) {
     stopInterlinearLazyLoad();
+    const viewOptions = { ...options, viewId: DETAIL_VIEW_IDS.languageStudy };
     if (!ctx.canUseCapability?.("interlinear")) {
       setDetail(
         "Language Study",
         createStudyEmptyState(ctx, "interlinear", {
           capabilityIds: ["interlinear"],
         }),
-        options,
+        viewOptions,
       );
       return;
     }
     const verses = interlinearVerses();
     if (!verses.length) {
-      setDetailMessage("Language Study", "No Language Study data found for this chapter.", options);
+      setDetailMessage("Language Study", "No Language Study data found for this chapter.", viewOptions);
       return;
     }
 
@@ -740,7 +747,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
         li.append(inspect);
       }),
     );
-    setDetail("Language Study", wrap, options);
+    setDetail("Language Study", wrap, viewOptions);
   }
 
   return {

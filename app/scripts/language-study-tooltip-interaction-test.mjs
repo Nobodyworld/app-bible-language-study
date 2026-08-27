@@ -98,7 +98,7 @@ async function captureReadinessDiagnostics(page, diagnostics, phase) {
           languageStudyControl: snapshotControl(document.querySelector("#showInterlinear")),
           languageTab: snapshotControl(
             document.querySelector(
-              "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language']",
+              "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language Study']",
             ),
           ),
           locators: {
@@ -203,7 +203,7 @@ async function waitForLanguageStudyReady(page, baseUrl, theme, diagnostics) {
     );
     await verseStudy.evaluate((button) => button.click());
     const languageTab = page.locator(
-      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language']",
+      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language Study']",
     );
     await languageTab.waitFor({ state: "visible", timeout: 30_000 });
     phase = "Language Study activation";

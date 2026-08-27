@@ -2,10 +2,11 @@ const ACTIVE_WORD_CONTEXT_KEY = "activeWord";
 
 function normalizedContext(context) {
   if (!context?.token) return null;
+  const { invoker: _invoker, ...storedOptions } = context.options || {};
   return {
     token: context.token,
     options: {
-      ...(context.options || {}),
+      ...storedOptions,
       forceHistory: false,
     },
   };

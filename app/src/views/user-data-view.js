@@ -9,6 +9,7 @@ import {
 } from "../stores.js?v=pr13-live-qa-20260711e";
 import { setDetail } from "../dom.js?v=pr13-live-qa-20260711e";
 import { resolveCapabilities } from "../capabilities.js";
+import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
 import { canRunJob, runJob } from "../job-processor.js?v=pr13-live-qa-20260711e";
 import { setCapabilityDisabled } from "../package-state.js";
 import { renderJobsDiagnostics } from "./jobs-view.js?v=pr13-live-qa-20260711e";
@@ -446,6 +447,6 @@ export function createUserDataView(ctx, options = {}) {
     diagnostics.append(diagnosticsSummary, diagnosticsIntro, diagnosticsSlot);
     wrap.append(diagnostics);
 
-    setDetail("My Data", wrap);
+    setDetail("My Data", wrap, { viewId: DETAIL_VIEW_IDS.myData });
   };
 }

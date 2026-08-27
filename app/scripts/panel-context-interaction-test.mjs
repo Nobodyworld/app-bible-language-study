@@ -193,7 +193,7 @@ async function openStrongFromReader(page) {
   }
   await click(
     page,
-    "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language']",
+    "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language Study']",
   );
   await waitFor(page, () =>
     document.querySelector("#detailTitle")?.textContent === "Language Study" &&
@@ -897,9 +897,18 @@ async function contextState(page) {
     const parallelButton = document.querySelector(
       "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel']",
     );
-    const verseButton = document.querySelector(
-      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Verse']",
-    );
+    const verseScopeLabels = [...document.querySelectorAll(
+      "#detailContext [data-panel-scope='verse'] .panel-context-scope-label",
+    )];
+    const currentControls = [...document.querySelectorAll("#detailContext .verse-context-tab")].map((button) => ({
+      action: button.dataset.panelAction || "",
+      ariaCurrent: button.getAttribute("aria-current") || "",
+      ariaLabel: button.getAttribute("aria-label") || "",
+      ariaPressed: button.getAttribute("aria-pressed") || "",
+      disabled: button.disabled,
+      label: button.dataset.visibleLabel || button.textContent.trim(),
+      title: button.title,
+    }));
     const summary = document.querySelector("#detailContext .panel-context-summary");
     const transliteration = document.querySelector(
       "#detailContent .original-language-transliteration, #detailContent .original-language-word-source .token-translit, #detailContent .original-language-word-source .original-language-token-transliteration",
@@ -916,6 +925,10 @@ async function contextState(page) {
       groupScopes,
       staticScopes,
       active,
+      currentControls,
+      displayedView: pane?.dataset.displayedView || "",
+      modeStatus: document.querySelector("#detailModeStatus")?.textContent.trim() || "",
+      modeStatusLabel: document.querySelector("#detailModeStatus")?.getAttribute("aria-label") || "",
       panelOccupant: nav?.dataset.panelOccupant || "",
       summary: summary?.textContent.trim() || "",
       summaryOverflow: summary ? summary.scrollWidth - summary.clientWidth : 0,
@@ -941,8 +954,10 @@ async function contextState(page) {
       wordActiveBackground: wordStyle?.backgroundColor || "",
       wordActiveColor: wordStyle?.color || "",
       parallelDisabled: parallelButton?.disabled ?? null,
-      verseDisabled: verseButton?.disabled ?? null,
-      verseCurrent: verseButton?.getAttribute("aria-current") || "",
+      parallelActionCount: document.querySelectorAll(
+        "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel']",
+      ).length,
+      verseScopeLabels: verseScopeLabels.map((label) => label.textContent.trim()),
       strongSectionControls: [...document.querySelectorAll("#detailContext [data-strong-section-control]")].map((button) => ({
         section: button.dataset.strongSectionControl,
         disabled: button.disabled,
@@ -965,6 +980,88 @@ async function contextState(page) {
       panelHeaderGap:
         paneRect && appHeaderRect ? Math.round((paneRect.top - appHeaderRect.bottom) * 100) / 100 : null,
       detailHeaderTop: detailHeaderRect ? Math.round(detailHeaderRect.top * 100) / 100 : null,
+    };
+  });
+}
+
+async function waitForStableDetailScroll(page, { minimum = 0, timeoutMs = 5000 } = {}) {
+  return page.evaluate(({ minimumScroll, timeout }) => new Promise((resolveStable, rejectStable) => {
+    const started = performance.now();
+    const recent = [];
+    let stableCount = 0;
+    let previous = null;
+    const sample = () => {
+      const value = document.querySelector("#detailContent")?.scrollTop || 0;
+      recent.push(value);
+      if (recent.length > 8) recent.shift();
+      stableCount = previous !== null && Math.abs(value - previous) <= 0.25 ? stableCount + 1 : 1;
+      previous = value;
+      if (value >= minimumScroll && stableCount >= 3) {
+        resolveStable(value);
+        return;
+      }
+      if (performance.now() - started >= timeout) {
+        rejectStable(new Error(`Detail scroll did not settle: ${JSON.stringify(recent)}`));
+        return;
+      }
+      window.requestAnimationFrame(sample);
+    };
+    window.requestAnimationFrame(sample);
+  }), { minimumScroll: minimum, timeout: timeoutMs });
+}
+
+function assertTruthfulCurrentState(state, expectedAction, expectedView, label) {
+  const navigationActions = new Set(["strongs", "par", "refs", "commentary", "interlinear"]);
+  const controls = state.currentControls.filter((control) => navigationActions.has(control.action));
+  const current = controls.filter((control) => control.ariaCurrent === "page");
+  assert.equal(state.displayedView, expectedView, `${label}: displayed-view identity is incorrect`);
+  assert.deepEqual(current.map((control) => control.action), [expectedAction], `${label}: current control is contradictory`);
+  controls.forEach((control) => {
+    const isCurrent = control.action === expectedAction;
+    assert.equal(control.ariaPressed, isCurrent ? "true" : "false", `${label}: ${control.action} aria-pressed is not truthful`);
+    assert.equal(control.ariaCurrent, isCurrent ? "page" : "", `${label}: ${control.action} aria-current is not truthful`);
+    if (isCurrent) {
+      assert.match(control.title, /^Current /, `${label}: current ${control.action} title is not truthful`);
+      assert.match(control.ariaLabel, /current view/i, `${label}: current ${control.action} accessible name is not truthful`);
+    }
+  });
+  assert.equal(state.modeStatus, state.lock === "locked" ? "Locked" : "Following", `${label}: visible mode status is stale`);
+  assert.equal(
+    state.modeStatusLabel,
+    `Study workspace mode: ${state.modeStatus}`,
+    `${label}: accessible mode status is stale`,
+  );
+}
+
+async function readerContextInvariantState(page) {
+  return page.evaluate(() => {
+    const word = document.querySelector(".reader-context-word");
+    const verse = word?.closest(".verse-row, .source-bearing-segment") || document.querySelector(".reader-context-verse");
+    const navigation = history.state?.bibleAppReaderNavigation || {};
+    const phrase = document.querySelector(".reader-context-phrase-verse");
+    return {
+      hash: location.hash,
+      pageScroll: scrollY,
+      readerScroll: document.querySelector("#chapterContent")?.scrollTop || 0,
+      selectedVerse: verse?.dataset.verse || "",
+      selectedWord: word
+        ? {
+            interlinearKey: word.dataset.interlinearKey || "",
+            strongCode: word.dataset.strongCode || "",
+            tokenIndex: word.dataset.tokenIndex || "",
+          }
+        : null,
+      phrase: phrase
+        ? {
+            charEnd: phrase.dataset.textSpanCharEnd || "",
+            charStart: phrase.dataset.textSpanCharStart || "",
+            targetId: phrase.dataset.textSpanTargetId || "",
+          }
+        : null,
+      readerHistory: {
+        index: navigation.navigationIndex ?? null,
+        maxIndex: navigation.navigationMaxIndex ?? null,
+      },
     };
   });
 }
@@ -1135,13 +1232,19 @@ async function runScenario(browser, baseUrl, mode, theme) {
     await waitFor(page, () => Boolean(document.querySelector("#detailContext .panel-context-navigation")));
     await click(
       page,
-      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language']",
+      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language Study']",
     );
     await waitFor(page, () =>
       document.querySelector("#detailTitle")?.textContent === "Language Study" &&
       document.querySelectorAll("#detailContent .interlinear-token").length > 0,
     );
     const languageStudyState = await contextState(page);
+    assertTruthfulCurrentState(
+      languageStudyState,
+      "interlinear",
+      "language-study",
+      `${mode}/${theme}: Language Study`,
+    );
     assert(
       languageStudyState.transliteration?.text &&
         languageStudyState.transliteration.contrast >= 4.5,
@@ -1164,6 +1267,7 @@ async function runScenario(browser, baseUrl, mode, theme) {
     );
 
     const wordState = await contextState(page);
+    assertTruthfulCurrentState(wordState, "strongs", "strongs", `${mode}/${theme}: Strong's Word`);
     assert.equal(wordState.scopeOrder, "word verse", `${mode}: Word must lead the compact scope order`);
     assert.deepEqual(wordState.groupScopes, ["word", "verse"], `${mode}: contextual groups must be Word then Verse`);
     assert.deepEqual(wordState.staticScopes, [], `${mode}: Chapter and Book groups must be absent from the side panel`);
@@ -1183,7 +1287,10 @@ async function runScenario(browser, baseUrl, mode, theme) {
     );
     assert(wordState.navOverflow <= 1, `${mode}: Word-first navigation has horizontal overflow`);
     assert(wordState.hasSummaryBoundary, `${mode}: selected-word summary boundary is missing`);
-    assert(wordState.navHeight < 180, `${mode}: compact navigation is unexpectedly tall`);
+    assert(
+      wordState.navHeight < (mobile || mode === "narrow" ? 240 : 190),
+      `${mode}: contextual navigation is unexpectedly tall for its target-size mode (${wordState.navHeight}px)`,
+    );
     assert(wordState.documentOverflow <= 1, `${mode}: document has horizontal overflow`);
     assertPanelPlacement(wordState, mode);
     assertLanguageSpecificStrong(wordState, "hebrew", `${mode}/${theme}: Hebrew Proverbs word`);
@@ -1234,20 +1341,122 @@ async function runScenario(browser, baseUrl, mode, theme) {
     assert.equal(forwardState.wordControl, "page", `${mode}: Forward must restore the active Word control`);
     assert.equal(forwardState.readerToken, wordReactivation.readerToken, `${mode}: Forward must restore the selected reader highlight`);
 
-    await click(
-      page,
-      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel']",
+    const readerContextBeforeToolSwitch = await readerContextInvariantState(page);
+    await page.locator("#detailContext [data-strong-section-control='hebrew']").click();
+    let strongDeepScroll = await waitForStableDetailScroll(page);
+    if (strongDeepScroll <= 0) {
+      const assignedScroll = await page.locator("#detailContent").evaluate((node) => {
+        const target = Math.min(240, Math.max(0, node.scrollHeight - node.clientHeight));
+        node.scrollTop = target;
+        return target;
+      });
+      assert(assignedScroll > 0, `${mode}: Strong's fixture has no independently scrollable Detail range`);
+      strongDeepScroll = await waitForStableDetailScroll(page, { minimum: 1 });
+    }
+    await page.locator(
+      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language Study']",
+    ).click();
+    await waitFor(page, () =>
+      document.querySelector("#detailTitle")?.textContent === "Language Study" &&
+      document.querySelector("#detailContent")?.scrollTop === 0,
     );
+    const languageFromWordState = await contextState(page);
+    assertTruthfulCurrentState(
+      languageFromWordState,
+      "interlinear",
+      "language-study",
+      `${mode}/${theme}: Language Study from a scrolled Strong's entry`,
+    );
+    assert.equal(languageFromWordState.wordDisabled, false, `${mode}: Word must remain available in Language Study`);
+    assert.deepEqual(
+      await readerContextInvariantState(page),
+      readerContextBeforeToolSwitch,
+      `${mode}: Language Study changed canonical Reader context`,
+    );
+
+    await page.locator("#detailBack").click();
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Strong's");
+    await page.evaluate(async () => {
+      await new Promise((resolveFrame) => window.requestAnimationFrame(() =>
+        window.requestAnimationFrame(() => window.requestAnimationFrame(resolveFrame)),
+      ));
+    });
+    const restoredStrongScroll = await page.locator("#detailContent").evaluate((node) => node.scrollTop);
+    assert(
+      Math.abs(restoredStrongScroll - strongDeepScroll) <= 1,
+      `${mode}: Detail Back did not restore exact Strong's scroll (${strongDeepScroll} -> ${restoredStrongScroll})`,
+    );
+    assert.deepEqual(
+      await readerContextInvariantState(page),
+      readerContextBeforeToolSwitch,
+      `${mode}: Detail Back changed canonical Reader context`,
+    );
+    await page.locator("#detailForward").click();
+    await waitFor(page, () =>
+      document.querySelector("#detailTitle")?.textContent === "Language Study" &&
+      document.querySelector("#detailContent")?.scrollTop === 0,
+    );
+    await page.locator(
+      "#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Word']",
+    ).click();
+    await waitFor(page, () =>
+      document.querySelector("#detailTitle")?.textContent === "Strong's" &&
+      document.querySelector(".detail-pane")?.dataset.displayedView === "strongs" &&
+      document.querySelector("#detailContent")?.scrollTop === 0,
+    );
+    const returnedWordState = await contextState(page);
+    assertTruthfulCurrentState(returnedWordState, "strongs", "strongs", `${mode}/${theme}: Word return`);
+    assert.deepEqual(
+      await readerContextInvariantState(page),
+      readerContextBeforeToolSwitch,
+      `${mode}: Word return changed canonical Reader context`,
+    );
+
+    await page.locator(
+      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel']",
+    ).click();
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Parallel");
     const inheritedState = await contextState(page);
     assert.equal(inheritedState.scopeOrder, "word verse", `${mode}: Verse view must retain containing Word context`);
     assert.deepEqual(inheritedState.groupScopes, ["word", "verse"], `${mode}: inherited Word and Verse groups are out of order`);
-    assert.deepEqual(inheritedState.active, ["word:Word"], `${mode}: exact selected word must remain the current canonical context`);
-    assert.equal(inheritedState.panelOccupant, "par", `${mode}: visible Parallel panel occupant must remain identifiable`);
-    assert.equal(inheritedState.wordDisabled, true, `${mode}: Word must not claim it can scroll a detached Strong's panel`);
-    assert.equal(inheritedState.verseCurrent, "", `${mode}: Verse must not claim a whole-verse selection while an exact word is selected`);
+    assert.deepEqual(inheritedState.active, ["verse:Parallel"], `${mode}: Parallel must be the sole current displayed view`);
+    assertTruthfulCurrentState(inheritedState, "par", "parallel", `${mode}/${theme}: Parallel`);
+    assert.equal(inheritedState.panelOccupant, "parallel", `${mode}: visible Parallel panel occupant must remain identifiable`);
+    assert.equal(inheritedState.wordDisabled, false, `${mode}: Word must remain available from Parallel`);
+    assert.deepEqual(inheritedState.verseScopeLabels, ["Verse"], `${mode}: Verse must render once as a scope label`);
+    assert.equal(inheritedState.parallelActionCount, 1, `${mode}: Parallel must render exactly one actual action`);
     assertPanelPlacement(inheritedState, mode);
     await capturePanel(page, mode, theme, "inherited-verse");
+
+    const inheritedReaderContext = await readerContextInvariantState(page);
+    await page.locator(
+      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='References']",
+    ).click();
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Cross References");
+    const inheritedReferencesState = await contextState(page);
+    assertTruthfulCurrentState(inheritedReferencesState, "refs", "references", `${mode}/${theme}: inherited References`);
+    assert.equal(inheritedReferencesState.wordDisabled, false, `${mode}: Word must remain available from References`);
+    assert.deepEqual(
+      await readerContextInvariantState(page),
+      inheritedReaderContext,
+      `${mode}: References changed canonical Reader context`,
+    );
+
+    await page.locator(
+      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Commentary']",
+    ).click();
+    await waitFor(page, () =>
+      document.querySelector("#detailTitle")?.textContent === "Commentary" &&
+      document.querySelector("#detailContext [data-panel-action='commentary'][aria-current='page']"),
+    );
+    const inheritedCommentaryState = await contextState(page);
+    assertTruthfulCurrentState(inheritedCommentaryState, "commentary", "commentary", `${mode}/${theme}: inherited Commentary`);
+    assert.equal(inheritedCommentaryState.wordDisabled, false, `${mode}: Word must remain available from Commentary`);
+    assert.deepEqual(
+      await readerContextInvariantState(page),
+      inheritedReaderContext,
+      `${mode}: Commentary changed canonical Reader context`,
+    );
 
     await click(page, "#showOutline");
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Outline");
@@ -1256,55 +1465,33 @@ async function runScenario(browser, baseUrl, mode, theme) {
     const verseOnlyState = await contextState(page);
     assert.equal(verseOnlyState.scopeOrder, "verse", `${mode}: cleared context must return to Verse-only order`);
     assert.deepEqual(verseOnlyState.groupScopes, ["verse"], `${mode}: cleared context must not render a Word group`);
-    assert.deepEqual(verseOnlyState.active, ["verse:Verse"], `${mode}: Verse self-control must identify the whole-verse context`);
-    assert.equal(verseOnlyState.verseCurrent, "page", `${mode}: Verse self-control must expose current state accessibly`);
-    assert.equal(verseOnlyState.verseDisabled, false, `${mode}: current Verse must permit a no-op activation`);
+    assert.deepEqual(verseOnlyState.active, ["verse:References"], `${mode}: References must identify the displayed verse tool`);
+    assertTruthfulCurrentState(verseOnlyState, "refs", "references", `${mode}/${theme}: verse-only References`);
+    assert.deepEqual(verseOnlyState.verseScopeLabels, ["Verse"], `${mode}: Verse must remain a noninteractive scope label`);
+    assert.equal(verseOnlyState.parallelActionCount, 1, `${mode}: verse scope must contain one Parallel action`);
     assert(verseOnlyState.navOverflow <= 1, `${mode}: Verse-only navigation has horizontal overflow`);
     assert(verseOnlyState.documentOverflow <= 1, `${mode}: cleared layout has horizontal overflow`);
     assertPanelPlacement(verseOnlyState, mode);
     await capturePanel(page, mode, theme, "verse-only");
 
-    const verseReactivation = await page.evaluate(() => {
-      const button = document.querySelector("#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Verse']");
-      const detail = document.querySelector("#detailContent");
-      const before = {
-        title: document.querySelector("#detailTitle")?.textContent,
-        firstChild: detail?.firstElementChild,
-        lock: document.querySelector(".detail-pane")?.dataset.panelMode,
-        readerVerse: document.querySelector(".reader-context-verse")?.dataset.verse,
-        backDisabled: document.querySelector("#detailBack")?.disabled,
-        forwardDisabled: document.querySelector("#detailForward")?.disabled,
-      };
-      button?.click();
-      return {
-        ...before,
-        sameTitle: before.title === document.querySelector("#detailTitle")?.textContent,
-        sameDetail: before.firstChild === detail?.firstElementChild,
-        sameLock: before.lock === document.querySelector(".detail-pane")?.dataset.panelMode,
-        sameVerse: before.readerVerse === document.querySelector(".reader-context-verse")?.dataset.verse,
-        sameBack: before.backDisabled === document.querySelector("#detailBack")?.disabled,
-        sameForward: before.forwardDisabled === document.querySelector("#detailForward")?.disabled,
-      };
-    });
-    assert(
-      verseReactivation.sameTitle &&
-        verseReactivation.sameDetail &&
-        verseReactivation.sameLock &&
-        verseReactivation.sameVerse &&
-        verseReactivation.sameBack &&
-        verseReactivation.sameForward,
-      `${mode}: current Verse activation must not rebuild detail, alter lock/selection, or add history: ${JSON.stringify(verseReactivation)}`,
-    );
+    const verseReferenceContext = await readerContextInvariantState(page);
+    const referenceControl = verseOnlyState.currentControls.find((control) => control.action === "refs");
+    assert.equal(referenceControl?.disabled, true, `${mode}: current References may be disabled only as the truthful displayed view`);
     await click(page, "#detailBack");
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Outline");
     await click(page, "#detailForward");
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Cross References");
     const verseForwardState = await contextState(page);
-    assert.deepEqual(verseForwardState.active, ["verse:Verse"], `${mode}: Forward must restore the Verse current state`);
-    assert.equal(verseForwardState.readerVerse, verseReactivation.readerVerse, `${mode}: Forward must restore the selected verse`);
-    assert.equal(verseForwardState.title, verseReactivation.title, `${mode}: Forward must restore the same Verse detail panel`);
-    assert.equal(verseForwardState.lock, verseReactivation.lock, `${mode}: Forward must restore the locked panel state`);
-    assert.equal(verseForwardState.panelOccupant, "refs", `${mode}: Forward must restore the visible Verse panel occupant`);
+    assertTruthfulCurrentState(verseForwardState, "refs", "references", `${mode}/${theme}: restored References`);
+    assert.equal(verseForwardState.readerVerse, verseOnlyState.readerVerse, `${mode}: Forward must restore the selected verse`);
+    assert.equal(verseForwardState.title, verseOnlyState.title, `${mode}: Forward must restore the same References panel`);
+    assert.equal(verseForwardState.lock, verseOnlyState.lock, `${mode}: Forward must restore the locked panel state`);
+    assert.equal(verseForwardState.panelOccupant, "references", `${mode}: Forward must restore the visible References occupant`);
+    assert.deepEqual(
+      await readerContextInvariantState(page),
+      verseReferenceContext,
+      `${mode}: Detail history changed the selected Reader verse or navigation state`,
+    );
 
     temporaryTagLabels = Array.from(
       { length: TEMPORARY_TAG_COUNT },

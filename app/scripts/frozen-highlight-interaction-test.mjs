@@ -269,6 +269,31 @@ async function main() {
         selectedPairs: document.querySelectorAll(".translation-token-pair.selected-range").length,
         nativeText: String(window.getSelection()),
         summaryVisible: Boolean(summaryRect && detailRect && summaryRect.top >= detailRect.top && summaryRect.bottom <= detailRect.bottom),
+        summaryRect: summaryRect
+          ? { top: summaryRect.top, bottom: summaryRect.bottom, height: summaryRect.height }
+          : null,
+        detailRect: detailRect
+          ? { top: detailRect.top, bottom: detailRect.bottom, height: detailRect.height }
+          : null,
+        detailScrollTop: detail?.scrollTop ?? null,
+        contentGeometry: [...document.querySelectorAll("#detailContent .interlinear-lazy-reader, #detailContent .interlinear-verse-section, #detailContent .interlinear-verse-section > h3")]
+          .map((node) => {
+            const rect = node.getBoundingClientRect();
+            return { selector: node.className || node.tagName, top: rect.top, bottom: rect.bottom, height: rect.height };
+          }),
+        lazyLayout: (() => {
+          const lazy = document.querySelector("#detailContent .interlinear-lazy-reader");
+          if (!lazy) return null;
+          const style = getComputedStyle(lazy);
+          return {
+            children: [...lazy.children].map((child) => child.className || child.tagName),
+            gridTemplateRows: style.gridTemplateRows,
+            alignContent: style.alignContent,
+            rowGap: style.rowGap,
+            minHeight: style.minHeight,
+            height: style.height,
+          };
+        })(),
       };
     });
     const persistentPhrase = await readerState(page);
@@ -277,7 +302,11 @@ async function main() {
     assert(afterStudy.overlapCount > 1, `Expected multiple overlapping source tokens: ${JSON.stringify(afterStudy)}`);
     nodeAssert.equal(afterStudy.selectedPairs, afterStudy.overlapCount);
     nodeAssert.equal(afterStudy.nativeText, "", "The native selection should yield to the application highlight.");
-    nodeAssert.equal(afterStudy.summaryVisible, true, "The selected phrase summary was not visible when Language Study opened.");
+    nodeAssert.equal(
+      afterStudy.summaryVisible,
+      true,
+      `The selected phrase summary was not visible when Language Study opened: ${JSON.stringify(afterStudy)}`,
+    );
     nodeAssert.equal(persistentPhrase.phraseText, phrase, "The persistent highlight did not cover the exact phrase.");
     nodeAssert.equal(persistentPhrase.phraseVerseCount, 1);
     nodeAssert.equal(
@@ -346,14 +375,24 @@ async function main() {
     );
     await page.emulateMedia({ forcedColors: "none", reducedMotion: "no-preference" });
     await clickWithPointer(page, "#detailBack");
-    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Strong's");
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Parallel");
     nodeAssert.equal((await readerState(page)).phraseText, phrase, "Detail Back cleared the exact phrase.");
     await clickWithPointer(page, "#detailForward");
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study");
     nodeAssert.equal((await readerState(page)).phraseText, phrase, "Detail Forward cleared the exact phrase.");
 
-    await clickWithPointer(page, "#detailBack");
-    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Strong's");
+    const expectedBackSequence = ["Parallel", "Commentary", "Cross References", "Language Study", "Strong's"];
+    const restoredBackSequence = [];
+    for (const expectedTitle of expectedBackSequence) {
+      const previousTitle = await page.locator("#detailTitle").textContent();
+      await clickWithPointer(page, "#detailBack");
+      await page.waitForFunction((title) => document.querySelector("#detailTitle")?.textContent === title, expectedTitle);
+      const restoredTitle = await page.locator("#detailTitle").textContent();
+      restoredBackSequence.push(restoredTitle);
+      nodeAssert.notEqual(restoredTitle, previousTitle, `Detail Back did not leave ${previousTitle}.`);
+      nodeAssert.equal((await readerState(page)).phraseText, phrase, `Detail Back to ${expectedTitle} cleared the exact phrase.`);
+    }
+    nodeAssert.deepEqual(restoredBackSequence, expectedBackSequence, "Detail Back did not restore each truthful Study view in order.");
     for (const documentTop of [0, 275]) {
       await page.evaluate((top) => window.scrollTo(0, top), documentTop);
       await delay(100);

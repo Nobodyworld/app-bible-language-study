@@ -481,6 +481,7 @@ function handleReaderFreezePointerDown(event) {
 }
 
 function handleFrozenHighlightKeydown(event) {
+  if (event.key === "Escape" && document.querySelector(".detail-pane.visible")) return;
   if (event.key === "Escape" && document.querySelector("#detailToolSurface:not([hidden])")) return;
   if (
     event.key === "Escape" &&

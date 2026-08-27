@@ -5,6 +5,7 @@ import { makeInternalLinksNavigable } from "../references.js";
 import { createStudyEmptyState } from "../study-empty-state.js";
 import { setSanitizedCommentaryHtml } from "../sanitize-commentary.js?v=pr13-live-qa-20260711e";
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
+import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
 
 export function createCommentaryOutlineViews(ctx) {
   async function loadCommentaryAggregate() {
@@ -28,13 +29,14 @@ export function createCommentaryOutlineViews(ctx) {
   }
 
   async function showCommentary(reference, verse, options = {}) {
+    const viewOptions = { ...options, viewId: DETAIL_VIEW_IDS.commentary };
     if (!ctx.canUseCapability?.("commentary")) {
-      setDetailMessage("Commentary", capabilityMessage(ctx.getCapabilityState?.("commentary")), options);
+      setDetailMessage("Commentary", capabilityMessage(ctx.getCapabilityState?.("commentary")), viewOptions);
       return;
     }
-    const detailIntent = setDetailMessage("Commentary", "Loading commentary...", options);
+    const detailIntent = setDetailMessage("Commentary", "Loading commentary...", viewOptions);
     if (detailIntent === null) return;
-    const detailOptions = { ...options, detailIntent };
+    const detailOptions = { ...viewOptions, detailIntent };
     const aggregate = await loadCommentaryAggregate();
     const entries = aggregate?.chapters?.[ctx.state.chapter]?.[verse] || [];
     if (!entries.length) {
@@ -43,7 +45,11 @@ export function createCommentaryOutlineViews(ctx) {
       heading.textContent = reference;
       const message = document.createElement("p");
       message.textContent = `No commentary entries found for ${reference}.`;
-      empty.append(heading, createVerseContextTabs(ctx, reference, verse, "commentary", ctx.getActiveWordContext?.(verse)), message);
+      empty.append(
+        heading,
+        createVerseContextTabs(ctx, reference, verse, DETAIL_VIEW_IDS.commentary, ctx.getActiveWordContext?.(verse)),
+        message,
+      );
       setDetail("Commentary", empty, detailOptions);
       return;
     }
@@ -51,7 +57,10 @@ export function createCommentaryOutlineViews(ctx) {
     const wrap = document.createElement("div");
     const heading = document.createElement("h3");
     heading.textContent = reference;
-    wrap.append(heading, createVerseContextTabs(ctx, reference, verse, "commentary", ctx.getActiveWordContext?.(verse)));
+    wrap.append(
+      heading,
+      createVerseContextTabs(ctx, reference, verse, DETAIL_VIEW_IDS.commentary, ctx.getActiveWordContext?.(verse)),
+    );
 
     for (const entry of entries.slice(0, 8)) {
       const resolved = await resolveCommentaryEntry(entry);
@@ -71,13 +80,14 @@ export function createCommentaryOutlineViews(ctx) {
   }
 
   function showOutline(options = {}) {
+    const viewOptions = { ...options, viewId: DETAIL_VIEW_IDS.outline };
     if (!ctx.canUseCapability?.("outlines")) {
       setDetail(
         "Outline",
         createStudyEmptyState(ctx, "outlines", {
           capabilityIds: ["outlines"],
         }),
-        options,
+        viewOptions,
       );
       return;
     }
@@ -91,7 +101,7 @@ export function createCommentaryOutlineViews(ctx) {
       const empty = document.createElement("p");
       empty.textContent = "No outline found for this book.";
       wrap.append(empty);
-      setDetail("Outline", wrap, options);
+      setDetail("Outline", wrap, viewOptions);
       return;
     }
 
@@ -117,7 +127,7 @@ export function createCommentaryOutlineViews(ctx) {
         }
       }),
     );
-    setDetail("Outline", wrap, options);
+    setDetail("Outline", wrap, viewOptions);
   }
 
   return { showCommentary, showOutline };

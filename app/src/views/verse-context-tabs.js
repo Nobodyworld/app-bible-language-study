@@ -1,7 +1,8 @@
 import { studyUnavailableLabel } from "../study-empty-state.js";
-import { CONTROL_STATES, resolveControlState } from "../ui-contracts.js";
+import { CONTROL_STATES, normalizeDetailViewId, resolveControlState } from "../ui-contracts.js";
 import {
   PANEL_SCOPE_LABELS,
+  isPanelActionCurrent,
   panelContextSummary,
   panelScopeSequence,
   panelToolsForScope,
@@ -63,17 +64,45 @@ function createScopeGroup(scope) {
   group.dataset.panelScope = scope;
   group.setAttribute("aria-label", `${PANEL_SCOPE_LABELS[scope]} scope`);
 
+  const label = document.createElement("h3");
+  label.className = "panel-context-scope-label";
+  label.textContent = PANEL_SCOPE_LABELS[scope];
+
   const controls = document.createElement("div");
   controls.className = "panel-context-controls";
-  group.append(controls);
-  return { group, controls };
+  group.append(label, controls);
+  return { group, controls, label };
 }
 
-function wordHighlightOptions(wordContext, verse) {
+function readerWordElement(wordContext, verse) {
   const token = wordContext?.token;
-  if (!token) return { verse, commit: true };
+  if (!token) return null;
+  const segmentId = String(wordContext?.options?.verseContext?.segmentId || "");
+  const requestedVerse = String(wordContext?.options?.verseContext?.verse || verse || "");
+  const rows = [...document.querySelectorAll(".reader-pane .verse-row, .reader-pane .source-bearing-segment")];
+  const row =
+    (segmentId && rows.find((candidate) => candidate.dataset.segmentId === segmentId)) ||
+    rows.find((candidate) => candidate.dataset.verse === requestedVerse) ||
+    null;
+  if (!row) return null;
+  const tokenIndex = token.token_index == null ? "" : String(token.token_index);
+  const strongCode = String(token.strong_code || "");
+  const tokens = [...row.querySelectorAll(".strong-token")];
+  return (
+    (tokenIndex && strongCode && tokens.find(
+      (candidate) => candidate.dataset.tokenIndex === tokenIndex && candidate.dataset.strongCode === strongCode,
+    )) ||
+    (strongCode && tokens.find((candidate) => candidate.dataset.strongCode === strongCode)) ||
+    null
+  );
+}
+
+function wordHighlightOptions(wordContext, verse, preserveTextSpan = false) {
+  const token = wordContext?.token;
+  if (!token) return { verse, commit: true, preserveTextSpan };
   return {
     verse,
+    wordElement: readerWordElement(wordContext, verse),
     word: {
       tokenIndex: token.token_index,
       strongCode: token.strong_code,
@@ -81,43 +110,32 @@ function wordHighlightOptions(wordContext, verse) {
       original: token.original,
     },
     commit: true,
+    preserveTextSpan,
   };
 }
 
-function actionForTool(ctx, tool, reference, verse, active, wordContext) {
-  if (tool.id === "verse") {
-    const isWholeVerseContext = !wordContext?.token;
-    return {
-      ...tool,
-      current: isWholeVerseContext,
-      reactivatableCurrent: isWholeVerseContext,
-      skipReaderHighlight: isWholeVerseContext,
-      capabilityAvailable: true,
-      dataAvailable: Boolean(getVerseText(ctx, verse)),
-      run: isWholeVerseContext
-        ? () => {}
-        : () => {
-            ctx.clearActiveWordContext?.();
-            return ctx.detailViews.showParallelVerse(reference, verse, getVerseText(ctx, verse), {
-              history: "replace",
-              lock: true,
-              verse,
-            });
-          },
-    };
-  }
-
+function actionForTool(ctx, tool, reference, verse, displayedViewId, wordContext) {
   if (tool.id === "strongs") {
     const hasCanonicalWord = Boolean(wordContext?.token);
+    const current = isPanelActionCurrent(tool.id, displayedViewId);
     return {
       ...tool,
-      current: hasCanonicalWord,
-      reactivatableCurrent: active === "strongs" && hasCanonicalWord,
+      current,
+      reactivatableCurrent: current && hasCanonicalWord,
       capabilityAvailable: ctx.canUseCapability?.("strongs-overlay") === true,
       dataAvailable: Boolean(wordContext?.token),
       unavailableKey: "strongs",
       dataUnavailableMessage: `Word detail is not available for ${reference}.`,
-      run: () => ctx.detailViews.scrollStrongSection?.("word"),
+      run: () => {
+        if (current) return ctx.detailViews.scrollStrongSection?.("word");
+        if (!wordContext?.token) return false;
+        return ctx.detailViews.showStrong(wordContext.token, {
+          ...(wordContext.options || {}),
+          force: true,
+          forceHistory: true,
+          pin: true,
+        });
+      },
     };
   }
 
@@ -137,12 +155,12 @@ function actionForTool(ctx, tool, reference, verse, active, wordContext) {
   if (tool.id === "par") {
     return {
       ...tool,
-      current: false,
+      current: isPanelActionCurrent(tool.id, displayedViewId),
       capabilityAvailable: true,
       dataAvailable: Boolean(getVerseText(ctx, verse)),
       run: () =>
         void ctx.detailViews.showParallelVerse(reference, verse, getVerseText(ctx, verse), {
-          history: "replace",
+          history: "push",
           lock: true,
           verse,
         }),
@@ -152,14 +170,14 @@ function actionForTool(ctx, tool, reference, verse, active, wordContext) {
   if (tool.id === "refs") {
     return {
       ...tool,
-      current: false,
+      current: isPanelActionCurrent(tool.id, displayedViewId),
       capabilityAvailable: ctx.canUseCapability?.("crossrefs") === true,
       dataAvailable: Boolean(getCrossRecord(ctx, verse)) || datasetMayLoad(ctx, "crossrefs"),
       unavailableKey: "crossrefs",
       dataUnavailableMessage: `Cross-reference data is not available for ${reference}.`,
       run: () =>
         ctx.detailViews.showCrossrefs(reference, getCrossRecord(ctx, verse), {
-          history: "replace",
+          history: "push",
           lock: true,
           verse,
         }),
@@ -169,24 +187,24 @@ function actionForTool(ctx, tool, reference, verse, active, wordContext) {
   if (tool.id === "commentary") {
     return {
       ...tool,
-      current: false,
+      current: isPanelActionCurrent(tool.id, displayedViewId),
       capabilityAvailable: ctx.canUseCapability?.("commentary") === true,
       dataAvailable: true,
       unavailableKey: "commentary",
-      run: () => void ctx.detailViews.showCommentary(reference, verse, { history: "replace", lock: true }),
+      run: () => void ctx.detailViews.showCommentary(reference, verse, { history: "push", lock: true }),
     };
   }
 
   if (tool.id === "interlinear") {
     return {
       ...tool,
-      current: false,
+      current: isPanelActionCurrent(tool.id, displayedViewId),
       capabilityAvailable: ctx.canUseCapability?.("interlinear") === true,
       dataAvailable: hasInterlinear(ctx, verse) || datasetMayLoad(ctx, "interlinear"),
       unavailableKey: "interlinear",
       dataUnavailableMessage: `Language Study data is not available for ${reference}.`,
       run: ({ textSpanTarget = null } = {}) => void ctx.detailViews.showInterlinearVerse(reference, verse, {
-        history: "replace",
+        history: "push",
         lock: true,
         textSpanTarget,
       }),
@@ -246,11 +264,11 @@ function appendActionButton(ctx, controls, action, reference, verse, wordContext
 
   if (action.run && (!action.current || reactivatableCurrent)) {
     button.addEventListener("click", () => {
-      const textSpanTarget = action.scope === "verse" ? ctx.getActiveTextSpanTarget?.(verse) || null : null;
+      const textSpanTarget = ctx.getActiveTextSpanTarget?.(verse) || null;
       if (!action.skipReaderHighlight) {
         ctx.highlightReaderContext?.(
-          action.scope === "word"
-            ? wordHighlightOptions(wordContext, verse)
+          wordContext?.token
+            ? wordHighlightOptions(wordContext, verse, Boolean(textSpanTarget))
             : { verse, commit: true, preserveTextSpan: Boolean(textSpanTarget) },
         );
       }
@@ -272,7 +290,8 @@ function syncStrongSectionControl(button, section, availability, reference) {
   button.setAttribute("aria-label", state.ariaLabel);
 }
 
-export function createVerseContextTabs(ctx, reference, verse, active, strongsContext = null) {
+export function createVerseContextTabs(ctx, reference, verse, displayedViewId, strongsContext = null) {
+  const normalizedViewId = normalizeDetailViewId(displayedViewId);
   const wordContext = resolveWordContext(ctx, strongsContext, verse);
   const hasWord = Boolean(wordContext?.token);
   const scopeOrder = panelScopeSequence({ word: hasWord, verse: true });
@@ -280,7 +299,8 @@ export function createVerseContextTabs(ctx, reference, verse, active, strongsCon
   const tabs = document.createElement("nav");
   tabs.className = "verse-context-tabs panel-context-navigation";
   tabs.dataset.scopeOrder = scopeOrder.join(" ");
-  tabs.dataset.panelOccupant = active || "unknown";
+  tabs.dataset.displayedView = normalizedViewId;
+  tabs.dataset.panelOccupant = normalizedViewId || "unknown";
   tabs.setAttribute("aria-label", `Contextual study tools for ${reference}`);
 
   const summary = document.createElement("div");
@@ -306,7 +326,7 @@ export function createVerseContextTabs(ctx, reference, verse, active, strongsCon
         const button = appendActionButton(
           ctx,
           controls,
-          actionForTool(ctx, tool, reference, verse, active, wordContext),
+          actionForTool(ctx, tool, reference, verse, normalizedViewId, wordContext),
           reference,
           verse,
           wordContext,

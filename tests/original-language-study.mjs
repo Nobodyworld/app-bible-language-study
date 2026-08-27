@@ -32,8 +32,9 @@ assert(
     /"Language Study"/.test(app) &&
     /"Language Study data is not available for this chapter\."/u.test(app) &&
     /interlinear:\s*{[\s\S]*?title:\s*"Language Study"[\s\S]*?heading:\s*"Language Study data is not included/.test(emptyState) &&
-    /detailTitle\?\.textContent === "Language Study"/.test(dom),
-  "Visible detail, picker, empty, unavailable, and pressed-state text must use Language Study.",
+    /currentDetailViewId === "language-study"/.test(dom) &&
+    !/detailTitle\?\.textContent === "Language Study"/.test(dom),
+  "Visible detail, picker, and unavailable text must use Language Study while pressed state follows the explicit displayed-view ID.",
 );
 assert(
   /createRelatedEntryControl/.test(flow) &&

@@ -1,6 +1,7 @@
 import { createDetailList, setDetail } from "../dom.js?v=pr13-live-qa-20260711e";
 import { canRunJob, runJob } from "../job-processor.js?v=pr13-live-qa-20260711e";
 import { completeJob, getAllJobEvents, updateJobStatus } from "../stores.js?v=pr13-live-qa-20260711e";
+import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
 
 function stateLabel(state) {
   return String(state || "unknown").replaceAll("_", " ");
@@ -189,6 +190,6 @@ export function createJobsView(ctx) {
     wrap.append(heading);
     const refresh = () => showJobs();
     wrap.append(renderJobsDiagnostics(ctx, refresh));
-    setDetail("Local Processing", wrap);
+    setDetail("Local Processing", wrap, { viewId: DETAIL_VIEW_IDS.localProcessing });
   };
 }

@@ -7,6 +7,7 @@ import {
 } from "../data-service.js?v=pr13-live-qa-20260711e";
 import { createDetailList, setDetail, textNode } from "../dom.js?v=pr13-live-qa-20260711e";
 import { capabilityMessage } from "../capabilities.js";
+import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
 
 const SEARCH_STOP_WORDS = new Set([
   "a",
@@ -388,7 +389,7 @@ export function createSearchView(ctx, { showStrong }) {
       const message = document.createElement("p");
       message.textContent = capabilityMessage(ctx.getCapabilityState?.("search"));
       unavailable.append(heading, message);
-      setDetail("Search", unavailable);
+      setDetail("Search", unavailable, { viewId: DETAIL_VIEW_IDS.search });
       heading.focus();
       return;
     }
@@ -513,7 +514,7 @@ export function createSearchView(ctx, { showStrong }) {
     });
 
     wrap.append(heading, form, resultSlot);
-    setDetail("Search", wrap);
+    setDetail("Search", wrap, { viewId: DETAIL_VIEW_IDS.search });
     queryInput.focus();
   };
 }

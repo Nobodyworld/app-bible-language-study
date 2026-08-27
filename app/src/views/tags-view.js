@@ -12,6 +12,7 @@ import {
 } from "../stores.js?v=pr13-live-qa-20260711e";
 import { tagDefinitionId, targetId } from "../semantic-targets.js?v=pr13-live-qa-20260711e";
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
+import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
 import {
   activateOverlay,
   deactivateOverlay,
@@ -601,7 +602,7 @@ export function createTagsView(ctx) {
         group.append(button);
       });
     wrap.append(group);
-    setDetail("Tags", wrap, options);
+    setDetail("Tags", wrap, { ...options, viewId: DETAIL_VIEW_IDS.tags });
     if (options.focusOnOpen) {
       queueMicrotask(() => {
         if (!wrap.isConnected) return;
@@ -976,7 +977,7 @@ export function createTagsView(ctx) {
       group.append(button);
     });
     wrap.append(group);
-    setDetail("Tags", wrap, options);
+    setDetail("Tags", wrap, { ...options, viewId: DETAIL_VIEW_IDS.tags });
   }
 
   function createCustomTagForm(onCreate) {
@@ -1225,7 +1226,7 @@ export function createTagsView(ctx) {
     manage.append(availableTitle, available);
     wrap.append(manage);
 
-    setDetail("Study Marks", wrap);
+    setDetail("Study Marks", wrap, { viewId: DETAIL_VIEW_IDS.studyMarks });
   }
 
   function showFavorites() {
@@ -1240,7 +1241,7 @@ export function createTagsView(ctx) {
       const empty = document.createElement("p");
       empty.textContent = "No favorites yet. Use a star beside a book, chapter, verse, selected phrase, or source word.";
       wrap.append(empty);
-      setDetail("Favorites", wrap);
+      setDetail("Favorites", wrap, { viewId: DETAIL_VIEW_IDS.favorites });
       return;
     }
 
@@ -1261,7 +1262,7 @@ export function createTagsView(ctx) {
       wrap.append(title);
       wrap.append(createStudyMarkList(ctx, matching.map((assertion) => [assertion]), { onChange: showFavorites }));
     });
-    setDetail("Favorites", wrap);
+    setDetail("Favorites", wrap, { viewId: DETAIL_VIEW_IDS.favorites });
   }
 
   return {

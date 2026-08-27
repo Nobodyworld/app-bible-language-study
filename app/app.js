@@ -45,8 +45,17 @@ import {
 } from "./src/reader-navigation.js";
 import { getTagTargets, initStores, listenForUserDataChanges } from "./src/stores.js?v=pr13-live-qa-20260711e";
 import { createStudyEmptyState, studyUnavailableLabel } from "./src/study-empty-state.js";
-import { chapterSwipeDirection, CONTROL_STATES, resolveControlState } from "./src/ui-contracts.js?v=pr13-live-qa-20260711e";
+import {
+  chapterSwipeDirection,
+  CONTROL_STATES,
+  DETAIL_VIEW_IDS,
+  resolveControlState,
+} from "./src/ui-contracts.js?v=pr13-live-qa-20260711e";
 import { dismissContainedDetailTool } from "./src/detail-tool-surface.js";
+import {
+  focusStudyWorkspaceAfterClear,
+  openStudyWorkspace,
+} from "./src/portrait-workspace.js";
 import {
   bindStudyWorkspaceWidthControls,
   initializeStudyWorkspaceWidth,
@@ -101,6 +110,7 @@ const READER_DATASETS = {
     label: "Cross-reference",
     panelTitle: "Cross References",
     stateKey: "crossrefs",
+    viewId: DETAIL_VIEW_IDS.references,
     load: loadBookCrossrefs,
   },
   outline: {
@@ -109,6 +119,7 @@ const READER_DATASETS = {
     label: "Outline",
     panelTitle: "Outline",
     stateKey: "outline",
+    viewId: DETAIL_VIEW_IDS.outline,
     load: loadBookOutline,
   },
   interlinear: {
@@ -117,6 +128,7 @@ const READER_DATASETS = {
     label: "Language Study",
     panelTitle: "Language Study",
     stateKey: "interlinear",
+    viewId: DETAIL_VIEW_IDS.languageStudy,
     load: loadBookInterlinear,
   },
 };
@@ -268,12 +280,12 @@ function showReaderDatasetFailure(key, options = {}) {
     detailViews.showStudyUnavailable(
       config.panelTitle,
       createStudyEmptyState(ctx, config.emptyStateKey, { capabilityIds: [config.capabilityId] }),
-      options,
+      { ...options, viewId: config.viewId },
     );
     return;
   }
   const message = `${config.label} data could not be loaded. Select this study tool again to retry.`;
-  setDetailMessage(config.panelTitle, message, options);
+  setDetailMessage(config.panelTitle, message, { ...options, viewId: config.viewId });
 }
 
 function getReferenceContext(overrides = {}) {
@@ -586,6 +598,7 @@ const renderer = createChapterRenderer(ctx);
 function captureReaderFocus() {
   const active = document.activeElement;
   if (!active || active === document.body || active === document.documentElement) return null;
+  if (active.closest?.(".detail-pane")) return null;
   if (active.id) return { kind: "id", id: active.id };
   const strong = active.closest?.(".strong-token");
   if (strong) {
@@ -701,7 +714,9 @@ let readerNavigationMaxIndex = Math.max(
 let activeReaderRoute = null;
 let readerSnapshotFrame = 0;
 let readerSnapshotSuspendedGeneration = null;
-function scheduleReaderSnapshotPersistence() {
+function scheduleReaderSnapshotPersistence(event) {
+  if (event?.type === "focusin" && event.target?.hasAttribute?.("data-study-drawer-focus-restore")) return;
+  if (event?.type === "focusin" && !event.target?.closest?.(".reader-pane")) return;
   if (
     !state.verseBook ||
     readerSnapshotFrame ||
@@ -1364,7 +1379,7 @@ function bindEvents() {
   els.showInterlinear.addEventListener("click", clearStudyContextAndCall(detailViews.showInterlinearChapter));
   els.openStudyPanel?.addEventListener("click", () => {
     setDetailHoverLocked(true);
-    els.detailPane?.classList.add("visible");
+    openStudyWorkspace({ invoker: els.openStudyPanel });
   });
   els.showSearch.addEventListener("click", clearStudyContextAndCall(detailViews.showSearch));
   els.showTags.addEventListener("click", clearStudyContextAndCall(detailViews.showTagIndex));
@@ -1380,11 +1395,34 @@ function bindEvents() {
     if (!goForwardDetail() && readerNavigationIndex < readerNavigationMaxIndex) window.history.forward();
   });
   els.clearDetail.addEventListener("click", () => {
+    const readerViewport = {
+      navigationGeneration: state.navigationGeneration,
+      route: window.location.hash,
+      x: window.scrollX,
+      y: window.scrollY,
+    };
+    const restoreReaderViewport = () => {
+      if (
+        readerViewport.navigationGeneration !== state.navigationGeneration ||
+        readerViewport.route !== window.location.hash
+      ) return;
+      window.scrollTo({ left: readerViewport.x, top: readerViewport.y, behavior: "auto" });
+    };
     detailViews.clearStrongPin();
-    clearActiveTextSpanSelection();
-    clearReaderHighlight();
-    state.activeReferenceContext = getReferenceContext({ verse: null, word: null });
     resetDetail();
+    focusStudyWorkspaceAfterClear();
+    if (!rehydrateActiveTextSpanSelection()) {
+      restoreReaderHighlightFromContext(state.activeReferenceContext);
+    }
+    restoreReaderViewport();
+    let remainingRestoreFrames = 3;
+    const settleReaderViewport = () => {
+      restoreReaderViewport();
+      if (remainingRestoreFrames <= 0) return;
+      remainingRestoreFrames -= 1;
+      window.requestAnimationFrame(settleReaderViewport);
+    };
+    window.requestAnimationFrame(settleReaderViewport);
   });
 
   // Add hover highlighting for reference buttons and outline items in detail panel
@@ -1472,17 +1510,15 @@ function bindEvents() {
       void goToLocation(matchingBook.id, chapter, verse);
     }
 
-    // Escape to close detail pane (on mobile)
-    if (event.key === "Escape") {
-      event.preventDefault();
-      const detailPane = document.querySelector(".detail-pane");
-      if (detailPane?.classList.contains("visible")) {
-        detailPane.classList.remove("visible");
-      } else {
-        resetDetail();
-        clearReaderHighlight();
-      }
+    if (
+      event.key === "Escape" &&
+      !event.defaultPrevented &&
+      !window.matchMedia("(max-width: 768px)").matches
+    ) {
+      resetDetail();
+      clearReaderHighlight();
     }
+
   });
 
   // Interlinear hover interaction - link Bible words to detail panel tokens

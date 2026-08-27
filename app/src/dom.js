@@ -1,5 +1,13 @@
-import { PANEL_EVENTS, PANEL_MODES, transitionPanelMode } from "./ui-contracts.js";
+import {
+  DETAIL_SCROLL_POLICIES,
+  PANEL_EVENTS,
+  PANEL_MODES,
+  normalizeDetailScrollPolicy,
+  normalizeDetailViewId,
+  transitionPanelMode,
+} from "./ui-contracts.js";
 import { dismissContainedDetailTool } from "./detail-tool-surface.js";
+import { closeStudyWorkspace, openStudyWorkspace } from "./portrait-workspace.js";
 
 export const els = {
   homeButton: document.querySelector("#homeButton"),
@@ -17,6 +25,7 @@ export const els = {
   chapterTagControl: document.querySelector("#chapterTagControl"),
   content: document.querySelector("#chapterContent"),
   detailTitle: document.querySelector("#detailTitle"),
+  detailModeStatus: document.querySelector("#detailModeStatus"),
   detailContext: document.querySelector("#detailContext"),
   detailWorkArea: document.querySelector("#detailWorkArea"),
   detail: document.querySelector("#detailContent"),
@@ -24,6 +33,7 @@ export const els = {
   detailBack: document.querySelector("#detailBack"),
   detailForward: document.querySelector("#detailForward"),
   clearDetail: document.querySelector("#clearDetail"),
+  hideStudyWorkspace: document.querySelector("#hideStudyWorkspace"),
   prev: document.querySelector("#prevChapter"),
   next: document.querySelector("#nextChapter"),
   prevFloat: document.querySelector("#prevChapterFloat"),
@@ -71,6 +81,7 @@ const detailForwardHistory = [];
 let currentDetailTransient = false;
 let transientBase = null;
 let detailPanelMode = PANEL_MODES.follow;
+let currentDetailViewId = "";
 let currentDetailReaderContext = null;
 let detailIntentGeneration = 0;
 
@@ -88,12 +99,30 @@ function updateDetailHistoryButtons() {
     els.detailPane.dataset.hoverLocked = locked ? "true" : "false";
     els.detailPane.dataset.panelMode = detailPanelMode;
   }
-  els.showOutline?.setAttribute("aria-pressed", els.detailTitle?.textContent === "Outline" ? "true" : "false");
+  if (els.detailModeStatus) {
+    const visibleMode = locked ? "Locked" : "Following";
+    els.detailModeStatus.textContent = visibleMode;
+    els.detailModeStatus.setAttribute("aria-label", `Study workspace mode: ${visibleMode}`);
+  }
+  els.showOutline?.setAttribute("aria-pressed", currentDetailViewId === "outline" ? "true" : "false");
   els.showInterlinear?.setAttribute(
     "aria-pressed",
-    els.detailTitle?.textContent === "Language Study" ? "true" : "false",
+    currentDetailViewId === "language-study" ? "true" : "false",
   );
   document.body.classList.toggle("detail-locked", locked);
+}
+
+function setDisplayedDetailView(viewId) {
+  currentDetailViewId = normalizeDetailViewId(viewId);
+  [els.detailPane, els.detail].forEach((node) => {
+    if (!node) return;
+    if (currentDetailViewId) node.dataset.displayedView = currentDetailViewId;
+    else delete node.dataset.displayedView;
+  });
+}
+
+export function getDisplayedDetailView() {
+  return currentDetailViewId;
 }
 
 function isDefaultDetail() {
@@ -130,6 +159,7 @@ function cloneReaderContext(context) {
 function snapshotDetail() {
   return {
     title: els.detailTitle.textContent,
+    viewId: currentDetailViewId,
     contextNodes: els.detailContext ? [...els.detailContext.childNodes] : [],
     contextHidden: els.detailContext ? els.detailContext.hidden : true,
     nodes: [...els.detail.childNodes],
@@ -146,9 +176,10 @@ function notifyDetailRestored(snapshot) {
   });
 }
 
-function restoreDetail(snapshot) {
+function restoreDetail(snapshot, detailIntent) {
   dismissContainedDetailTool("history-restore");
   els.detailTitle.textContent = snapshot.title;
+  setDisplayedDetailView(snapshot.viewId);
   setDetailContext(null);
   if (els.detailContext) {
     els.detailContext.replaceChildren(...(snapshot.contextNodes || []));
@@ -158,7 +189,7 @@ function restoreDetail(snapshot) {
   currentDetailReaderContext = cloneReaderContext(snapshot.readerContext);
   notifyDetailRestored(snapshot);
   window.requestAnimationFrame(() => {
-    if (els.detail) els.detail.scrollTop = Number(snapshot.scrollTop) || 0;
+    if (els.detail && isDetailIntentCurrent(detailIntent)) els.detail.scrollTop = Number(snapshot.scrollTop) || 0;
   });
 }
 
@@ -184,12 +215,27 @@ function setDetailContext(node) {
   els.detailContext.hidden = false;
 }
 
-function revealDetailOnMobile(options = {}) {
-  if (options.transient || options.history === "replace" || options.reveal === false || !els.detailPane) return;
-  if (!window.matchMedia("(max-width: 768px)").matches) return;
+function applyDetailScrollPolicy(policy, scrollTop, detailIntent) {
+  if (!els.detail || policy === DETAIL_SCROLL_POLICIES.revealSection) return;
+  const targetScrollTop =
+    policy === DETAIL_SCROLL_POLICIES.preserve || policy === DETAIL_SCROLL_POLICIES.restore
+      ? Number(scrollTop) || 0
+      : 0;
+  els.detail.scrollTop = targetScrollTop;
   window.requestAnimationFrame(() => {
-    els.detailPane.classList.add("visible");
+    if (isDetailIntentCurrent(detailIntent) && els.detail) els.detail.scrollTop = targetScrollTop;
   });
+}
+
+function revealDetailOnMobile(options = {}) {
+  if (
+    options.transient ||
+    (options.history === "replace" && !options.invoker) ||
+    options.reveal === false ||
+    !els.detailPane
+  ) return;
+  if (!window.matchMedia("(max-width: 768px)").matches) return;
+  openStudyWorkspace({ invoker: options.invoker || document.activeElement, focus: options.focus !== false });
 }
 
 export function beginDetailIntent() {
@@ -218,8 +264,20 @@ export function setDetail(title, node, options = {}) {
   dismissContainedDetailTool("detail-change");
   const historyMode = options.history || "push";
   const sameTitle = els.detailTitle.textContent === title;
+  const nextViewId = normalizeDetailViewId(options.viewId);
+  const sameView = Boolean(nextViewId) && nextViewId === currentDetailViewId;
+  const previousScrollTop = Number(els.detail?.scrollTop) || 0;
+  const defaultScrollPolicy =
+    !options.transient && historyMode === "replace" && sameView
+      ? DETAIL_SCROLL_POLICIES.preserve
+      : DETAIL_SCROLL_POLICIES.reset;
+  const scrollPolicy = normalizeDetailScrollPolicy(options.scrollPolicy, defaultScrollPolicy);
   const storedCurrent = currentDetailTransient ? transientBase : canStoreCurrentDetail() ? snapshotDetail() : null;
-  if (historyMode === "push" && storedCurrent && (!sameTitle || options.forceHistory || currentDetailTransient)) {
+  if (
+    historyMode === "push" &&
+    storedCurrent &&
+    (!sameTitle || !sameView || options.forceHistory || currentDetailTransient)
+  ) {
     detailHistory.push(storedCurrent);
     detailForwardHistory.length = 0;
   }
@@ -235,12 +293,14 @@ export function setDetail(title, node, options = {}) {
   }
   const contextNode = extractContextNode(node, options);
   els.detailTitle.textContent = title;
+  setDisplayedDetailView(nextViewId);
   setDetailContext(contextNode);
   els.detail.replaceChildren(node);
   currentDetailReaderContext = Object.prototype.hasOwnProperty.call(options, "readerContext")
     ? cloneReaderContext(options.readerContext)
     : null;
   currentDetailTransient = Boolean(options.transient);
+  applyDetailScrollPolicy(scrollPolicy, previousScrollTop, detailIntent);
   updateDetailHistoryButtons();
   revealDetailOnMobile(options);
   return detailIntent;
@@ -265,7 +325,7 @@ export function setDetailMessage(title, message, options = {}) {
 }
 
 export function goBackDetail() {
-  beginDetailIntent();
+  const detailIntent = beginDetailIntent();
   dismissContainedDetailTool("history-back");
   const previousDetail = detailHistory.pop();
 
@@ -274,7 +334,7 @@ export function goBackDetail() {
     transientBase = null;
     currentDetailTransient = false;
     detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
-    restoreDetail(previousDetail);
+    restoreDetail(previousDetail, detailIntent);
     updateDetailHistoryButtons();
     return true;
   }
@@ -283,7 +343,7 @@ export function goBackDetail() {
 }
 
 export function goForwardDetail() {
-  beginDetailIntent();
+  const detailIntent = beginDetailIntent();
   dismissContainedDetailTool("history-forward");
   const nextDetail = detailForwardHistory.pop();
 
@@ -292,7 +352,7 @@ export function goForwardDetail() {
     transientBase = null;
     currentDetailTransient = false;
     detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
-    restoreDetail(nextDetail);
+    restoreDetail(nextDetail, detailIntent);
     updateDetailHistoryButtons();
     return true;
   }
@@ -301,7 +361,7 @@ export function goForwardDetail() {
 }
 
 function resetDetailContent(title, message) {
-  beginDetailIntent();
+  const detailIntent = beginDetailIntent();
   dismissContainedDetailTool("detail-reset");
   detailHistory.length = 0;
   detailForwardHistory.length = 0;
@@ -310,14 +370,18 @@ function resetDetailContent(title, message) {
   detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.reset);
   currentDetailReaderContext = null;
   els.detailTitle.textContent = title;
+  setDisplayedDetailView("");
   setDetailContext(null);
   els.detail.textContent = message;
-  els.detailPane?.classList.remove("visible");
+  applyDetailScrollPolicy(DETAIL_SCROLL_POLICIES.reset, 0, detailIntent);
   updateDetailHistoryButtons();
 }
 
 export function resetDetailForNavigation(title = "Details", message = defaultDetailText) {
   resetDetailContent(title, message);
+  if (window.matchMedia("(max-width: 768px)").matches) {
+    closeStudyWorkspace({ restoreFocus: false });
+  }
 }
 
 export function resetDetail(title = "Details", message = defaultDetailText) {

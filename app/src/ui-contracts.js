@@ -9,6 +9,44 @@ export const PANEL_MODES = Object.freeze({
   locked: "locked",
 });
 
+export const DETAIL_VIEW_IDS = Object.freeze({
+  commentary: "commentary",
+  favorites: "favorites",
+  footnote: "footnote",
+  languageStudy: "language-study",
+  localProcessing: "local-processing",
+  meaning: "meaning",
+  myData: "my-data",
+  outline: "outline",
+  parallel: "parallel",
+  references: "references",
+  search: "search",
+  strongs: "strongs",
+  studyMarks: "study-marks",
+  tags: "tags",
+});
+
+const DETAIL_VIEW_ID_SET = new Set(Object.values(DETAIL_VIEW_IDS));
+
+export function normalizeDetailViewId(viewId) {
+  const normalized = String(viewId || "").trim().toLowerCase();
+  return DETAIL_VIEW_ID_SET.has(normalized) ? normalized : "";
+}
+
+export const DETAIL_SCROLL_POLICIES = Object.freeze({
+  preserve: "preserve",
+  reset: "reset",
+  restore: "restore",
+  revealSection: "reveal-section",
+});
+
+const DETAIL_SCROLL_POLICY_SET = new Set(Object.values(DETAIL_SCROLL_POLICIES));
+
+export function normalizeDetailScrollPolicy(policy, fallback = DETAIL_SCROLL_POLICIES.reset) {
+  const normalized = String(policy || "").trim().toLowerCase();
+  return DETAIL_SCROLL_POLICY_SET.has(normalized) ? normalized : fallback;
+}
+
 export const PANEL_EVENTS = Object.freeze({
   activate: "activate",
   disengage: "disengage",

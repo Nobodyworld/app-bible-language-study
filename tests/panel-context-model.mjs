@@ -8,14 +8,17 @@ import {
   setActiveWordContext,
 } from "../app/src/active-word-context.js";
 import {
+  PANEL_ACTION_VIEW_IDS,
   PANEL_CONTEXT_TOOL_MATRIX,
   PANEL_SCOPE_LABELS,
   PANEL_SCOPE_ORDER,
+  isPanelActionCurrent,
   panelContextSummary,
   panelScopeSequence,
   panelToolsForScope,
   panelToolsForWordContext,
 } from "../app/src/panel-context-model.js";
+import { DETAIL_VIEW_IDS, normalizeDetailViewId } from "../app/src/ui-contracts.js";
 
 assert.deepEqual(PANEL_SCOPE_ORDER, ["word", "verse", "chapter", "book", "global"]);
 assert.equal(PANEL_SCOPE_LABELS.word, "Word");
@@ -33,7 +36,7 @@ assert.deepEqual(
 );
 assert.deepEqual(
   panelToolsForScope("verse").map((tool) => tool.id),
-  ["verse", "par", "refs", "commentary", "interlinear"],
+  ["par", "refs", "commentary", "interlinear"],
 );
 assert.deepEqual(panelToolsForScope("word").map((tool) => tool.id), ["strongs"]);
 assert.deepEqual(
@@ -54,6 +57,22 @@ assert.deepEqual(
 );
 assert.deepEqual(panelToolsForScope("chapter"), []);
 assert.deepEqual(panelToolsForScope("book"), []);
+assert.equal(panelToolsForScope("verse").find((tool) => tool.id === "interlinear")?.label, "Language Study");
+
+assert.deepEqual(PANEL_ACTION_VIEW_IDS, {
+  commentary: DETAIL_VIEW_IDS.commentary,
+  interlinear: DETAIL_VIEW_IDS.languageStudy,
+  par: DETAIL_VIEW_IDS.parallel,
+  refs: DETAIL_VIEW_IDS.references,
+  strongs: DETAIL_VIEW_IDS.strongs,
+});
+for (const [actionId, viewId] of Object.entries(PANEL_ACTION_VIEW_IDS)) {
+  assert.equal(isPanelActionCurrent(actionId, viewId), true, `${actionId} must be current only in ${viewId}`);
+  assert.equal(isPanelActionCurrent(actionId, DETAIL_VIEW_IDS.search), false, `${actionId} must not be current in Search`);
+}
+assert.equal(normalizeDetailViewId("unknown-view"), "");
+assert.equal(normalizeDetailViewId("meaning"), DETAIL_VIEW_IDS.meaning);
+assert.equal(isPanelActionCurrent("strongs", "unknown-view"), false);
 
 for (const [scope, tools] of Object.entries(PANEL_CONTEXT_TOOL_MATRIX)) {
   tools.forEach((tool) => {
@@ -75,9 +94,14 @@ assert.equal(panelContextSummary({ reference: "Psalms 23:1" }), "Psalms 23:1");
 const activeContextFixture = { studyContext: {} };
 const storedContext = setActiveWordContext(activeContextFixture, {
   token: { original: "מָשָׁל", strong_code: "H4912" },
-  options: { verseContext: { verse: "1", reference: "Proverbs 1:1" }, forceHistory: true },
+  options: {
+    verseContext: { verse: "1", reference: "Proverbs 1:1" },
+    forceHistory: true,
+    invoker: { nodeType: 1 },
+  },
 });
 assert.equal(storedContext.options.forceHistory, false);
+assert.equal(Object.prototype.hasOwnProperty.call(storedContext.options, "invoker"), false);
 assert.equal(getActiveWordContext(activeContextFixture, "1")?.token.strong_code, "H4912");
 assert.equal(getActiveWordContext(activeContextFixture, "2"), null);
 clearActiveWordContext(activeContextFixture);
@@ -99,6 +123,7 @@ assert.match(index, /id="showOutline"[\s\S]*?Outline/);
 assert.match(index, /styles-context\.css\?v=pr13-live-qa-20260711e/);
 
 assert.match(tabsSource, /scope === "word" \|\| scope === "verse"/);
+assert.match(tabsSource, /panel-context-scope-label/);
 assert.match(tabsSource, /panelToolsForScope\(scope\)/);
 assert.match(tabsSource, /ctx\.getActiveWordContext\?\.\(verse\)/);
 assert.doesNotMatch(tabsSource, /studyContext\?\.strong/);
@@ -109,6 +134,7 @@ assert.match(detailViewsSource, /Object\.defineProperty\(strongsCtx, "studyConte
 assert.match(detailViewsSource, /showStrong: createSearchView|createSearchView\(ctx, \{ showStrong \}\)/);
 assert.match(tabsSource, /renderStudyMarksTrigger/);
 assert.match(tabsSource, /scrollStrongSection/);
+assert.match(tabsSource, /ctx\.detailViews\.showStrong/);
 assert.match(tabsSource, /reactivatableCurrent/);
 assert.match(tabsSource, /updateStrongSectionAvailability/);
 assert.match(tabsSource, /dataset\.panelOccupant/);
@@ -132,7 +158,7 @@ console.log(
       status: "ok",
       scopes: PANEL_SCOPE_ORDER.length,
       tools: Object.values(PANEL_CONTEXT_TOOL_MATRIX).flat().length,
-      assertions: 46,
+      assertions: 63,
     },
     null,
     2,
