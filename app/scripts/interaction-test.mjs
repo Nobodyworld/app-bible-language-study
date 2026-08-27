@@ -2306,8 +2306,40 @@ async function runQa(page) {
     await evaluate(page, `document.querySelector('#detailToolSurface')?.hidden === true && document.querySelector(${JSON.stringify(studyTrigger)})?.getAttribute('aria-expanded') === 'false'`),
     "focusing the side-panel Study Marks trigger must not open its contained tool",
   );
+  const studyTriggerBeforeActivation = await evaluate(page, `(() => {
+    const trigger = document.querySelector(${JSON.stringify(studyTrigger)});
+    const pane = document.querySelector('.detail-pane');
+    const rect = trigger?.getBoundingClientRect();
+    return {
+      count: document.querySelectorAll(${JSON.stringify(studyTrigger)}).length,
+      disabled: trigger?.disabled,
+      tabIndex: trigger?.tabIndex,
+      active: document.activeElement === trigger,
+      ariaExpanded: trigger?.getAttribute('aria-expanded'),
+      drawerVisible: pane?.classList.contains('visible'),
+      drawerHidden: pane?.getAttribute('aria-hidden'),
+      drawerInert: Boolean(pane?.inert || pane?.hasAttribute('inert')),
+      rect: rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : null
+    };
+  })()`);
   await page.press(studyTrigger, "Enter");
-  await waitFor(page, "document.querySelector('#detailToolSurface')?.dataset.toolKind === 'study-marks' && document.querySelector('#detailToolSurface')?.hidden === false");
+  try {
+    await waitFor(page, "document.querySelector('#detailToolSurface')?.dataset.toolKind === 'study-marks' && document.querySelector('#detailToolSurface')?.hidden === false");
+  } catch (error) {
+    const studyTriggerAfterActivation = await evaluate(page, `(() => {
+      const trigger = document.querySelector(${JSON.stringify(studyTrigger)});
+      const surface = document.querySelector('#detailToolSurface');
+      return {
+        activeTag: document.activeElement?.tagName || '',
+        activeClass: document.activeElement?.className || '',
+        ariaExpanded: trigger?.getAttribute('aria-expanded'),
+        surfaceHidden: surface?.hidden,
+        surfaceKind: surface?.dataset.toolKind || '',
+        surfaceAriaHidden: surface?.getAttribute('aria-hidden')
+      };
+    })()`);
+    throw new Error(`Study Marks Enter activation failed: ${JSON.stringify({ studyTriggerBeforeActivation, studyTriggerAfterActivation })}`, { cause: error });
+  }
   const containedStudyMarksState = await evaluate(page, `(() => {
     const pane = document.querySelector('.detail-pane');
     const surface = document.querySelector('#detailToolSurface');
@@ -2392,14 +2424,62 @@ async function runQa(page) {
   );
   await evaluate(page, "document.querySelector('#themeToggle')?.focus()");
   await page.press("#themeToggle", "Escape");
-  const closedPickerEscape = await evaluate(
-    page,
-    `({
+  if (qaDevice === "mobile") {
+    try {
+      await waitFor(
+        page,
+        "!document.querySelector('.detail-pane')?.classList.contains('visible') && (document.activeElement?.classList.contains('verse-number') || document.activeElement === document.querySelector('#openStudyPanel'))",
+      );
+    } catch (error) {
+      const focusFailure = await evaluate(page, `(() => {
+        const launcher = document.querySelector('#openStudyPanel');
+        const rect = launcher?.getBoundingClientRect();
+        const before = document.activeElement;
+        launcher?.focus({ preventScroll: true });
+        return {
+          activeBefore: { id: before?.id || '', className: before?.className || '', tag: before?.tagName || '' },
+          activeAfter: { id: document.activeElement?.id || '', className: document.activeElement?.className || '', tag: document.activeElement?.tagName || '' },
+          launcherConnected: launcher?.isConnected,
+          launcherDisabled: launcher?.disabled,
+          launcherTabIndex: launcher?.tabIndex,
+          launcherHiddenAncestor: Boolean(launcher?.closest('[hidden], [inert], [aria-hidden="true"]')),
+          launcherRect: rect ? { left: rect.left, top: rect.top, width: rect.width, height: rect.height } : null,
+          drawerClass: document.querySelector('.detail-pane')?.className || '',
+          drawerAriaHidden: document.querySelector('.detail-pane')?.getAttribute('aria-hidden'),
+          drawerInert: Boolean(document.querySelector('.detail-pane')?.inert || document.querySelector('.detail-pane')?.hasAttribute('inert'))
+        };
+      })()`);
+      throw new Error(`Mobile drawer focus settlement failed: ${JSON.stringify(focusFailure)}`, { cause: error });
+    }
+  }
+  const closedPickerEscape = await evaluate(page, `(() => {
+    const pane = document.querySelector('.detail-pane');
+    return {
       focusUnchanged: document.activeElement === document.querySelector('#themeToggle'),
+      focusOnVerseInvoker: document.activeElement?.classList.contains('verse-number') === true,
+      focusOnFallback: document.activeElement === document.querySelector('#openStudyPanel'),
+      activeId: document.activeElement?.id || '',
+      activeClass: document.activeElement?.className || '',
+      activeText: document.activeElement?.textContent?.trim() || '',
+      drawerClosed: !pane?.classList.contains('visible') && pane?.getAttribute('aria-hidden') === 'true',
+      drawerInert: Boolean(pane?.inert || pane?.hasAttribute('inert')),
       marksUnchanged: ${pickerMarksExpression} === ${JSON.stringify(secondMarksBeforeClosedEscape)}
-    })`,
-  );
-  assert(closedPickerEscape.focusUnchanged && closedPickerEscape.marksUnchanged, `Escape with no active Study Marks picker must leave focus and marks unchanged: ${JSON.stringify(closedPickerEscape)}`);
+    };
+  })()`);
+  if (qaDevice === "mobile") {
+    assert(
+      (closedPickerEscape.focusOnVerseInvoker || closedPickerEscape.focusOnFallback) &&
+        closedPickerEscape.drawerClosed &&
+        closedPickerEscape.drawerInert &&
+        closedPickerEscape.marksUnchanged,
+      `Escape after nested Study Marks dismissal must close the mobile drawer and restore the external invoker or launcher fallback: ${JSON.stringify(closedPickerEscape)}`,
+    );
+  } else {
+    assert(
+      closedPickerEscape.focusUnchanged && closedPickerEscape.marksUnchanged,
+      `Escape with no active Study Marks picker must leave desktop focus and marks unchanged: ${JSON.stringify(closedPickerEscape)}`,
+    );
+  }
   if (qaDevice !== "mobile") {
     const rerenderingStudyTrigger = "#favoriteBook";
     await evaluate(page, `(() => {
@@ -2931,9 +3011,17 @@ async function runQa(page) {
   );
   await click(page, "#clearDetail");
   await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Details'");
+  const clearHighlight = await evaluate(
+    page,
+    `(() => ({
+      code: document.querySelector('.reader-context-word')?.dataset.strongCode || '',
+      text: document.querySelector('.reader-context-word')?.textContent.trim() || '',
+      verseCount: document.querySelectorAll('.reader-context-verse').length
+    }))()`,
+  );
   assert(
-    await evaluate(page, "!document.querySelector('.reader-context-word') && !document.querySelector('.reader-context-verse')"),
-    "Clear did not remove restored reader highlight",
+    clearHighlight.code === historyHighlightFixture.second.code && clearHighlight.verseCount === 1,
+    `Clear did not preserve the restored Reader highlight: ${JSON.stringify({ historyHighlightFixture, clearHighlight })}`,
   );
   pass("Strong's detail history restores reader highlight");
 

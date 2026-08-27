@@ -1,3 +1,4 @@
+import { DETAIL_VIEW_IDS, normalizeDetailViewId } from "./ui-contracts.js";
 import { resolveStrongLanguage } from "./strong-section-lifecycle.js";
 
 export const PANEL_SCOPE_ORDER = Object.freeze(["word", "verse", "chapter", "book", "global"]);
@@ -17,16 +18,28 @@ export const PANEL_CONTEXT_TOOL_MATRIX = Object.freeze({
     Object.freeze({ id: "greek", shortLabel: "Greek", label: "Greek concordance", scope: "word" }),
   ]),
   verse: Object.freeze([
-    Object.freeze({ id: "verse", shortLabel: "Verse", label: "Verse", scope: "verse" }),
     Object.freeze({ id: "par", shortLabel: "Par", label: "Parallel", scope: "verse" }),
     Object.freeze({ id: "refs", shortLabel: "Refs", label: "References", scope: "verse" }),
     Object.freeze({ id: "commentary", shortLabel: "Cmt", label: "Commentary", scope: "verse" }),
-    Object.freeze({ id: "interlinear", shortLabel: "Int", label: "Language", scope: "verse" }),
+    Object.freeze({ id: "interlinear", shortLabel: "Int", label: "Language Study", scope: "verse" }),
   ]),
   chapter: Object.freeze([]),
   book: Object.freeze([]),
   global: Object.freeze([]),
 });
+
+export const PANEL_ACTION_VIEW_IDS = Object.freeze({
+  commentary: DETAIL_VIEW_IDS.commentary,
+  interlinear: DETAIL_VIEW_IDS.languageStudy,
+  par: DETAIL_VIEW_IDS.parallel,
+  refs: DETAIL_VIEW_IDS.references,
+  strongs: DETAIL_VIEW_IDS.strongs,
+});
+
+export function isPanelActionCurrent(actionId, displayedViewId) {
+  const expectedViewId = PANEL_ACTION_VIEW_IDS[String(actionId || "")] || "";
+  return Boolean(expectedViewId) && expectedViewId === normalizeDetailViewId(displayedViewId);
+}
 
 export function panelScopeSequence({ word = false, verse = false, chapter = false, book = false, global = false } = {}) {
   const available = { word, verse, chapter, book, global };

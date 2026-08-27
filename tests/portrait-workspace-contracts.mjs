@@ -64,19 +64,19 @@ assert(
   "Width presets must read left-to-right as narrower, Standard reset, then wider.",
 );
 assert(
-  /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;[\s\S]*?font-size:\s*0;/.test(css) &&
+  /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*0;/.test(css) &&
     /button\[data-study-workspace-width-mode="compact"\][\s\S]*?\.study-workspace-width-symbol::before,[\s\S]*?button\[data-study-workspace-width-mode="expanded"\][\s\S]*?\.study-workspace-width-symbol::after\s*{[\s\S]*?grid-area:\s*1 \/ 1;[\s\S]*?width:\s*10px;[\s\S]*?height:\s*2px;/.test(css) &&
     /button\[data-study-workspace-width-mode="expanded"\][\s\S]*?\.study-workspace-width-symbol::after\s*{[\s\S]*?width:\s*2px;[\s\S]*?height:\s*10px;/.test(css) &&
     /\.study-workspace-width-reset-symbol\s*{[\s\S]*?font-size:\s*14px;/.test(css),
-  "Width controls must retain 24px targets with geometrically centered Compact and Expanded strokes and an unchanged Standard reset glyph.",
+  "Width controls must use compact 32px targets with centered Compact and Expanded strokes and an unchanged Standard reset glyph.",
 );
 assert(
   /@media\s*\(min-width:\s*769px\)[\s\S]*?\.detail-header\s*{[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;[\s\S]*?\.detail-header-main\s*{\s*display:\s*contents;/.test(css),
   "Desktop detail title, width controls, and utility actions must share one compact header row.",
 );
 assert(
-  /\.detail-header-icon-button\s*{[\s\S]*?width:\s*24px;[\s\S]*?height:\s*24px;/.test(css),
-  "Clear and Hide must remain compact icon controls.",
+  /\.detail-header-icon-button\s*{[\s\S]*?min-width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*11px;/.test(css),
+  "Clear and Hide must remain compact labeled 32px controls on desktop.",
 );
 
 for (const [id, label] of [
@@ -133,8 +133,9 @@ assert(
   "Reader picker correction must have one owner and center only within the intended scroller.",
 );
 assert(
-  /@media\s*\(max-width:\s*768px\)[\s\S]*?\.study-workspace-width-controls,[\s\S]*?display:\s*none !important;/.test(css),
-  "Desktop width controls must remain hidden in the established mobile drawer.",
+  /@media\s*\(max-width:\s*768px\)[\s\S]*?\.study-workspace-width-controls,[\s\S]*?\.study-workspace-show-button\s*{[\s\S]*?display:\s*none !important;/.test(css) &&
+    /\.detail-header-icon-button\s*{[\s\S]*?min-width:\s*44px;[\s\S]*?min-height:\s*44px;/.test(css),
+  "Mobile must hide desktop width/show controls while retaining 44px Clear and Close actions.",
 );
 assert(
   /button\.dataset\.panelAction = action\.id;/.test(contextTabs),
@@ -154,7 +155,7 @@ const verseBranch = contextTabs.match(
 )?.[0] || "";
 assert(
   /marks\.dataset\.panelAction = "study-marks";[\s\S]*?controls\.append\(marks\);[\s\S]*?relatedTools\.forEach\(appendTool\);/.test(verseBranch),
-  "Verse Study Marks must sit directly after the Verse scope control before related tools.",
+  "Verse Study Marks must sit after the single Parallel action and before the remaining verse tools.",
 );
 assert(
   /\.panel-context-navigation \.word-meaning-trigger\[aria-expanded="false"\]\s*{[\s\S]*?border:\s*0 !important;[\s\S]*?background:\s*transparent !important;[\s\S]*?color:\s*var\(--muted\) !important;/.test(css) &&

@@ -30,20 +30,34 @@
 }
 
 .panel-context-group {
-  display: block;
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 6px;
   min-width: 0;
+}
+
+.panel-context-scope-label {
+  margin: 0;
+  padding: 8px 2px 0 0;
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 900;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  text-transform: uppercase;
 }
 
 .panel-context-controls {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: 6px;
   min-width: 0;
 }
 
 .verse-context-tab {
-  min-height: 28px;
-  padding: 3px 8px;
+  min-height: 34px;
+  padding: 5px 10px;
   border-radius: 999px;
   font-size: 12px;
   line-height: 1.2;
@@ -75,9 +89,9 @@
   position: relative;
   display: inline-grid;
   place-items: center;
-  width: 30px;
-  min-width: 30px;
-  min-height: 28px;
+  width: 34px;
+  min-width: 34px;
+  min-height: 34px;
   padding: 4px;
   border-radius: 8px;
 }
@@ -152,10 +166,31 @@
   .panel-context-group { grid-template-columns: 1fr; }
 
   .panel-context-controls {
-    gap: 5px;
+    gap: 8px;
   }
 
   .verse-context-tab {
     flex: 1 1 auto;
+  }
+}
+
+@media (max-width: 768px), (hover: none), (pointer: coarse) {
+  .panel-context-scope-label {
+    padding-top: 0;
+  }
+
+  .verse-context-tab,
+  .study-marks-trigger,
+  .scope-mark-button {
+    min-height: 44px;
+  }
+
+  .study-marks-trigger {
+    width: 44px;
+    min-width: 44px;
+  }
+
+  .scope-mark-button {
+    width: auto;
   }
 }

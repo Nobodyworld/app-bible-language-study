@@ -15,6 +15,7 @@ import { setMorphologyHelp } from "../morphology-tooltips.js?v=pr13-live-qa-2026
 import { analyzeOriginalWord, gematriaValueForUnit, languageUnitDisplayGlyph, wordHasLanguageScript } from "../language.js";
 import { createStrongReferenceControl, resolveStrongSeeSegments } from "../strong-reference-control.js?v=pr13-live-qa-20260711e";
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
+import { DETAIL_SCROLL_POLICIES, DETAIL_VIEW_IDS } from "../ui-contracts.js";
 import {
   absentStrongSections,
   createStrongSectionLifecycle,
@@ -582,7 +583,11 @@ export function createStrongsView(ctx = null) {
 
   function showStrong(token, options = {}) {
     if (!ctx?.canUseCapability?.("strongs-overlay")) {
-      if (!options.hover) setDetail("Strong's", document.createTextNode(capabilityMessage(ctx?.getCapabilityState?.("strongs-overlay"))));
+      if (!options.hover) {
+        setDetail("Strong's", document.createTextNode(capabilityMessage(ctx?.getCapabilityState?.("strongs-overlay"))), {
+          viewId: DETAIL_VIEW_IDS.strongs,
+        });
+      }
       return;
     }
     if (options.hover && isDetailHoverLocked()) return;
@@ -697,7 +702,13 @@ export function createStrongsView(ctx = null) {
     stickySummary.append(heading, overview);
     wrap.append(stickySummary);
     if (options.verseContext && !options.hover && ctx) {
-      const tabs = createVerseContextTabs(ctx, options.verseContext.reference, options.verseContext.verse, "strongs", null);
+      const tabs = createVerseContextTabs(
+        ctx,
+        options.verseContext.reference,
+        options.verseContext.verse,
+        DETAIL_VIEW_IDS.strongs,
+        null,
+      );
       updateStrongSections = tabs.updateStrongSectionAvailability || updateStrongSections;
       wrap.append(tabs);
     }
@@ -706,7 +717,10 @@ export function createStrongsView(ctx = null) {
       history: options.hover ? "replace" : "push",
       transient: Boolean(options.hover),
       forceHistory: Boolean(options.forceHistory || options.pin || options.force),
+      invoker: options.invoker || null,
       readerContext: readerContextForStrong(token, options),
+      scrollPolicy: options.scrollPolicy || DETAIL_SCROLL_POLICIES.reset,
+      viewId: DETAIL_VIEW_IDS.strongs,
     });
 
     const extra = token.strong_code ? document.createElement("div") : null;

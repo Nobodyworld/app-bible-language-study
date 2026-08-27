@@ -47,7 +47,7 @@ export function createChapterRenderer(ctx) {
           commit: true,
           preserveTextSpan: Boolean(ctx.getActiveTextSpanTarget?.(event.verse)),
         });
-        ctx.detailViews.showFootnote(event.note, event.reference, { verse: event.verse });
+        ctx.detailViews.showFootnote(event.note, event.reference, { verse: event.verse, invoker: button });
       });
       parent.append(button);
       return;
@@ -80,6 +80,7 @@ export function createChapterRenderer(ctx) {
     ctx.detailViews.showStrong(token, {
       pin: true,
       forceHistory: true,
+      invoker: element,
       verseContext: tokenRange.verseContext,
     });
   }
@@ -794,7 +795,12 @@ export function createChapterRenderer(ctx) {
     number.setAttribute("aria-label", `Verse ${verse}: Study Marks and parallel translations`);
     number.addEventListener("click", () => {
       ctx.highlightReaderContext?.({ verse, commit: true });
-      void ctx.detailViews.showParallelVerse(reference, verse, verseText, { history: "replace", lock: true, verse });
+      void ctx.detailViews.showParallelVerse(reference, verse, verseText, {
+        history: "replace",
+        invoker: number,
+        lock: true,
+        verse,
+      });
     });
 
     const numberWrap = document.createElement("div");
@@ -907,6 +913,7 @@ export function createChapterRenderer(ctx) {
       void ctx.detailViews.showDefaultVerseStudy(reference, verse, {
         verse,
         forceHistory: true,
+        invoker: studyButton,
         preserveTextSpan: Boolean(textSpanTarget),
         textSpanTarget,
       });

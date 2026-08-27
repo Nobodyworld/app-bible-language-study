@@ -87,7 +87,7 @@
                 <span aria-hidden="true" class="toolbar-icon">⌕</span>
                 <span>Search</span>
               </button>
-              <button id="openStudyPanel" class="toolbar-button mobile-detail-launcher" type="button" title="Open study panel">
+              <button id="openStudyPanel" class="toolbar-button mobile-detail-launcher" type="button" title="Open study panel" aria-controls="detailPane" aria-expanded="false">
                 <span aria-hidden="true" class="toolbar-icon">☰</span>
                 <span>Study panel</span>
               </button>
@@ -141,7 +141,35 @@
       <aside id="detailPane" class="detail-pane" aria-label="Reference details">
         <div class="detail-header">
           <div class="detail-header-main">
-            <h2 id="detailTitle">Details</h2>
+            <div class="detail-title-block">
+              <h2 id="detailTitle">Details</h2>
+              <span
+                id="detailModeStatus"
+                class="detail-mode-status"
+                aria-label="Study workspace mode: Following"
+              >Following</span>
+            </div>
+            <div id="studyWorkspaceWidthControls" class="study-workspace-width-controls" role="group" aria-label="Study workspace width">
+              <span class="study-workspace-width-label">Width</span>
+              <button
+                type="button"
+                data-study-workspace-width-mode="compact"
+                aria-label="Use compact study workspace"
+                title="Compact study workspace"
+                aria-pressed="false">Compact<span aria-hidden="true" class="study-workspace-width-symbol">−</span></button>
+              <button
+                type="button"
+                data-study-workspace-width-mode="standard"
+                aria-label="Use standard study workspace"
+                title="Standard study workspace"
+                aria-pressed="true">Standard<span aria-hidden="true" class="study-workspace-width-symbol study-workspace-width-reset-symbol">↺</span></button>
+              <button
+                type="button"
+                data-study-workspace-width-mode="expanded"
+                aria-label="Use expanded study workspace"
+                title="Expanded study workspace"
+                aria-pressed="false">Expanded<span aria-hidden="true" class="study-workspace-width-symbol">+</span></button>
+            </div>
             <div class="detail-header-actions">
               <button
                 id="clearDetail"
@@ -164,7 +192,7 @@
                 aria-controls="detailPane"
                 aria-expanded="true"
               >
-                Hide
+                <span id="hideStudyWorkspaceLabel">Hide</span>
                 <svg aria-hidden="true" viewBox="0 0 24 24">
                   <rect x="3" y="4" width="18" height="16" rx="2"></rect>
                   <path d="M14 4v16M18 12h-8M13 9l-3 3 3 3"></path>
@@ -172,31 +200,9 @@
               </button>
             </div>
           </div>
-          <div id="studyWorkspaceWidthControls" class="study-workspace-width-controls" role="group" aria-label="Study workspace width">
-            <span class="study-workspace-width-label">Width</span>
-            <button
-              type="button"
-              data-study-workspace-width-mode="compact"
-              aria-label="Use compact study workspace"
-              title="Compact study workspace"
-              aria-pressed="false">Compact<span aria-hidden="true" class="study-workspace-width-symbol">−</span></button>
-            <button
-              type="button"
-              data-study-workspace-width-mode="standard"
-              aria-label="Use standard study workspace"
-              title="Standard study workspace"
-              aria-pressed="true">Standard<span aria-hidden="true" class="study-workspace-width-symbol study-workspace-width-reset-symbol">↺</span></button>
-            <button
-              type="button"
-              data-study-workspace-width-mode="expanded"
-              aria-label="Use expanded study workspace"
-              title="Expanded study workspace"
-              aria-pressed="false">Expanded<span aria-hidden="true" class="study-workspace-width-symbol">+</span></button>
-          </div>
         </div>
         <div id="detailWorkspace" class="detail-workspace">
           <div id="detailWorkArea" class="detail-work-area">
-            <div id="detailContext" class="detail-context" hidden></div>
             <div class="detail-floating-nav" aria-label="Detail panel history">
               <button id="detailBack" class="detail-nav-arrow" type="button" title="Panel history back" aria-label="Panel history back" disabled>
                 ↶
@@ -205,6 +211,7 @@
                 ↷
               </button>
             </div>
+            <div id="detailContext" class="detail-context" hidden></div>
             <div id="detailContent" class="detail-content">
               Select a verse, tag, or reader tool.
             </div>
@@ -221,7 +228,6 @@
     </main>
 
     <script type="module" src="./app.js?v=pr13-live-qa-20260711e"></script>
-    <script type="module" src="./src/portrait-workspace.js?v=pr13-live-qa-20260711e"></script>
     <script type="module" src="./src/reader-picker-flow.js?v=pr13-live-qa-20260711e"></script>
     <script type="module" src="./src/original-language-study-flow.js?v=pr13-live-qa-20260711e"></script>
   </body>

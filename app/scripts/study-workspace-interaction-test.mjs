@@ -18,6 +18,7 @@ const SOURCE_TOKEN_TAGS = Object.freeze([
 const VIEWPORTS = Object.freeze([
   Object.freeze({ name: "desktop-wide", width: 1440, height: 900 }),
   Object.freeze({ name: "desktop", width: 1280, height: 720 }),
+  Object.freeze({ name: "portrait-desktop", width: 960, height: 1200 }),
   Object.freeze({ name: "desktop-compact", width: 1024, height: 768 }),
   Object.freeze({ name: "narrow-desktop", width: 820, height: 900 }),
   Object.freeze({ name: "mobile", width: 390, height: 844 }),
@@ -114,7 +115,7 @@ async function openLanguageStudy(page) {
   await page.locator(".verse-study-button").first().click();
   await page.waitForFunction(() => Boolean(document.querySelector("#detailContext .panel-context-navigation")));
   const language = page
-    .locator("#detailContext .verse-context-tab[data-visible-label='Language']")
+    .locator("#detailContext .verse-context-tab[data-visible-label='Language Study']")
     .first();
   assert.equal(await language.count(), 1, "Language Study context control was not rendered");
   await language.click();
@@ -406,24 +407,24 @@ function assertLayoutHealth(state, label, { mobile = false } = {}) {
     assert.deepEqual(
       state.widthControlArtwork.compact,
       {
-        buttonHeight: 24,
-        buttonWidth: 24,
+        buttonHeight: 32,
+        buttonWidth: 32,
         before: { height: "2px", width: "10px" },
         after: { content: "none", height: "auto", width: "auto" },
         symbolDisplay: "grid",
       },
-      `${label}: Compact artwork is not geometrically centered in its 24px target`,
+      `${label}: Compact artwork is not geometrically centered in its 32px target`,
     );
     assert.deepEqual(
       state.widthControlArtwork.expanded,
       {
-        buttonHeight: 24,
-        buttonWidth: 24,
+        buttonHeight: 32,
+        buttonWidth: 32,
         before: { height: "2px", width: "10px" },
         after: { content: '\"\"', height: "10px", width: "2px" },
         symbolDisplay: "grid",
       },
-      `${label}: Expanded artwork is not geometrically centered in its 24px target`,
+      `${label}: Expanded artwork is not geometrically centered in its 32px target`,
     );
     assert(state.pane.right <= state.viewport.width + 1, `${label}: detail pane escapes the viewport`);
     assert(state.reader.width >= 340, `${label}: scripture column is not practical`);
@@ -1101,6 +1102,21 @@ async function exerciseMobileDrawer(page, selectors) {
   const mobileLayout = await widthState(page);
   assert.equal(mobileLayout.mode, "expanded", "Mobile responsive constraint replaced the stored desktop mode");
   assertLayoutHealth(mobileLayout, "mobile/expanded-stored", { mobile: true });
+  const closedBeforeOpen = await page.locator(".detail-pane").evaluate((pane) => ({
+    ariaHidden: pane.getAttribute("aria-hidden"),
+    inert: Boolean(pane.inert || pane.hasAttribute("inert")),
+    open: pane.classList.contains("visible"),
+  }));
+  assert.deepEqual(
+    closedBeforeOpen,
+    { ariaHidden: "true", inert: true, open: false },
+    "Closed mobile Study drawer is not truthfully hidden and inert",
+  );
+  await page.locator("#clearDetail").focus();
+  assert(
+    await page.evaluate(() => !document.querySelector(".detail-pane")?.contains(document.activeElement)),
+    "A closed inert Study drawer accepted focus",
+  );
   await page.locator("#openStudyPanel").click();
   await page.waitForFunction(() => {
     const pane = document.querySelector(".detail-pane");
@@ -1119,6 +1135,145 @@ async function exerciseMobileDrawer(page, selectors) {
   assert.equal(drawer.position, "fixed", "Mobile study panel is not a fixed full-screen drawer");
   assert(drawer.left >= -1 && drawer.top >= -1 && drawer.width >= 389 && drawer.height >= 843, `Mobile study drawer is not full screen: ${JSON.stringify(drawer)}`);
 
+  const measureDrawerControls = async (label) => {
+    const state = await page.evaluate(() => {
+      const rect = (node) => {
+        const value = node.getBoundingClientRect();
+        return { bottom: value.bottom, height: value.height, left: value.left, right: value.right, top: value.top, width: value.width };
+      };
+      const selectors = [
+        "#clearDetail",
+        "#hideStudyWorkspace",
+        "#detailBack",
+        "#detailForward",
+        "#detailContext button",
+      ].join(",");
+      const controls = [...document.querySelectorAll(selectors)]
+        .filter((node) => getComputedStyle(node).display !== "none" && node.getClientRects().length)
+        .map((node, index) => {
+          const bounds = rect(node);
+          const hit = document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2);
+          return {
+            action:
+              node.dataset.panelAction ||
+              node.closest("[data-panel-action]")?.dataset.panelAction ||
+              node.id ||
+              `control-${index}`,
+            disabled: node.disabled,
+            domIndex: index,
+            label: node.getAttribute("aria-label") || node.textContent.trim(),
+            hit: hit
+              ? {
+                  action: hit.closest?.("[data-panel-action]")?.dataset.panelAction || "",
+                  className: String(hit.className || ""),
+                  id: hit.id || "",
+                  tagName: hit.tagName || "",
+                }
+              : null,
+            ownsCenter: hit === node || node.contains(hit),
+            rect: bounds,
+          };
+        });
+      const overlaps = [];
+      controls.forEach((first, firstIndex) => controls.slice(firstIndex + 1).forEach((second) => {
+        const width = Math.min(first.rect.right, second.rect.right) - Math.max(first.rect.left, second.rect.left);
+        const height = Math.min(first.rect.bottom, second.rect.bottom) - Math.max(first.rect.top, second.rect.top);
+        if (width > 0.5 && height > 0.5) overlaps.push([first.action, second.action, width, height]);
+      }));
+      const pane = document.querySelector(".detail-pane");
+      const header = document.querySelector(".detail-header");
+      const history = document.querySelector(".detail-floating-nav");
+      const context = document.querySelector("#detailContext");
+      const content = document.querySelector("#detailContent");
+      return {
+        ariaHidden: pane?.getAttribute("aria-hidden") || "",
+        contentHeight: content?.getBoundingClientRect().height || 0,
+        contextHeight: context?.getBoundingClientRect().height || 0,
+        controls,
+        headerHeight: header?.getBoundingClientRect().height || 0,
+        historyHeight: history?.getBoundingClientRect().height || 0,
+        inert: Boolean(pane?.inert || pane?.hasAttribute("inert")),
+        overlaps,
+        overflow: document.documentElement.scrollWidth - window.innerWidth,
+      };
+    });
+    assert.equal(state.ariaHidden, "false", `${label}: open drawer reports aria-hidden`);
+    assert.equal(state.inert, false, `${label}: open drawer remains inert`);
+    assert.equal(state.overflow <= 1, true, `${label}: drawer creates horizontal overflow`);
+    assert.deepEqual(state.overlaps, [], `${label}: Study controls overlap`);
+    state.controls.forEach((control) => {
+      assert(control.rect.height >= 43.5, `${label}: ${control.label} is shorter than 44px`);
+      assert(
+        control.ownsCenter,
+        `${label}: ${control.label} does not own its center coordinate: ${JSON.stringify(control)}`,
+      );
+    });
+    return state;
+  };
+
+  const verifyMobileTabOrder = async (label) => {
+    const expected = await page.evaluate(() => {
+      const focusable = [...document.querySelectorAll([
+        "#clearDetail:not([disabled])",
+        "#hideStudyWorkspace:not([disabled])",
+        "#detailBack:not([disabled])",
+        "#detailForward:not([disabled])",
+        "#detailContext button:not([disabled])",
+      ].join(","))].filter((node) => getComputedStyle(node).display !== "none" && node.getClientRects().length);
+      focusable.forEach((node, index) => { node.dataset.qaDrawerTabOrder = String(index); });
+      return {
+        dom: focusable.map((node) => node.dataset.qaDrawerTabOrder),
+        visual: focusable
+          .slice()
+          .sort((first, second) => {
+            const firstRect = first.getBoundingClientRect();
+            const secondRect = second.getBoundingClientRect();
+            return Math.abs(firstRect.top - secondRect.top) > 1
+              ? firstRect.top - secondRect.top
+              : firstRect.left - secondRect.left;
+          })
+          .map((node) => node.dataset.qaDrawerTabOrder),
+      };
+    });
+    assert.deepEqual(expected.visual, expected.dom, `${label}: DOM and visual control order diverge`);
+    const actual = [];
+    await page.evaluate(() => document.querySelector('[data-qa-drawer-tab-order="0"]')?.focus({ preventScroll: true }));
+    actual.push(await page.evaluate(() => document.activeElement?.dataset.qaDrawerTabOrder || ""));
+    for (let index = 1; index < expected.dom.length; index += 1) {
+      await page.keyboard.press("Tab");
+      actual.push(await page.evaluate(() => document.activeElement?.dataset.qaDrawerTabOrder || ""));
+    }
+    assert.deepEqual(actual, expected.dom, `${label}: actual Tab order differs from DOM and visual order`);
+
+    await page.evaluate(() => {
+      const controls = [...document.querySelectorAll("#detailPane a[href], #detailPane button:not([disabled]), #detailPane input:not([disabled]):not([type='hidden']), #detailPane select:not([disabled]), #detailPane textarea:not([disabled]), #detailPane [tabindex]:not([tabindex='-1'])")]
+        .filter((node) => getComputedStyle(node).display !== "none" && node.getClientRects().length);
+      controls.forEach((node) => node.removeAttribute("data-qa-drawer-edge"));
+      controls[0]?.setAttribute("data-qa-drawer-edge", "first");
+      controls.at(-1)?.setAttribute("data-qa-drawer-edge", "last");
+      controls.at(-1)?.focus({ preventScroll: true });
+    });
+    await page.keyboard.press("Tab");
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.dataset.qaDrawerEdge || ""),
+      "first",
+      `${label}: Tab did not wrap from the final drawer control`,
+    );
+    await page.keyboard.press("Shift+Tab");
+    assert.equal(
+      await page.evaluate(() => document.activeElement?.dataset.qaDrawerEdge || ""),
+      "last",
+      `${label}: Shift+Tab did not wrap to the final drawer control`,
+    );
+    await page.evaluate(() => document.querySelectorAll("[data-qa-drawer-tab-order], [data-qa-drawer-edge]").forEach((node) => {
+      node.removeAttribute("data-qa-drawer-tab-order");
+      node.removeAttribute("data-qa-drawer-edge");
+    }));
+  };
+
+  const openGeometry = await measureDrawerControls("Mobile Language Study drawer");
+  await verifyMobileTabOrder("Mobile Language Study drawer");
+
   await page.locator(selectors.marks).click();
   await waitForToolOpen(page, ".tag-picker-option");
   assertContainedSurface(await toolSurfaceState(page), "Mobile Study Marks");
@@ -1133,13 +1288,89 @@ async function exerciseMobileDrawer(page, selectors) {
     const pane = document.querySelector(".detail-pane");
     return !pane?.classList.contains("visible") && pane?.getBoundingClientRect().left >= window.innerWidth - 0.1;
   });
+  const afterEscapeClose = await page.locator(".detail-pane").evaluate((pane) => ({
+    ariaHidden: pane.getAttribute("aria-hidden"),
+    inert: Boolean(pane.inert || pane.hasAttribute("inert")),
+    launcherFocused: document.activeElement === document.querySelector("#openStudyPanel"),
+  }));
+  assert.deepEqual(
+    afterEscapeClose,
+    { ariaHidden: "true", inert: true, launcherFocused: true },
+    "Mobile drawer Escape did not restore launcher focus and inertness",
+  );
+
+  const readerInvoker = page.locator(".reader-pane .strong-token[data-strong-code]").first();
+  await readerInvoker.focus();
+  await readerInvoker.press("Enter");
+  await page.waitForFunction(() =>
+    document.querySelector(".detail-pane")?.classList.contains("visible") &&
+    document.querySelector(".detail-pane")?.dataset.displayedView === "strongs" &&
+    document.querySelector(".detail-pane")?.getBoundingClientRect().left <= 1,
+  );
+  await waitForFrames(page, 3);
+  const strongGeometry = await measureDrawerControls("Mobile Strong's drawer");
+  for (const action of ["strongs", "par", "refs", "commentary", "interlinear", "study-marks", "meaning"]) {
+    assert(
+      strongGeometry.controls.some((control) => control.action === action),
+      `Mobile Strong's drawer is missing the ${action} control`,
+    );
+  }
+  await page.locator("#hideStudyWorkspace").click();
+  await page.waitForFunction(() => !document.querySelector(".detail-pane")?.classList.contains("visible"));
+  const readerFocusReturn = await readerInvoker.evaluate((node) => ({
+    activeClass: document.activeElement?.className || "",
+    activeId: document.activeElement?.id || "",
+    activeStrong: document.activeElement?.dataset?.strongCode || "",
+    connected: node.isConnected,
+    focused: document.activeElement === node,
+    rendered: node.getClientRects().length > 0,
+    strongCode: node.dataset.strongCode || "",
+  }));
+  assert(
+    readerFocusReturn.focused,
+    `Closing a keyboard-opened mobile drawer did not restore the Reader invoker: ${JSON.stringify(readerFocusReturn)}`,
+  );
+
+  await page.locator("#openStudyPanel").click();
+  await page.waitForFunction(() => document.querySelector(".detail-pane")?.classList.contains("visible"));
+  await page.locator("#clearDetail").click();
+  await page.waitForFunction(() =>
+    document.querySelector(".detail-pane")?.classList.contains("visible") &&
+    document.querySelector("#detailTitle")?.textContent === "Details" &&
+    document.querySelector(".detail-pane")?.dataset.panelMode === "follow",
+  );
+  assert(
+    await page.evaluate(() => document.querySelector(".detail-pane")?.contains(document.activeElement)),
+    "Mobile Clear left focus outside the still-open drawer",
+  );
+  await page.locator("#hideStudyWorkspace").click();
+  await page.waitForFunction(() => !document.querySelector(".detail-pane")?.classList.contains("visible"));
+  const finalClosed = await page.locator(".detail-pane").evaluate((pane) => ({
+    ariaHidden: pane.getAttribute("aria-hidden"),
+    inert: Boolean(pane.inert || pane.hasAttribute("inert")),
+    launcherFocused: document.activeElement === document.querySelector("#openStudyPanel"),
+  }));
+  assert.deepEqual(
+    finalClosed,
+    { ariaHidden: "true", inert: true, launcherFocused: true },
+    "Mobile Close did not leave an inert drawer and restore external focus",
+  );
 
   await page.setViewportSize({ width: 1440, height: 900 });
   await waitForFrames(page, 3);
   const restored = await widthState(page);
   assert.equal(restored.mode, "expanded", "Returning from mobile did not restore the stored desktop mode");
   assertLayoutHealth(restored, "desktop-restored-from-mobile");
-  return { drawer: { height: Math.round(drawer.height), width: Math.round(drawer.width) }, name: "mobile" };
+  return {
+    drawer: { height: Math.round(drawer.height), width: Math.round(drawer.width) },
+    geometry: {
+      contentHeight: Math.round(openGeometry.contentHeight),
+      contextHeight: Math.round(openGeometry.contextHeight),
+      headerHeight: Math.round(openGeometry.headerHeight),
+      historyHeight: Math.round(openGeometry.historyHeight),
+    },
+    name: "mobile",
+  };
 }
 
 async function exerciseClearAndRouteCleanup(page, baseUrl) {

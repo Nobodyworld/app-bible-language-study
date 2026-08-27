@@ -58,7 +58,7 @@ assert(
 );
 assert(
   /showMyData: createUserDataView\(ctx, \{ showStudyMarks: tagsView\.showTagIndex \}\)/.test(detailViews) &&
-    /setDetail\("My Data", wrap\)/.test(userDataView),
+    /setDetail\("My Data", wrap, \{ viewId: DETAIL_VIEW_IDS\.myData \}\)/.test(userDataView),
   "My Data must use one stable global detail view.",
 );
 assert(
@@ -110,9 +110,9 @@ assert(
   "All immediate detail mutations must invalidate older deferred intents while tokened stale mutations are rejected.",
 );
 assert(
-  /export function goBackDetail\(\) \{\s*beginDetailIntent\(\)/.test(dom) &&
-    /export function goForwardDetail\(\) \{\s*beginDetailIntent\(\)/.test(dom) &&
-    /function resetDetailContent\(title, message\) \{\s*beginDetailIntent\(\)/.test(dom),
+  /export function goBackDetail\(\) \{\s*const detailIntent = beginDetailIntent\(\)/.test(dom) &&
+    /export function goForwardDetail\(\) \{\s*const detailIntent = beginDetailIntent\(\)/.test(dom) &&
+    /function resetDetailContent\(title, message\) \{\s*const detailIntent = beginDetailIntent\(\)/.test(dom),
   "Detail Back, Forward, reset, and clear paths must invalidate pending deferred intents.",
 );
 assert(
@@ -169,7 +169,11 @@ assert(
   "Floating chapter navigation must keep its edge placement while exposing a real 40px target and contained focus ring.",
 );
 assert(/\.reader-floating-nav\s*{[\s\S]*?top:\s*176px;/.test(css), "Floating chapter navigation must sit below the reader header.");
-assert(/\.detail-floating-nav\s*{[\s\S]*?top:\s*18px;[\s\S]*?margin:\s*0 24px 0 0;/.test(css), "Detail history controls must sit slightly lower and left of the panel edge.");
+assert(
+  /\.detail-floating-nav\s*{[\s\S]*?position:\s*relative;[\s\S]*?flex:\s*0 0 auto;[\s\S]*?min-height:\s*44px;[\s\S]*?padding:\s*6px 12px 0;/.test(css) &&
+    /\.detail-nav-arrow\s*{[\s\S]*?width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?min-width:\s*32px;[\s\S]*?min-height:\s*32px;/.test(css),
+  "Detail history controls must remain in source-order flow with compact desktop targets that cannot be overlapped by contextual navigation.",
+);
 assert(
   (index.match(/class="scope-mark-control"/g) || []).length === 2 &&
     !/Book tags|Chapter tags/.test(index) &&
@@ -538,8 +542,9 @@ assert(
   "Browser history must own Reader routes while in-app Detail history remains panel-only and button states use the monotonic index.",
 );
 assert(
-  /const textSpanTarget = action\.scope === "verse"/.test(await readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8")) &&
-    /preserveTextSpan: Boolean\(textSpanTarget\)/.test(await readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8")) &&
+  /const textSpanTarget = ctx\.getActiveTextSpanTarget\?\.\(verse\) \|\| null;/.test(await readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8")) &&
+    /wordHighlightOptions\(wordContext, verse, Boolean\(textSpanTarget\)\)/.test(await readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8")) &&
+    /\{ verse, commit: true, preserveTextSpan: Boolean\(textSpanTarget\) \}/.test(await readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8")) &&
     /action\.run\(\{ textSpanTarget \}\)/.test(await readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8")),
   "Same-verse contextual tools must capture and explicitly preserve the active phrase before changing detail content.",
 );

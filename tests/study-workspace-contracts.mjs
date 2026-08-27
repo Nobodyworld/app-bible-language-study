@@ -9,13 +9,19 @@ const sources = Object.fromEntries(await Promise.all(
     ["css", "../app/styles.css"],
     ["contextCss", "../app/styles-context.css"],
     ["app", "../app/app.js"],
+    ["activeWord", "../app/src/active-word-context.js"],
+    ["chapter", "../app/src/chapter-renderer.js"],
     ["dom", "../app/src/dom.js"],
+    ["portrait", "../app/src/portrait-workspace.js"],
+    ["readerPicker", "../app/src/reader-picker-flow.js"],
+    ["ui", "../app/src/ui-contracts.js"],
     ["boot", "../app/src/study-workspace-width-boot.js"],
     ["width", "../app/src/study-workspace-width.js"],
     ["surface", "../app/src/detail-tool-surface.js"],
     ["tags", "../app/src/views/tags-view.js"],
     ["meaning", "../app/src/word-meaning.js"],
     ["contextView", "../app/src/views/verse-context-tabs.js"],
+    ["strongView", "../app/src/views/strongs-view.js"],
     ["interlinearView", "../app/src/views/interlinear-translation-view.js"],
     ["stores", "../app/src/stores.js"],
   ].map(async ([name, path]) => [name, await readFile(new URL(path, import.meta.url), "utf8")]),
@@ -134,6 +140,83 @@ assert(
   /matchMedia\("\(max-width: 768px\)"\)/.test(sources.dom),
   "Mobile reveal behavior must use the same 768px breakpoint as the full-screen drawer.",
 );
+assert(
+  /DETAIL_VIEW_IDS/.test(sources.ui) &&
+    /normalizeDetailViewId/.test(sources.ui) &&
+    /viewId:\s*currentDetailViewId/.test(sources.dom) &&
+    /setDisplayedDetailView\(snapshot\.viewId\)/.test(sources.dom) &&
+    /dataset\.displayedView/.test(sources.dom),
+  "Displayed Detail view identity must be bounded, exposed, snapshotted, and restored.",
+);
+assert(
+  /DETAIL_SCROLL_POLICIES/.test(sources.ui) &&
+    /function applyDetailScrollPolicy/.test(sources.dom) &&
+    /isDetailIntentCurrent\(detailIntent\)/.test(sources.dom) &&
+    /DETAIL_SCROLL_POLICIES\.preserve/.test(sources.dom) &&
+    /DETAIL_SCROLL_POLICIES\.reset/.test(sources.dom),
+  "Detail replacement must use explicit reset/preserve policies with stale-intent protection.",
+);
+assert(
+  /function setPaneInert\(inert\)/.test(sources.portrait) &&
+    /detailPane\.setAttribute\("aria-hidden", "true"\)/.test(sources.portrait) &&
+    /detailPane\.setAttribute\("aria-hidden", "false"\)/.test(sources.portrait) &&
+    /export function openStudyWorkspace/.test(sources.portrait) &&
+    /export function closeStudyWorkspace/.test(sources.portrait) &&
+    /event\.key !== "Tab"/.test(sources.portrait),
+  "One responsive lifecycle must own mobile open/close, inertness, exposure, and Tab containment.",
+);
+assert(
+  !/src="\.\/src\/portrait-workspace\.js/.test(sources.index) &&
+    /from "\.\/src\/portrait-workspace\.js"/.test(sources.app),
+  "The responsive Study lifecycle must be instantiated only through the application module graph.",
+);
+assert(
+  /invoker:\s*element/.test(sources.chapter) &&
+    /invoker:\s*options\.invoker \|\| null/.test(sources.strongView) &&
+    /const \{ invoker: _invoker, \.\.\.storedOptions \}/.test(sources.activeWord),
+  "Reader activation must restore focus through the live invoker without storing a DOM node in canonical word context.",
+);
+assert(
+  /options\.history === "replace" && !options\.invoker/.test(sources.dom),
+  "An invoker-owned Reader replacement must open the mobile drawer while background same-view replacements remain non-revealing.",
+);
+assert(
+  /return document\.activeElement === element;/.test(sources.portrait) &&
+    /!restoredBeforeClose \|\| !isExternalInvoker\(document\.activeElement\)[\s\S]*?focusElement\(openButton, \{ suppressReaderSnapshot: true \}\)/.test(sources.portrait) &&
+    /data-study-drawer-focus-restore/.test(sources.portrait) &&
+    /event\.target\?\.hasAttribute\?\.\("data-study-drawer-focus-restore"\)/.test(sources.app),
+  "Drawer focus restoration must verify the active element, fall back to the external Study launcher, and avoid rewriting Reader history.",
+);
+assert(
+  /const generation = \+\+drawerTransitionGeneration;[\s\S]*?requestAnimationFrame[\s\S]*?generation !== drawerTransitionGeneration/.test(sources.portrait),
+  "Drawer close must use one bounded, generation-guarded frame to reassert external focus after key settlement.",
+);
+assert(
+  /function isExternalInvoker\(element\)[\s\S]*?element\.matches\?\.\(FOCUSABLE_SELECTOR\)[\s\S]*?element\.tabIndex >= 0/.test(sources.portrait),
+  "Drawer restoration must reject body and other non-focusable external nodes as invokers.",
+);
+assert(
+  /event\.key === "Escape" && document\.querySelector\("\.detail-pane\.visible"\)/.test(sources.readerPicker),
+  "A mobile drawer-owned Escape must not clear the frozen Reader highlight before focus restoration.",
+);
+assert(
+  !/resetDetailContent[\s\S]*?classList\.remove\("visible"\)/.test(sources.dom) &&
+    /focusStudyWorkspaceAfterClear/.test(sources.app) &&
+    /Close study panel/.test(sources.portrait),
+  "Clear must retain the mobile drawer while the adaptive Hide control owns Close.",
+);
+assert(
+  /id="detailModeStatus"[\s\S]*?>Following<\/span>/.test(sources.index) &&
+    /Study workspace mode: \$\{visibleMode\}/.test(sources.dom),
+  "The header must expose a compact, truthful Locked/Following status.",
+);
+const detailHeader = sources.index.match(/<div class="detail-header">[\s\S]*?<\/div>\s*<div id="detailWorkspace"/)?.[0] || "";
+assert(
+  detailHeader.indexOf('id="detailTitle"') < detailHeader.indexOf('id="studyWorkspaceWidthControls"') &&
+    detailHeader.indexOf('id="studyWorkspaceWidthControls"') < detailHeader.indexOf('id="clearDetail"') &&
+    detailHeader.indexOf('id="clearDetail"') < detailHeader.indexOf('id="hideStudyWorkspace"'),
+  "Detail header source order must match title, width, Clear, then Hide/Close.",
+);
 
 const containedMarksBranch = sources.tags.match(/if \(options\.boundary === "detail-pane"\) \{[\s\S]*?return trigger;\s*\}/)?.[0] || "";
 assert(
@@ -181,4 +264,4 @@ assert(
   "The completed workspace must retain reduced-motion suppression.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 25 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 38 }, null, 2));

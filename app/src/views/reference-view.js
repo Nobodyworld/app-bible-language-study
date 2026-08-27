@@ -1,6 +1,7 @@
 import { fetchVerseBook, resolvePassageText } from "../data-service.js?v=pr13-live-qa-20260711e";
 import { createDetailList, setDetail, setDetailMessage } from "../dom.js?v=pr13-live-qa-20260711e";
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
+import { DETAIL_SCROLL_POLICIES, DETAIL_VIEW_IDS } from "../ui-contracts.js";
 
 export function createReferenceViews(ctx) {
   function appendPassageText(container, text) {
@@ -44,7 +45,7 @@ export function createReferenceViews(ctx) {
     });
   }
 
-  function showFootnote(note, reference) {
+  function showFootnote(note, reference, options = {}) {
     const wrap = document.createElement("div");
     wrap.className = "footnote-detail";
     const heading = document.createElement("h3");
@@ -55,13 +56,19 @@ export function createReferenceViews(ctx) {
     const body = document.createElement("p");
     body.textContent = note.text;
     wrap.append(heading, marker, body);
-    setDetail("Footnote", wrap, { forceHistory: true });
+    setDetail("Footnote", wrap, {
+      forceHistory: true,
+      ...options,
+      viewId: DETAIL_VIEW_IDS.footnote,
+    });
   }
 
   async function showParallelVerse(reference, verse, verseText, options = {}) {
     const detailIntent = setDetailMessage("Parallel", "Loading parallel translations...", {
       forceHistory: true,
       ...options,
+      scrollPolicy: options.scrollPolicy || DETAIL_SCROLL_POLICIES.reset,
+      viewId: DETAIL_VIEW_IDS.parallel,
     });
     if (detailIntent === null) return;
     const detailOptions = { ...options, detailIntent };
@@ -69,13 +76,26 @@ export function createReferenceViews(ctx) {
     wrap.className = "parallel-panel";
     const heading = document.createElement("h3");
     heading.textContent = reference;
-    const tabs = createVerseContextTabs(ctx, reference, verse, "par", ctx.getActiveWordContext?.(verse));
+    const tabs = createVerseContextTabs(
+      ctx,
+      reference,
+      verse,
+      DETAIL_VIEW_IDS.parallel,
+      ctx.getActiveWordContext?.(verse),
+    );
     const intro = document.createElement("p");
     intro.textContent = verseText;
     const list = document.createElement("div");
     list.className = "parallel-list";
     wrap.append(heading, tabs, intro, list);
-    setDetail("Parallel", wrap, { history: "replace", ...detailOptions, verse });
+    setDetail("Parallel", wrap, {
+      ...detailOptions,
+      forceHistory: false,
+      history: "replace",
+      scrollPolicy: DETAIL_SCROLL_POLICIES.preserve,
+      verse,
+      viewId: DETAIL_VIEW_IDS.parallel,
+    });
 
     const rows = await Promise.all(
       (ctx.state.manifest?.translations || []).map(async (translation) => {
@@ -135,7 +155,15 @@ export function createReferenceViews(ctx) {
     heading.textContent = reference;
     wrap.append(heading);
     if (options.verse) {
-      wrap.append(createVerseContextTabs(ctx, reference, options.verse, "refs", ctx.getActiveWordContext?.(options.verse)));
+      wrap.append(
+        createVerseContextTabs(
+          ctx,
+          reference,
+          options.verse,
+          DETAIL_VIEW_IDS.references,
+          ctx.getActiveWordContext?.(options.verse),
+        ),
+      );
     }
 
     const refs = [...(record.cross_references || []), ...(record.treasury || [])];
@@ -143,7 +171,11 @@ export function createReferenceViews(ctx) {
       const empty = document.createElement("p");
       empty.textContent = "No cross references found for this verse.";
       wrap.append(empty);
-      setDetail("Cross References", wrap, { forceHistory: true, ...options });
+      setDetail("Cross References", wrap, {
+        forceHistory: true,
+        ...options,
+        viewId: DETAIL_VIEW_IDS.references,
+      });
       return;
     }
 
@@ -175,7 +207,11 @@ export function createReferenceViews(ctx) {
         li.append(label, meta, body);
       }),
     );
-    setDetail("Cross References", wrap, { forceHistory: true, ...options });
+    setDetail("Cross References", wrap, {
+      forceHistory: true,
+      ...options,
+      viewId: DETAIL_VIEW_IDS.references,
+    });
   }
 
   return { showCrossrefs, showFootnote, showParallelVerse };

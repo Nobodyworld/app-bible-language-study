@@ -109,6 +109,49 @@ async function workspaceSnapshot(page) {
   });
 }
 
+async function readerContextSnapshot(page) {
+  return page.evaluate(() => JSON.stringify({
+    route: location.hash,
+    documentScroll: { x: window.scrollX, y: window.scrollY },
+    readerScroll: {
+      left: document.querySelector("#chapterContent")?.scrollLeft || 0,
+      top: document.querySelector("#chapterContent")?.scrollTop || 0,
+    },
+    highlightedContext: [...document.querySelectorAll(
+      ".reader-context-verse, .reader-context-word, .reader-context-phrase-verse, .selected-range",
+    )].map((node) => ({
+      className: node.className,
+      interlinearKey: node.dataset.interlinearKey || "",
+      strongCode: node.dataset.strongCode || "",
+      textSpanCharEnd: node.dataset.textSpanCharEnd || "",
+      textSpanCharStart: node.dataset.textSpanCharStart || "",
+      textSpanTargetId: node.dataset.textSpanTargetId || "",
+      tokenIndex: node.dataset.tokenIndex || "",
+      verse: node.dataset.verse || "",
+    })),
+    browserHistoryLength: history.length,
+    readerNavigation: history.state?.bibleAppReaderNavigation || null,
+  }));
+}
+
+async function waitForStableReaderContext(page, { timeoutMs = 3000, stableSamples = 3 } = {}) {
+  const startedAt = Date.now();
+  const recentSamples = [];
+  let previous = null;
+  let consecutive = 0;
+  while (Date.now() - startedAt < timeoutMs) {
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(resolve)));
+    const current = await readerContextSnapshot(page);
+    recentSamples.push(JSON.parse(current));
+    if (recentSamples.length > 6) recentSamples.shift();
+    if (current === previous) consecutive += 1;
+    else consecutive = 1;
+    if (consecutive >= stableSamples) return current;
+    previous = current;
+  }
+  throw new Error(`Reader context did not stabilize: ${JSON.stringify(recentSamples)}`);
+}
+
 function findRendering(snapshot, targetId) {
   const tokenRenderings = JSON.parse(snapshot).tokenRenderings || {};
   for (const verseBucket of Object.values(tokenRenderings)) {
@@ -352,6 +395,7 @@ async function runProfile(browser, url, profile) {
   const page = await context.newPage();
   const failures = [];
   let stage = "navigate";
+  let clearEscapeEvidence = null;
 
   page.on("console", (message) => {
     if (message.type() === "error") failures.push(`console: ${message.text()}`);
@@ -377,7 +421,14 @@ async function runProfile(browser, url, profile) {
     await waitFor(page, () => Boolean(document.querySelector("#chapterTitle")?.textContent.includes("Proverbs 1")));
 
     stage = "open verse context";
-    await page.locator(".verse-study-button").first().evaluate((button) => button.click());
+    await page.locator(".verse-study-button").first().evaluate((button, mobile) => {
+      if (mobile) {
+        document.querySelectorAll("[data-qa-word-meaning-drawer-invoker]")
+          .forEach((node) => node.removeAttribute("data-qa-word-meaning-drawer-invoker"));
+        button.setAttribute("data-qa-word-meaning-drawer-invoker", "true");
+      }
+      button.click();
+    }, profile.mobile);
     await waitFor(page, () =>
       [...document.querySelectorAll("#detailContext .verse-context-tab")].some(
         (button) => button.textContent.trim() === "Int" && !button.disabled,
@@ -732,8 +783,27 @@ async function runProfile(browser, url, profile) {
     let clearMeaning = page.locator(
       `button.word-meaning-trigger[data-word-meaning-target-id="${secondTargetId}"]`,
     ).first();
-    if (!(await clearMeaning.count())) {
-      await page.locator(".verse-study-button").nth(1).evaluate((button) => button.click());
+    if (profile.mobile) {
+      const readerInvoker = page.locator("#chapterContent .strong-token").first();
+      await readerInvoker.evaluate((button) => {
+        document.querySelectorAll("[data-qa-word-meaning-drawer-invoker]")
+          .forEach((node) => node.removeAttribute("data-qa-word-meaning-drawer-invoker"));
+        button.setAttribute("data-qa-word-meaning-drawer-invoker", "true");
+        button.click();
+      });
+      await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Strong's" &&
+        Boolean(document.querySelector("#detailContext button.word-meaning-trigger")) &&
+        Boolean(document.querySelector(".reader-context-word")));
+      clearMeaning = page.locator("#detailContext button.word-meaning-trigger").first();
+    } else if (!(await clearMeaning.count())) {
+      await page.locator(".verse-study-button").nth(1).evaluate((button, mobile) => {
+        if (mobile) {
+          document.querySelectorAll("[data-qa-word-meaning-drawer-invoker]")
+            .forEach((node) => node.removeAttribute("data-qa-word-meaning-drawer-invoker"));
+          button.setAttribute("data-qa-word-meaning-drawer-invoker", "true");
+        }
+        button.click();
+      }, profile.mobile);
       await waitFor(page, () => [...document.querySelectorAll("#detailContext .verse-context-tab")]
         .some((button) => button.textContent.trim() === "Int" && !button.disabled));
       await page.locator("#detailContext .verse-context-tab").filter({ hasText: /^Int$/ }).first().click();
@@ -743,27 +813,178 @@ async function runProfile(browser, url, profile) {
     await clearMeaning.focus();
     await clearMeaning.press("Enter");
     await waitFor(page, () => document.querySelector("#detailToolSurface")?.dataset.toolKind === "meaning");
-    await page.locator("#clearDetail").click();
+    if (profile.mobile) {
+      await page.locator("#clearDetail").evaluate((button) => button.focus({ preventScroll: true }));
+      await waitFor(page, () => document.activeElement === document.querySelector("#clearDetail"));
+    }
+    const readerContextBeforeClear = profile.mobile
+      ? await waitForStableReaderContext(page)
+      : await readerContextSnapshot(page);
+    if (profile.mobile) {
+      assert(
+        JSON.parse(readerContextBeforeClear).highlightedContext.some((entry) =>
+          entry.className.includes("reader-context-word")),
+        `${profile.name}: mobile Clear baseline did not begin from a committed Reader word highlight`,
+      );
+    }
+    if (profile.mobile) {
+      await page.locator("#clearDetail").evaluate((button) => button.click());
+    } else {
+      await page.locator("#clearDetail").click();
+    }
     await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true &&
       document.querySelector("#detailTitle")?.textContent === "Details");
+    await page.evaluate(() => new Promise((resolve) => requestAnimationFrame(() =>
+      requestAnimationFrame(() => requestAnimationFrame(resolve)))));
     await assertSurfaceClosed(page, profile, "Clear");
     await assertWorkspaceUnchanged(removedSnapshot, "Clear cleanup");
 
-    stage = "closed-state Escape";
-    const closedEscapeTarget = page.locator("#themeToggle");
-    await closedEscapeTarget.focus();
-    await closedEscapeTarget.press("Escape");
-    assert(
-      await closedEscapeTarget.evaluate((node) => document.activeElement === node),
-      `${profile.name}: closed-state Escape moved focus`,
-    );
-    await assertSurfaceClosed(page, profile, "closed-state Escape");
-    await assertWorkspaceUnchanged(removedSnapshot, "closed-state Escape");
+    if (profile.mobile) {
+      stage = "post-Clear open drawer";
+      await waitFor(page, () => document.activeElement === document.querySelector("#clearDetail"));
+      const afterClear = await page.evaluate(() => {
+        const pane = document.querySelector(".detail-pane");
+        const surface = document.querySelector("#detailToolSurface");
+        return {
+          activeId: document.activeElement?.id || "",
+          ariaHidden: pane?.getAttribute("aria-hidden"),
+          displayedView: pane?.dataset.displayedView || "",
+          inert: Boolean(pane?.inert || pane?.hasAttribute("inert")),
+          meaningSurfaceClosed: Boolean(surface?.hidden && surface?.getAttribute("aria-hidden") === "true"),
+          mode: pane?.dataset.panelMode || "",
+          modeStatus: document.querySelector("#detailModeStatus")?.textContent.trim() || "",
+          open: pane?.classList.contains("visible"),
+          title: document.querySelector("#detailTitle")?.textContent || "",
+        };
+      });
+      assert(
+        afterClear.open && afterClear.ariaHidden !== "true" && !afterClear.inert &&
+          afterClear.title === "Details" && !afterClear.displayedView &&
+          afterClear.mode === "follow" && afterClear.modeStatus === "Following" &&
+          afterClear.activeId === "clearDetail" && afterClear.meaningSurfaceClosed,
+        `${profile.name}: Clear did not retain a truthful focused open drawer: ${JSON.stringify(afterClear)}`,
+      );
+      const readerContextAfterClear = await waitForStableReaderContext(page);
+      assert(
+        readerContextAfterClear === readerContextBeforeClear,
+        `${profile.name}: Clear changed Reader route, scroll, highlight, phrase, canonical context, or history: ${JSON.stringify({
+          before: JSON.parse(readerContextBeforeClear),
+          after: JSON.parse(readerContextAfterClear),
+        })}`,
+      );
+
+      stage = "post-Clear drawer Escape close";
+      await page.keyboard.press("Escape");
+      await waitFor(page, () => {
+        const pane = document.querySelector(".detail-pane");
+        const expectedInvoker = document.querySelector("[data-qa-word-meaning-drawer-invoker='true']");
+        const expectedInvokerAvailable = Boolean(
+          expectedInvoker?.isConnected && expectedInvoker.getClientRects().length &&
+          !expectedInvoker.closest("[hidden], [inert], [aria-hidden='true']"),
+        );
+        return Boolean(
+          !pane?.classList.contains("visible") &&
+          pane?.getAttribute("aria-hidden") === "true" &&
+          (pane?.inert || pane?.hasAttribute("inert")) &&
+          !pane?.contains(document.activeElement) &&
+          (expectedInvokerAvailable
+            ? document.activeElement === expectedInvoker
+            : document.activeElement === document.querySelector("#openStudyPanel")),
+        );
+      });
+      const afterEscape = await page.evaluate(() => {
+        const pane = document.querySelector(".detail-pane");
+        const surface = document.querySelector("#detailToolSurface");
+        const expectedInvoker = document.querySelector("[data-qa-word-meaning-drawer-invoker='true']");
+        const expectedInvokerAvailable = Boolean(
+          expectedInvoker?.isConnected && expectedInvoker.getClientRects().length &&
+          !expectedInvoker.closest("[hidden], [inert], [aria-hidden='true']"),
+        );
+        const focusableSelector = [
+          "a[href]",
+          "button:not([disabled])",
+          "input:not([disabled]):not([type='hidden'])",
+          "select:not([disabled])",
+          "textarea:not([disabled])",
+          "[tabindex]:not([tabindex='-1'])",
+        ].join(",");
+        const sequentiallyFocusableDescendants = [...(pane?.querySelectorAll(focusableSelector) || [])]
+          .filter((node) => node.tabIndex >= 0 && node.getClientRects().length &&
+            !node.closest("[hidden], [inert], [aria-hidden='true']"));
+        return {
+          activeClass: document.activeElement?.className || "",
+          activeId: document.activeElement?.id || "",
+          activeInside: pane?.contains(document.activeElement) || false,
+          ariaHidden: pane?.getAttribute("aria-hidden"),
+          expectedInvokerAvailable,
+          expectedInvokerFocused: document.activeElement === expectedInvoker,
+          inert: Boolean(pane?.inert || pane?.hasAttribute("inert")),
+          launcherExpanded: document.querySelector("#openStudyPanel")?.getAttribute("aria-expanded"),
+          launcherFocused: document.activeElement === document.querySelector("#openStudyPanel"),
+          meaningSurfaceClosed: Boolean(surface?.hidden && surface?.getAttribute("aria-hidden") === "true"),
+          open: pane?.classList.contains("visible"),
+          sequentiallyFocusableDescendants: sequentiallyFocusableDescendants.length,
+        };
+      });
+      assert(
+        !afterEscape.open && afterEscape.ariaHidden === "true" && afterEscape.inert &&
+          afterEscape.launcherExpanded === "false" && !afterEscape.activeInside &&
+          afterEscape.sequentiallyFocusableDescendants === 0 && afterEscape.meaningSurfaceClosed &&
+          (afterEscape.expectedInvokerAvailable
+            ? afterEscape.expectedInvokerFocused
+            : afterEscape.launcherFocused),
+        `${profile.name}: Escape did not close, inert, and restore focus truthfully: ${JSON.stringify(afterEscape)}`,
+      );
+      const readerContextAfterEscape = await waitForStableReaderContext(page);
+      assert(
+        readerContextAfterEscape === readerContextBeforeClear,
+        `${profile.name}: drawer Escape changed Reader route, scroll, highlight, phrase, canonical context, or history: ${JSON.stringify({
+          before: JSON.parse(readerContextBeforeClear),
+          after: JSON.parse(readerContextAfterEscape),
+        })}`,
+      );
+      await assertSurfaceClosed(page, profile, "post-Clear drawer Escape");
+      await assertWorkspaceUnchanged(removedSnapshot, "post-Clear drawer Escape");
+
+      stage = "closed-drawer Escape no-op";
+      const closedEscapeTarget = page.locator("#themeToggle");
+      await closedEscapeTarget.focus();
+      await closedEscapeTarget.press("Escape");
+      assert(
+        await closedEscapeTarget.evaluate((node) => document.activeElement === node) &&
+          await page.locator(".detail-pane").evaluate((pane) => (
+            !pane.classList.contains("visible") && pane.getAttribute("aria-hidden") === "true" &&
+            Boolean(pane.inert || pane.hasAttribute("inert"))
+          )),
+        `${profile.name}: Escape outside an already closed drawer changed focus or reopened the drawer`,
+      );
+      const readerContextAfterClosedEscape = await waitForStableReaderContext(page);
+      assert(
+        readerContextAfterClosedEscape === readerContextBeforeClear,
+        `${profile.name}: closed-drawer Escape changed Reader context: ${JSON.stringify({
+          before: JSON.parse(readerContextBeforeClear),
+          after: JSON.parse(readerContextAfterClosedEscape),
+        })}`,
+      );
+      clearEscapeEvidence = { afterClear, afterEscape, closedEscapeNoOp: true, readerContextPreserved: true };
+    } else {
+      stage = "closed-state Escape";
+      const closedEscapeTarget = page.locator("#themeToggle");
+      await closedEscapeTarget.focus();
+      await closedEscapeTarget.press("Escape");
+      assert(
+        await closedEscapeTarget.evaluate((node) => document.activeElement === node),
+        `${profile.name}: closed-state Escape moved focus`,
+      );
+      await assertSurfaceClosed(page, profile, "closed-state Escape");
+      await assertWorkspaceUnchanged(removedSnapshot, "closed-state Escape");
+      clearEscapeEvidence = { externalFocusUnchanged: true };
+    }
 
     stage = "console and request health";
     assert(failures.length === 0, `${profile.name}: application failures: ${JSON.stringify(failures)}`);
 
-    return { name: profile.name, assertions: profile.mobile ? 49 : 54 };
+    return { name: profile.name, assertions: profile.mobile ? 53 : 54, clearEscapeEvidence };
   } catch (error) {
     error.message = `${profile.name} at ${stage}: ${error.message}`;
     throw error;
@@ -798,6 +1019,9 @@ async function main() {
       status: "ok",
       profiles: completed.map(({ name }) => name),
       assertions: completed.reduce((total, profile) => total + profile.assertions, 0),
+      clearEscapeEvidence: Object.fromEntries(
+        completed.map(({ name, clearEscapeEvidence }) => [name, clearEscapeEvidence]),
+      ),
     }, null, 2));
   } finally {
     await browser.close();

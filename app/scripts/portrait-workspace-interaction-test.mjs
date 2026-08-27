@@ -129,8 +129,14 @@ function assertPortraitLayout(state, label) {
   assert(state.documentOverflow <= 1, `${label}: document has horizontal overflow`);
   assert.equal(state.iconButtons.length, 5, `${label}: compact detail-header control set is incomplete`);
   for (const button of state.iconButtons) {
-    assert(button.width <= 31 && button.height <= 31, `${label}: ${button.id} is still oversized: ${JSON.stringify(button)}`);
-    assert(button.fontSize <= 1, `${label}: ${button.id} still presents a text-sized label`);
+    assert(
+      button.height >= 30 && button.height <= 32 && button.width >= 30,
+      `${label}: ${button.id} is outside the approved compact target range: ${JSON.stringify(button)}`,
+    );
+    if (["compact", "standard", "expanded"].includes(button.id)) {
+      assert(button.width <= 32, `${label}: ${button.id} width control is oversized: ${JSON.stringify(button)}`);
+      assert(button.fontSize <= 1, `${label}: ${button.id} still presents a text-sized label`);
+    }
     assert(button.ariaLabel, `${label}: ${button.id} lacks an accessible label`);
   }
 }
