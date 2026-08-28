@@ -12,6 +12,8 @@
   --accent-dark: #174744;
   --red-letter: #9d2f2f;
   --token: #fde047;
+  --search-match-bg: #fde047;
+  --search-match-fg: #202124;
   --strong-fg: #27863a;
   --success: #059669;
   --warning: #d97706;
@@ -52,6 +54,8 @@
   --accent-dark: #174744;
   --red-letter: #9d2f2f;
   --token: #fde047;
+  --search-match-bg: #fde047;
+  --search-match-fg: #202124;
   --strong-fg: #27863a;
   --success: #059669;
   --warning: #d97706;
@@ -77,6 +81,8 @@
   --accent-dark: #70e8d9;
   --red-letter: #f87171;
   --token: #fbbf24;
+  --search-match-bg: #fbbf24;
+  --search-match-fg: #1a1a18;
   --strong-fg: #86efac;
   --success: #10b981;
   --warning: #f59e0b;
@@ -103,6 +109,8 @@
     --accent-dark: #70e8d9;
     --red-letter: #f87171;
     --token: #fbbf24;
+    --search-match-bg: #fbbf24;
+    --search-match-fg: #1a1a18;
     --strong-fg: #86efac;
     --success: #10b981;
     --warning: #f59e0b;
@@ -129,6 +137,8 @@
   --accent-dark: #174744;
   --red-letter: #9d2f2f;
   --token: #fde047;
+  --search-match-bg: #fde047;
+  --search-match-fg: #202124;
   --strong-fg: #27863a;
   --success: #059669;
   --warning: #d97706;
@@ -153,6 +163,8 @@
   --accent-dark: #70e8d9;
   --red-letter: #f87171;
   --token: #fbbf24;
+  --search-match-bg: #fbbf24;
+  --search-match-fg: #1a1a18;
   --strong-fg: #86efac;
   --success: #10b981;
   --warning: #f59e0b;
@@ -2326,8 +2338,8 @@ button:disabled {
 
 .search-result-text mark {
   border-radius: 3px;
-  background: var(--token);
-  color: var(--text);
+  background: var(--search-match-bg);
+  color: var(--search-match-fg);
   padding: 0 2px;
 }
 
@@ -4756,6 +4768,13 @@ button.user-data-summary-item {
     --red-letter: Mark;
     --token: Highlight;
     --shadow: none;
+  }
+
+  .search-result-text mark {
+    background: Highlight;
+    color: HighlightText;
+    outline: 1px solid HighlightText;
+    forced-color-adjust: none;
   }
 
   button,
