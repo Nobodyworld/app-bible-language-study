@@ -19,6 +19,13 @@ cross-references, Strong's lexicons, structured study marks, and portable
 browser-local data without requiring an account, hosted backend, analytics
 service, or remote application API.
 
+The default Stable profile preserves the existing experience and storage
+identities. An explicit local Lab profile (`?profile=lab` before the hash route)
+enables complete experimental diagnostics with isolated personal-data,
+notification, physical-registry, and physical-byte namespaces. Both profiles
+remain static, local-first, offline-capable browser products and use the same
+portable `bibleapp:user-data` version-3 contract.
+
 The app keeps the reader primary while deeper material remains close at hand.
 Reader words, references, source-language forms, morphology, transliteration
 marks, and related lexical entries reveal context through hover, keyboard focus,

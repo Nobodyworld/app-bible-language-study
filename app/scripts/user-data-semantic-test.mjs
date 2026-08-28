@@ -16,6 +16,7 @@ import {
 import { projectAssertionsToSemanticGraph } from "../src/semantic-graph.js";
 import {
   createUserDataExport,
+  configureUserStorageAdapter,
   getUserDataSummary,
   importUserData,
   normalizeAssertionStore,
@@ -27,6 +28,7 @@ import {
   setVerseTag,
   updateCustomTag,
 } from "../src/stores.js";
+import { createMemoryUserStorageAdapter } from "../src/platform/browser-user-storage.js";
 
 const appRoot = new URL("..", import.meta.url).pathname.replace(/^\/([A-Za-z]:\/)/, "$1");
 
@@ -48,6 +50,7 @@ function assertVerseTarget(target, bookId, chapter, verse) {
 }
 
 async function main() {
+  configureUserStorageAdapter(createMemoryUserStorageAdapter());
   const semanticTags = await readJson(join(appRoot, "data", "semantic", "tag-definitions.json"));
   const targetSchema = await readJson(join(appRoot, "schemas", "target.schema.json"));
   const assertionSchema = await readJson(join(appRoot, "schemas", "assertion.schema.json"));
@@ -335,6 +338,7 @@ async function main() {
       },
     },
   };
+  configureUserStorageAdapter(createMemoryUserStorageAdapter());
   const mergeV3State = {};
   setVerseDraft(mergeV3State, "john:1:4", "Local draft", { expected_revision: 0 });
   const mergeV3Summary = importUserData(mergeV3State, legacyV3Payload, "merge");

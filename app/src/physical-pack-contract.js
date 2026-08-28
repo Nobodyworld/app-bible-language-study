@@ -119,12 +119,14 @@ export function canonicalAggregateFrame(entries) {
   return chunks.join("");
 }
 
-export function physicalPackCacheName(packId, packVersion, manifestSha256, phase = "active") {
+export function physicalPackCacheName(packId, packVersion, manifestSha256, phase = "active", prefix = "bibleapp-pack:") {
   const normalizedPackId = normalizePackIdentifier(packId, "packId");
   const normalizedVersion = normalizePackIdentifier(packVersion, "packVersion");
   const normalizedPhase = normalizePackIdentifier(phase, "phase");
   const digest = normalizeSha256(manifestSha256, "manifestSha256").slice("sha256:".length, 23);
-  return `bibleapp-pack:${normalizedPhase}:${normalizedPackId}:${normalizedVersion}:${digest}`;
+  const normalizedPrefix = String(prefix || "");
+  if (!/^bibleapp-pack:(?:[a-z0-9._-]+:)?$/.test(normalizedPrefix)) fail("physical pack cache prefix is invalid.");
+  return `${normalizedPrefix}${normalizedPhase}:${normalizedPackId}:${normalizedVersion}:${digest}`;
 }
 
 function packageIdentity(value, label = "package_identity") {

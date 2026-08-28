@@ -63,10 +63,10 @@ assert(
 );
 assert(
   /diagnostics\.className = "advanced-diagnostics"/.test(userDataView) &&
-    !/diagnostics\.open\s*=\s*true/.test(userDataView) &&
+    /if \(profile\?\.isLab\) \{[\s\S]*?diagnostics\.open\s*=\s*true/.test(userDataView) &&
     /renderJobsDiagnostics/.test(userDataView) &&
     /payload\.textContent = JSON\.stringify/.test(jobsView),
-  "Technical job controls must be text-only and nested in collapsed-by-default diagnostics.",
+  "Technical job controls must be text-only, collapsed by default in Stable, and expanded only in Lab.",
 );
 assert(
   /Refresh Study Marks index/.test(userDataView) &&

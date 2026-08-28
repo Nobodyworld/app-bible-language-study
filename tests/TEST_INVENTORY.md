@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-08-27
+Reviewed: 2026-08-28
 
 ## Authority
 
@@ -12,9 +12,9 @@ remove, or reclassify a maintained test.
 
 | Command | Current composition |
 |---|---|
-| `npm run test:static` | Repository integrity and data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
+| `npm run test:static` | Repository integrity, feature registry/profile/platform contracts, data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
 | `npm run test:domain` | Job, logical package, physical-pack contract and lifecycle, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
-| `npm run test:browser` | Desktop rendered interaction, Search-match contrast, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks/Meaning, and physical-pack Edge lifecycle flows. |
+| `npm run test:browser` | Desktop rendered interaction, Stable/Lab/disabled-profile behavior, Search-match contrast, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks/Meaning, and physical-pack Edge lifecycle flows. |
 | `npm run test:browser:mobile` | The maintained interaction journey in mobile mode. |
 | `npm test` | Static, desktop-browser, and mobile-browser suites. |
 | `npm run audit` | Public package/file audit through `app/tools/publish-audit.mjs`. |
@@ -30,6 +30,10 @@ composition above:
 | `npm run audit:health` | `tests/integrity.mjs`. |
 | `npm run test:integrity` | `tests/integrity.mjs`. |
 | `npm run test:capabilities` | `tests/capabilities.mjs`. |
+| `npm run test:feature-registry` | `tests/feature-registry.mjs`. |
+| `npm run test:feature-profiles` | `tests/feature-profiles.mjs`. |
+| `npm run test:platform-contracts` | `tests/platform-contracts.mjs`. |
+| `npm run test:feature-profile-browser` | Stable, Lab, unknown-profile, isolation, and disabled-feature behavior in Edge. |
 | `npm run test:analysis` | `tests/analysis.mjs`. |
 | `npm run test:interlinear` | `tests/interlinear.mjs`. |
 | `npm run test:tags` | `tests/tags.mjs`. |
@@ -55,6 +59,9 @@ order:
 | `tests/integrity.mjs` | Tracked package, manifest, path, and bundled-data integrity. |
 | `tests/serve-app.mjs` | Static server behavior and application delivery boundaries. |
 | `tests/run.mjs` | Core runtime-data and application-source contracts. |
+| `tests/feature-registry.mjs` | Complete static feature inventory, lifecycle values, dependencies, ownership, profile closure, test ownership, and actionable invalid-fixture diagnostics. |
+| `tests/feature-profiles.mjs` | Deterministic Stable/Lab resolution, recovery/compatibility access, unknown fallback, disabled-feature closure, unchanged Stable identities, and isolated Lab identities. |
+| `tests/platform-contracts.mjs` | Platform shape, user-storage isolation, profile-scoped notifications, browser file/data operations, digest/source/estimate services, profile-scoped physical registry identity, and explicit byte-store operations. |
 | `tests/capabilities.mjs` | Capability declarations and availability behavior. |
 | `tests/analysis.mjs` | Generated analysis data and manifest contracts. |
 | `tests/interlinear.mjs` | Internal interlinear records, token resolution, marked Greek glyphs, and Hebrew analysis behavior. |
@@ -116,6 +123,7 @@ entry.
 | `app/scripts/word-meaning-focus-test.mjs` | Desktop and mobile | Contained Meaning and Study Marks overlay coordination, exact-target save/remove, data-neutral dismissal, lifecycle cleanup, and focus restoration. |
 | `app/scripts/study-workspace-interaction-test.mjs` | Desktop, intermediate, mobile, light/dark, forced colors, and reduced motion | Width switching/persistence/storage failure, semantic reader anchors, independent scroll ownership, contained tools, lifecycle/history/selection preservation, Clear behavior with browser-owned Reader navigation availability, responsive header container bands at 320px and 420px, exact 773px title containment, 280–760px Study-panel sweeps, per-word geometry, focus order/clipping, responsive bounds, and browser-error/overflow checks. |
 | `app/scripts/physical-pack-interaction-test.mjs` | Edge desktop, portrait, narrow, mobile-width, mobile-device, light/dark, and reduced motion | Distribution-aware fallback and strict `incompatible_version`; real persisted incompatible active records; compatible rollback recovery; simultaneous update/rollback state and actions after reload; update and rollback context preservation; storage plans; plan/cancel; install/offline reads; delayed `startup_verifying` live transition; action suppression; mounted-node-only updates; corruption/repair; invalid rollback loss; removal fallback; exact reader/detail context; containment; and zero console/page/request/HTTP errors. |
+| `app/scripts/feature-profile-interaction-test.mjs` | Edge desktop plus deterministic disabled-feature viewport | Stable default/UI/Search/recovery access; Lab identity, expanded diagnostics, separate user/notification/physical namespaces, version-3 imports, bidirectional isolation across reloads, unknown-profile fallback, disabled-control/data-request ownership, Reader preservation, and browser health. |
 
 ## Historical July 1 Promotion and Retirement Record
 

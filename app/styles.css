@@ -366,6 +366,25 @@ button:disabled {
   line-height: 1.2;
 }
 
+.profile-identity {
+  display: block;
+  margin-top: 0.1rem;
+  color: var(--muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  line-height: 1.15;
+}
+
+.lab-data-warning {
+  margin: 0 0 1rem;
+  padding: 0.7rem 0.8rem;
+  border: 1px solid var(--line);
+  border-radius: 0.55rem;
+  background: var(--panel-alt);
+  color: var(--text);
+}
+
 .reader-controls {
   display: flex;
   align-items: end;
@@ -947,6 +966,10 @@ button:disabled {
   color: var(--muted);
   font-size: 12px;
   font-weight: 700;
+}
+
+.profile-identity[hidden] {
+  display: none;
 }
 
 .chapter-nav-button + .chapter-nav-button {

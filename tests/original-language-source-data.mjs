@@ -55,8 +55,7 @@ assert.equal(wlco.chapters["23"]["1"], "מזמור לדוד יהוה רעי לא
 assert(/[\u0370-\u03ff\u1f00-\u1fff]/u.test(nestle.chapters["1"]["1"]));
 assert(/[\u0370-\u03ff\u1f00-\u1fff]/u.test(tr94.chapters["1"]["1"]));
 
-const originalFetch = globalThis.fetch;
-globalThis.fetch = async (path) => {
+const fixtureFetch = async (path) => {
   const match = String(path).match(/verses\/(wlc|wlco|nestle|tr94)\/(psalms|john|missing)\.json/);
   if (!match || match[2] === "missing" || (match[2] === "psalms" && ["nestle", "tr94"].includes(match[1]))) {
     return { ok: false, json: async () => ({}) };
@@ -65,7 +64,8 @@ globalThis.fetch = async (path) => {
   return { ok: true, json: async () => book };
 };
 
-const { loadOriginalSourceTexts } = await import("../app/src/data-service.js");
+const { configureDataAdapter, loadOriginalSourceTexts } = await import("../app/src/data-service.js");
+configureDataAdapter({ fetchResponse: fixtureFetch });
 const hebrew = await loadOriginalSourceTexts({ manifest, bookId: "psalms", chapter: 23 }, "hebrew", 1);
 const greek = await loadOriginalSourceTexts({ manifest, bookId: "john", chapter: 1 }, "greek", 1);
 const absentGreek = await loadOriginalSourceTexts({ manifest, bookId: "psalms", chapter: 23 }, "greek", 1);
@@ -75,6 +75,5 @@ assert.deepEqual(greek.map((source) => source.id), ["nestle", "tr94"]);
 assert.equal(greek[0].label, "Nestle Greek New Testament 1904");
 assert.equal(greek[1].label, "Scrivener’s Textus Receptus 1894");
 assert.deepEqual(absentGreek, []);
-globalThis.fetch = originalFetch;
 
 console.log(JSON.stringify({ status: "ok", assertions: 37 }, null, 2));

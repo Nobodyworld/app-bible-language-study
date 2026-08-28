@@ -45,15 +45,16 @@ function withTimeout(promise, message) {
 }
 
 export class BrowserPhysicalPackRegistry {
-  constructor(indexedDb = globalThis.indexedDB) {
+  constructor(indexedDb = globalThis.indexedDB, options = {}) {
     this.indexedDb = indexedDb;
+    this.dbName = options.dbName || PHYSICAL_PACK_DB_NAME;
     this.database = null;
   }
 
   async open() {
     if (this.database) return this;
     if (!this.indexedDb) throw new Error("IndexedDB is unavailable for the physical-pack registry.");
-    const request = this.indexedDb.open(PHYSICAL_PACK_DB_NAME, PHYSICAL_PACK_DB_VERSION);
+    const request = this.indexedDb.open(this.dbName, PHYSICAL_PACK_DB_VERSION);
     request.onupgradeneeded = () => {
       const database = request.result;
       if (!database.objectStoreNames.contains(RECORD_STORE)) {
@@ -187,5 +188,5 @@ export class MemoryPhysicalPackRegistry {
 
 export function createPhysicalPackRegistry(options = {}) {
   if (options.memory) return new MemoryPhysicalPackRegistry(options.seed);
-  return new BrowserPhysicalPackRegistry(options.indexedDb);
+  return new BrowserPhysicalPackRegistry(options.indexedDb, { dbName: options.dbName });
 }

@@ -9,6 +9,7 @@ import {
   loadReaderCoreBookData,
   translationCanLoadBook,
   configurePhysicalPackResolver,
+  configureDataAdapter,
   invalidatePhysicalPackData,
 } from "./src/data-service.js?v=pr13-live-qa-20260711e";
 import { createPhysicalPackManager } from "./src/physical-pack-manager.js";
@@ -60,6 +61,18 @@ import {
   bindStudyWorkspaceWidthControls,
   initializeStudyWorkspaceWidth,
 } from "./src/study-workspace-width.js";
+import { createBrowserPlatform } from "./src/platform/browser-platform.js";
+import { featureEnabled } from "./src/feature-profiles.js";
+import { applyFeatureProfileToDocument } from "./src/feature-ui.js";
+
+const platform = createBrowserPlatform({ applicationVersion: "1.0.0" });
+configureDataAdapter(platform.data);
+applyFeatureProfileToDocument(document, platform.profile);
+const storageIdentity = platform.userStorage.status().identities;
+document.documentElement.dataset.userStorageDatabase = storageIdentity.userDatabase;
+document.documentElement.dataset.notificationChannel = storageIdentity.notificationChannel;
+document.documentElement.dataset.physicalRegistryDatabase = storageIdentity.physicalRegistryDatabase;
+document.documentElement.dataset.physicalBytePrefix = storageIdentity.physicalBytePrefix;
 
 const studyWorkspaceWidthControls = [
   ...document.querySelectorAll("[data-study-workspace-width-mode]"),
@@ -70,6 +83,8 @@ initializeStudyWorkspaceWidth({
 });
 
 const state = {
+  platform,
+  featureProfile: platform.profile,
   manifest: null,
   translationId: DEFAULT_ROUTE.translationId,
   bookId: DEFAULT_ROUTE.bookId,
@@ -105,6 +120,7 @@ const state = {
 
 const READER_DATASETS = {
   crossrefs: {
+    featureId: "cross-references",
     capabilityId: "crossrefs",
     emptyStateKey: "crossrefs",
     label: "Cross-reference",
@@ -114,6 +130,7 @@ const READER_DATASETS = {
     load: loadBookCrossrefs,
   },
   outline: {
+    featureId: "outlines",
     capabilityId: "outlines",
     emptyStateKey: "outlines",
     label: "Outline",
@@ -123,6 +140,7 @@ const READER_DATASETS = {
     load: loadBookOutline,
   },
   interlinear: {
+    featureId: "language-study",
     capabilityId: "interlinear",
     emptyStateKey: "interlinear",
     label: "Language Study",
@@ -194,7 +212,7 @@ function readerDatasetState(key) {
 
 function readerDatasetCanLoad(key) {
   const config = READER_DATASETS[key];
-  if (!config || !canUseCapability(config.capabilityId)) return false;
+  if (!config || !featureEnabled(state.featureProfile, config.featureId) || !canUseCapability(config.capabilityId)) return false;
   return readerDatasetState(key).status !== "unavailable";
 }
 
@@ -212,7 +230,7 @@ function synchronizeReaderDatasetControls({ generation, bookId, translationId })
 
 async function ensureReaderDataset(key) {
   const config = READER_DATASETS[key];
-  if (!config || !canUseCapability(config.capabilityId)) {
+  if (!config || !featureEnabled(state.featureProfile, config.featureId) || !canUseCapability(config.capabilityId)) {
     return { status: "unavailable", data: null };
   }
 
@@ -452,6 +470,8 @@ function restoreReaderHighlightFromContext(context) {
 
 const ctx = {
   state,
+  platform,
+  isFeatureEnabled: (featureId) => featureEnabled(state.featureProfile, featureId),
   clearReaderHighlight,
   createReferenceButton,
   currentReference,
@@ -556,27 +576,31 @@ detailViews.showCrossrefs = (reference, record, options = {}) =>
 
 detailViews.showDefaultVerseStudy = async (reference, verse, options = {}) => {
   const activation = captureReaderActivation();
-  const crossrefResult = await loadReaderDatasetForActivation("crossrefs", activation);
-  if (crossrefResult.status === "stale") return;
-  const crossRecord = state.crossrefs?.verses?.[`${state.chapter}:${verse}`] || null;
-  if (crossrefResult.status === "loaded" && crossRecord) {
-    return showLoadedCrossrefs(reference, crossRecord, {
-      ...options,
-      detailIntent: activation.detailIntent,
-    });
+  if (featureEnabled(state.featureProfile, "cross-references")) {
+    const crossrefResult = await loadReaderDatasetForActivation("crossrefs", activation);
+    if (crossrefResult.status === "stale") return;
+    const crossRecord = state.crossrefs?.verses?.[`${state.chapter}:${verse}`] || null;
+    if (crossrefResult.status === "loaded" && crossRecord) {
+      return showLoadedCrossrefs(reference, crossRecord, {
+        ...options,
+        detailIntent: activation.detailIntent,
+      });
+    }
   }
 
-  const interlinearResult = await loadReaderDatasetForActivation("interlinear", activation);
-  if (interlinearResult.status === "stale") return;
-  const interlinearTokens = state.interlinear?.chapters?.[state.chapter]?.[verse];
-  if (interlinearResult.status === "loaded" && Array.isArray(interlinearTokens) && interlinearTokens.length) {
-    return showLoadedInterlinearVerse(reference, verse, {
-      ...options,
-      detailIntent: activation.detailIntent,
-    });
+  if (featureEnabled(state.featureProfile, "language-study")) {
+    const interlinearResult = await loadReaderDatasetForActivation("interlinear", activation);
+    if (interlinearResult.status === "stale") return;
+    const interlinearTokens = state.interlinear?.chapters?.[state.chapter]?.[verse];
+    if (interlinearResult.status === "loaded" && Array.isArray(interlinearTokens) && interlinearTokens.length) {
+      return showLoadedInterlinearVerse(reference, verse, {
+        ...options,
+        detailIntent: activation.detailIntent,
+      });
+    }
   }
 
-  if (canUseCapability("commentary")) {
+  if (featureEnabled(state.featureProfile, "commentary") && canUseCapability("commentary")) {
     return detailViews.showCommentary(reference, verse, {
       ...options,
       detailIntent: activation.detailIntent,
@@ -952,10 +976,11 @@ function syncScopeControls() {
 
 function syncToolButtons() {
   const tools = [
-    [els.showSearch, "search", null, "Search this book", true],
-    [els.showOutline, "outlines", "outline", "Book outline", Boolean(state.outline)],
+    [els.showSearch, "search", "search", null, "Search this book", true],
+    [els.showOutline, "outlines", "outlines", "outline", "Book outline", Boolean(state.outline)],
     [
       els.showInterlinear,
+      "language-study",
       "interlinear",
       "interlinear",
       "Language Study",
@@ -964,8 +989,11 @@ function syncToolButtons() {
       ),
     ],
   ];
-  tools.forEach(([button, key, datasetKey, fallbackTitle, loadedDataAvailable]) => {
+  tools.forEach(([button, featureId, key, datasetKey, fallbackTitle, loadedDataAvailable]) => {
     if (!button) return;
+    const enabled = featureEnabled(state.featureProfile, featureId);
+    button.hidden = !enabled;
+    if (!enabled) return;
     const dataset = datasetKey ? readerDatasetState(datasetKey) : null;
     const dataAvailable =
       !dataset || dataset.status === "idle" || dataset.status === "loading" || dataset.status === "error"
@@ -1038,7 +1066,8 @@ function showHomePage(options = {}) {
     ["Study Marks", runWithReaderData(detailViews.showTagIndex)],
     ["My Data", runWithReaderData(detailViews.showMyData)],
   ];
-  actions.forEach(([label, action]) => {
+  const actionFeatures = { Search: "search", "Study Marks": "study-marks", "My Data": "my-data" };
+  actions.filter(([label]) => !actionFeatures[label] || featureEnabled(state.featureProfile, actionFeatures[label])).forEach(([label, action]) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "home-action";
@@ -1472,6 +1501,7 @@ function bindEvents() {
   document.addEventListener("keydown", (event) => {
     // Ctrl+K or Cmd+K to open search
     if ((event.ctrlKey || event.metaKey) && event.key === "k") {
+      if (!featureEnabled(state.featureProfile, "search")) return;
       event.preventDefault();
       ctx.studyContext = {};
       detailViews.showSearch();
@@ -1626,7 +1656,7 @@ function bindEvents() {
 }
 
 async function init() {
-  await initStores(state);
+  await initStores(state, platform.userStorage);
   listenForUserDataChanges(state, () => {
     setStatus("User data changed in another tab");
   });
@@ -1634,22 +1664,24 @@ async function init() {
   try {
     state.manifest = await loadManifest();
     [state.packageManifest, state.distributionManifest] = await Promise.all([
-      fetch("./data/package-manifest.json").then((response) => {
-        if (!response.ok) throw new Error("Package manifest could not be loaded.");
-        return response.json();
-      }),
-      fetch("./data/distribution-manifest.json").then((response) => {
-        if (!response.ok) throw new Error("Distribution manifest could not be loaded.");
-        return response.json().then(validateDistributionManifest);
-      }),
+      platform.data.fetchJson("./data/package-manifest.json"),
+      platform.data.fetchJson("./data/distribution-manifest.json").then(validateDistributionManifest),
     ]);
     try {
       let verificationDelayMs = Number(globalThis.__BIBLEAPP_TEST_PHYSICAL_PACK_VERIFICATION_DELAY_MS__ || 0);
       state.physicalPackManager = createPhysicalPackManager({
+        registry: platform.physicalPacks.registry,
+        byteStore: platform.physicalPacks.bytes,
+        sourceLoader: platform.physicalPacks.source,
+        digestService: platform.physicalPacks.digest,
+        storageEstimateService: platform.physicalPacks.storageEstimate,
+        cancellation: platform.physicalPacks.cancellation,
+        cacheNamePrefix: platform.physicalPacks.byteStoreIdentityPrefix,
         packageManifest: state.packageManifest,
         distributionManifest: state.distributionManifest,
-        appVersion: "1.0.0",
-        baseUrl: new URL("./", document.baseURI),
+        appVersion: platform.environment.applicationVersion,
+        baseUrl: platform.physicalPacks.baseUrl,
+        clock: platform.physicalPacks.clock,
         beforeStoredPackVerification: verificationDelayMs > 0 && Number.isFinite(verificationDelayMs)
           ? async () => {
             const delay = verificationDelayMs;

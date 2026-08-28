@@ -20,6 +20,64 @@ across ES modules in `app/src/`.
 - User-created state is stored in browser storage and can be exported/imported
   as JSON.
 
+## Static Features and Profiles
+
+`app/src/feature-registry.js` is the pure-data feature authority. Descriptors
+declare lifecycle (`core`, `stable`, `lab`, `frozen`, or
+`compatibility_only`), dependencies, capabilities, physical packs, providers,
+UI surfaces and exclusive controls, storage namespaces, portable-data
+participation, unavailable behavior, cleanup/migration authority, and focused
+test owners. Validation rejects duplicate IDs/control owners, invalid values,
+missing or cyclic dependencies, incomplete profiles, experimental dependencies
+from Core, ordinary compatibility-only UI, and missing test ownership.
+
+`app/src/feature-profiles.js` deterministically resolves Stable and Lab. Stable
+is the default and exposes Core/Stable features ordinarily while retaining
+frozen/Lab diagnostics as collapsed recovery access. Lab is explicit through
+`?profile=lab`, includes Core and Stable, and exposes the experimental controls
+against isolated state. Unknown profile values fall back to Stable with a
+testable diagnostic. Interpretation polls remain compatibility-only and own no
+ordinary UI.
+
+## Platform Composition
+
+Before:
+
+```text
+browser globals consumed directly by stores/views/data/manager
+```
+
+After:
+
+```text
+app.js creates browser platform and resolves profile
+  -> user storage + scoped notifications
+  -> file operations
+  -> static data source
+  -> physical registry + physical byte store + source/digest/estimate/cancellation
+domain and feature logic consume explicit contracts
+```
+
+`app/src/platform/browser-platform.js` is the browser composition root for
+`platform.kind`, `platform.profile`, `platform.environment`,
+`platform.userStorage`, `platform.files`, `platform.data`,
+`platform.physicalPacks`, and `platform.notifications`. Environment paths that
+do not exist in a browser are `null`; no fake filesystem path, shell/process
+access, or unrestricted network service is exposed.
+
+`stores.js` retains normalization, conflicts, defaults, user-data version 3,
+merge/replace, recovery semantics, summaries, and application mutations. The
+browser user-storage adapter owns IndexedDB, localStorage fallback, identity,
+timeouts, migration, structured failure state, and profile-scoped advisory
+notifications. The My Data view consumes the file service rather than Blob,
+File, object-URL, or Clipboard globals. `data-service.js` retains logical
+parsed/pending caches, physical source identity, and structured fallback while
+the browser data adapter performs actual static-asset fetches.
+
+The platform contract is ready for a later desktop composition adapter, but no
+desktop shell, native filesystem pack, SQLite database, or desktop application
+is implemented here.
+
 ## UI Ownership
 
 - `app/src/panel-context-model.js` derives scope order and tool ownership.
@@ -73,12 +131,14 @@ for:
 - verified active-pack identity;
 - separation of bundled package authority from managed physical-pack authority.
 
-`app/src/physical-pack-registry.js` owns the independent
-`bibleapp-physical-packs` IndexedDB database. `app/src/physical-pack-manager.js`
+`app/src/physical-pack-registry.js` owns the profile-scoped browser registry
+implementation; Stable retains the independent `bibleapp-physical-packs`
+IndexedDB database. `app/src/physical-pack-manager.js`
 owns catalog refresh, dependency planning, verified staging, atomic activation,
 update, repair, retained rollback, removal, cleanup, startup reconciliation,
 and orphan-cache classification. Staging, active, and rollback data use
-separate immutable Cache Storage names. Active and rollback claims are verified
+separate immutable names through an explicit physical byte-store contract; the
+browser implementation wraps Cache Storage. Active and rollback claims are verified
 independently; invalid rollback metadata is removed without invalidating a
 verified active copy. Persisted catalogs and manifests are revalidated against
 the current schema, package identity, semantic app range, source policy,

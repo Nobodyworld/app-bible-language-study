@@ -11,6 +11,13 @@ import {
   validatePhysicalPackManifest,
 } from "./physical-pack-contract.js";
 import { createPhysicalPackRegistry } from "./physical-pack-registry.js";
+import {
+  createCacheStoragePhysicalByteStore,
+  createCancellationService,
+  createFetchSourceService,
+  createStorageEstimateService,
+  createWebDigestService,
+} from "./platform/physical-services.js";
 
 const CACHE_PREFIX = "bibleapp-pack:";
 const OPTIONAL_PATH_PACKS = Object.freeze([
@@ -45,19 +52,6 @@ function stableJson(value) {
   return `${JSON.stringify(value, null, 2)}\n`;
 }
 
-function bytesToHex(bytes) {
-  return [...new Uint8Array(bytes)].map((value) => value.toString(16).padStart(2, "0")).join("");
-}
-
-async function sha256Bytes(bytes, cryptoImpl = globalThis.crypto) {
-  if (!cryptoImpl?.subtle) throw new Error("SHA-256 verification is unavailable in this browser.");
-  return `sha256:${bytesToHex(await cryptoImpl.subtle.digest("SHA-256", bytes))}`;
-}
-
-async function sha256Text(value, cryptoImpl = globalThis.crypto) {
-  return sha256Bytes(new TextEncoder().encode(value), cryptoImpl);
-}
-
 function responseMediaType(response) {
   return String(response.headers.get("content-type") || "application/json").split(";", 1)[0].toLowerCase();
 }
@@ -73,10 +67,6 @@ function samePackageIdentity(left, right) {
     left.package_id === right.package_id &&
     left.content_sha256 === right.content_sha256
   );
-}
-
-function ensureNotAborted(signal) {
-  if (signal?.aborted) throw new DOMException("Physical-pack operation was cancelled.", "AbortError");
 }
 
 function pathPackId(path) {
@@ -106,13 +96,17 @@ export class PhysicalPackError extends Error {
 export class PhysicalPackManager {
   constructor(options = {}) {
     this.registry = options.registry || createPhysicalPackRegistry({ indexedDb: options.indexedDb });
-    this.cacheStorage = options.cacheStorage || globalThis.caches;
-    this.fetchImpl = options.fetchImpl || globalThis.fetch?.bind(globalThis);
-    this.cryptoImpl = options.cryptoImpl || globalThis.crypto;
-    this.storage = options.storage || globalThis.navigator?.storage || null;
+    this.byteStore = options.byteStore || createCacheStoragePhysicalByteStore(options.cacheStorage, {
+      ResponseImpl: options.ResponseImpl,
+    });
+    this.sourceLoader = options.sourceLoader || createFetchSourceService(options.fetchImpl);
+    this.digestService = options.digestService || (options.cryptoImpl ? createWebDigestService(options.cryptoImpl) : null);
+    this.storageEstimateService = options.storageEstimateService || createStorageEstimateService(options.storage);
+    this.cancellation = options.cancellation || createCancellationService();
+    this.cachePrefix = options.cacheNamePrefix || CACHE_PREFIX;
     this.beforeStoredPackVerification = options.beforeStoredPackVerification || null;
     this.clock = options.clock || Date.now;
-    this.baseUrl = new URL(options.baseUrl || globalThis.document?.baseURI || globalThis.location?.href || "http://localhost/");
+    this.baseUrl = new URL(options.baseUrl || "http://localhost/");
     this.packageManifest = options.packageManifest || null;
     this.distributionManifest = options.distributionManifest
       ? validateDistributionManifest(options.distributionManifest)
@@ -133,8 +127,8 @@ export class PhysicalPackManager {
   }
 
   async initialize() {
-    if (!this.cacheStorage || !this.fetchImpl) {
-      throw new Error("Cache Storage and fetch are required for physical-pack management.");
+    if (!this.byteStore || !this.sourceLoader || !this.digestService) {
+      throw new Error("Physical byte storage, source loading, and SHA-256 services are required for physical-pack management.");
     }
     await this.registry.open();
     this.mode = await this.registry.getMeta("physical_data_mode", PHYSICAL_DATA_MODES.bundled);
@@ -197,7 +191,7 @@ export class PhysicalPackManager {
       records: clone(this.records),
       history: clone(this.history),
       orphan_caches: [...this.orphanCaches],
-      storage_supported: Boolean(this.cacheStorage && this.registry),
+      storage_supported: Boolean(this.byteStore && this.registry),
       distribution: clone(this.distributionManifest),
     });
   }
@@ -263,11 +257,11 @@ export class PhysicalPackManager {
   async refreshCatalog(url = this.catalogUrl, options = {}) {
     if (!url) throw new PhysicalPackError("load_failed", "Enter a physical-pack catalog URL before refreshing.");
     const catalogUrl = this.sameOriginUrl(url, this.baseUrl, "Physical-pack catalog URL");
-    const response = await this.fetchImpl(catalogUrl, { cache: "no-store", signal: options.signal });
+    const response = await this.sourceLoader.fetch(catalogUrl, { cache: "no-store", signal: options.signal });
     assertResponse(response, "Physical-pack catalog");
     const bytes = await response.arrayBuffer();
     if (options.expectedSha256) {
-      const actual = await sha256Bytes(bytes, this.cryptoImpl);
+      const actual = await this.digestService.sha256(bytes);
       if (actual !== normalizeSha256(options.expectedSha256)) {
         throw new PhysicalPackError("corrupt", "Physical-pack catalog digest does not match the expected SHA-256.");
       }
@@ -320,7 +314,7 @@ export class PhysicalPackManager {
 
   async storageEstimate() {
     try {
-      const estimate = await this.storage?.estimate?.();
+      const estimate = await this.storageEstimateService.estimate();
       const usage = Number(estimate?.usage);
       const quota = Number(estimate?.quota);
       const known = Number.isFinite(usage) && usage >= 0 && Number.isFinite(quota) && quota > 0;
@@ -388,10 +382,10 @@ export class PhysicalPackManager {
 
   async loadManifest(entry, signal) {
     const manifestUrl = this.sameOriginUrl(entry.manifest_path, this.catalogUrl, `Manifest URL for ${entry.pack_id}`);
-    const response = await this.fetchImpl(manifestUrl, { cache: "no-store", signal });
+    const response = await this.sourceLoader.fetch(manifestUrl, { cache: "no-store", signal });
     assertResponse(response, `Manifest for ${entry.pack_id}`);
     const bytes = await response.arrayBuffer();
-    const digest = await sha256Bytes(bytes, this.cryptoImpl);
+    const digest = await this.digestService.sha256(bytes);
     if (digest !== entry.manifest_sha256) {
       throw new PhysicalPackError("corrupt", `Manifest digest for ${entry.pack_id} does not match the catalog.`);
     }
@@ -400,7 +394,7 @@ export class PhysicalPackManager {
       throw new PhysicalPackError("corrupt", `Manifest identity for ${entry.pack_id} does not match the catalog.`);
     }
     this.assertCompatibility(manifest, `Manifest for ${entry.pack_id}`);
-    const aggregate = await sha256Text(canonicalAggregateFrame(manifest.files), this.cryptoImpl);
+    const aggregate = await this.digestService.sha256(new TextEncoder().encode(canonicalAggregateFrame(manifest.files)));
     if (aggregate !== manifest.aggregate_sha256) {
       throw new PhysicalPackError("corrupt", `Manifest aggregate digest for ${entry.pack_id} is invalid.`);
     }
@@ -426,13 +420,13 @@ export class PhysicalPackManager {
     if (claim.aggregateSha256 && manifest.aggregate_sha256 !== claim.aggregateSha256) {
       throw new PhysicalPackError("corrupt", `${label} aggregate identity does not match its persisted registry claim.`);
     }
-    if (claim.manifestSha256 && await sha256Text(stableJson(manifest), this.cryptoImpl) !== claim.manifestSha256) {
+    if (claim.manifestSha256 && await this.digestService.sha256(new TextEncoder().encode(stableJson(manifest))) !== claim.manifestSha256) {
       throw new PhysicalPackError("corrupt", `${label} persisted manifest digest is invalid.`);
     }
-    if (await sha256Text(stableJson(manifest.files), this.cryptoImpl) !== manifest.inventory_sha256) {
+    if (await this.digestService.sha256(new TextEncoder().encode(stableJson(manifest.files))) !== manifest.inventory_sha256) {
       throw new PhysicalPackError("corrupt", `${label} manifest inventory digest is invalid.`);
     }
-    if (await sha256Text(canonicalAggregateFrame(manifest.files), this.cryptoImpl) !== manifest.aggregate_sha256) {
+    if (await this.digestService.sha256(new TextEncoder().encode(canonicalAggregateFrame(manifest.files))) !== manifest.aggregate_sha256) {
       throw new PhysicalPackError("corrupt", `${label} manifest aggregate digest is invalid.`);
     }
     return manifest;
@@ -440,7 +434,7 @@ export class PhysicalPackManager {
 
   async install(packId, options = {}) {
     const plan = await this.plan(packId, options.action || "install");
-    ensureNotAborted(options.signal);
+    this.cancellation.throwIfAborted(options.signal);
     this.assertStorageCapacity(plan);
     for (const entry of this.installationOrder(packId)) {
       const current = await this.registry.getRecord(entry.pack_id);
@@ -462,7 +456,7 @@ export class PhysicalPackManager {
     let stagingCacheName = null;
     let activeCacheName = null;
     try {
-      ensureNotAborted(signal);
+      this.cancellation.throwIfAborted(signal);
       const { manifest, manifestUrl } = await this.loadManifest(entry, signal);
       for (const dependency of manifest.dependencies) {
         const record = await this.registry.getRecord(dependency);
@@ -470,9 +464,9 @@ export class PhysicalPackManager {
           throw new PhysicalPackError("dependency_missing", `${entry.pack_id} requires active pack ${dependency}.`);
         }
       }
-      stagingCacheName = physicalPackCacheName(entry.pack_id, entry.pack_version, entry.manifest_sha256, `staging-${operation}`);
-      activeCacheName = physicalPackCacheName(entry.pack_id, entry.pack_version, entry.manifest_sha256, `active-${operation}`);
-      const stagingCache = await this.cacheStorage.open(stagingCacheName);
+      stagingCacheName = physicalPackCacheName(entry.pack_id, entry.pack_version, entry.manifest_sha256, `staging-${operation}`, this.cachePrefix);
+      activeCacheName = physicalPackCacheName(entry.pack_id, entry.pack_version, entry.manifest_sha256, `active-${operation}`, this.cachePrefix);
+      await this.byteStore.createStore(stagingCacheName);
       const stagingRecord = {
         ...createPhysicalRegistryRecord({
           pack_id: entry.pack_id,
@@ -504,23 +498,23 @@ export class PhysicalPackManager {
       let verifiedBytes = 0;
       let verifiedFiles = 0;
       for (const file of manifest.files) {
-        ensureNotAborted(signal);
+        this.cancellation.throwIfAborted(signal);
         const artifactUrl = this.sameOriginUrl(`files/${file.path}`, manifestUrl, `Artifact URL for ${file.path}`);
-        const response = await this.fetchImpl(artifactUrl, { cache: "no-store", signal });
+        const response = await this.sourceLoader.fetch(artifactUrl, { cache: "no-store", signal });
         assertResponse(response, file.path);
         const bytes = await response.arrayBuffer();
         if (bytes.byteLength !== file.bytes) {
           throw new PhysicalPackError("corrupt", `${file.path} has an unexpected byte length.`);
         }
-        const digest = await sha256Bytes(bytes, this.cryptoImpl);
+        const digest = await this.digestService.sha256(bytes);
         if (digest !== file.sha256) throw new PhysicalPackError("corrupt", `${file.path} failed SHA-256 verification.`);
         const mediaType = responseMediaType(response);
         if (mediaType !== file.media_type) throw new PhysicalPackError("corrupt", `${file.path} has unexpected media type ${mediaType}.`);
         const runtimeUrl = new URL(file.path, this.baseUrl).href;
-        await stagingCache.put(runtimeUrl, new Response(bytes, {
-          status: 200,
-          headers: { "content-type": file.media_type, "x-bibleapp-pack": `${entry.pack_id}@${entry.pack_version}` },
-        }));
+        await this.byteStore.writeVerifiedBytes(stagingCacheName, runtimeUrl, bytes, {
+          mediaType: file.media_type,
+          packIdentity: `${entry.pack_id}@${entry.pack_version}`,
+        });
         verifiedFiles += 1;
         verifiedBytes += bytes.byteLength;
         this.emitProgress(options, { phase: "staging", pack_id: entry.pack_id, completed: verifiedFiles, total: manifest.files.length });
@@ -533,11 +527,11 @@ export class PhysicalPackManager {
         verified_bytes: verifiedBytes,
         updated_at: isoNow(this.clock),
       });
-      const activeCache = await this.cacheStorage.open(activeCacheName);
-      for (const request of await stagingCache.keys()) {
-        const response = await stagingCache.match(request);
+      await this.byteStore.createStore(activeCacheName);
+      for (const path of await this.byteStore.enumerateStoredPaths(stagingCacheName)) {
+        const response = await this.byteStore.readResponse(stagingCacheName, path);
         if (!response) throw new PhysicalPackError("corrupt", "A staged response disappeared before activation.");
-        await activeCache.put(request, response.clone());
+        await this.byteStore.writeResponse(activeCacheName, path, response);
       }
       const activatedAt = isoNow(this.clock);
       let previousActiveIsValid = false;
@@ -614,7 +608,7 @@ export class PhysicalPackManager {
       };
       await this.registry.putRecord(activeRecord);
       try {
-        await this.cacheStorage.delete(stagingCacheName);
+        await this.byteStore.deleteStore(stagingCacheName);
       } catch (cleanupError) {
         await this.appendHistory("cleanup", "failed", { pack_id: entry.pack_id, message: sanitizeMessage(cleanupError) });
       }
@@ -628,8 +622,8 @@ export class PhysicalPackManager {
       this.emitProgress(options, { phase: "active", pack_id: entry.pack_id, completed: verifiedFiles, total: manifest.files.length });
       return activeRecord;
     } catch (error) {
-      if (stagingCacheName) await this.cacheStorage.delete(stagingCacheName).catch(() => false);
-      if (activeCacheName) await this.cacheStorage.delete(activeCacheName).catch(() => false);
+      if (stagingCacheName) await this.byteStore.deleteStore(stagingCacheName).catch(() => false);
+      if (activeCacheName) await this.byteStore.deleteStore(activeCacheName).catch(() => false);
       const cancelled = error?.name === "AbortError";
       if (previous?.active_cache) {
         await this.registry.putRecord({ ...previous, last_failure: {
@@ -683,15 +677,14 @@ export class PhysicalPackManager {
     });
     await this.beforeStoredPackVerification?.({ cacheName, manifest, label });
     if (!cacheName) throw new PhysicalPackError("repair_required", `${label} has no complete cache claim.`);
-    const cacheNames = await this.cacheStorage.keys();
+    const cacheNames = await this.byteStore.listStoreIdentities();
     if (!cacheNames.includes(cacheName)) {
       throw new PhysicalPackError("repair_required", `${label} cache is missing.`);
     }
-    const cache = await this.cacheStorage.open(cacheName);
     const expectedUrls = new Map(
       manifest.files.map((file) => [new URL(file.path, this.baseUrl).href, file]),
     );
-    const actualUrls = new Set((await cache.keys()).map((request) => request.url));
+    const actualUrls = new Set(await this.byteStore.enumerateStoredPaths(cacheName));
     const missing = [...expectedUrls.keys()].filter((url) => !actualUrls.has(url));
     if (missing.length) {
       const file = expectedUrls.get(missing[0]);
@@ -703,7 +696,7 @@ export class PhysicalPackManager {
     }
     let bytes = 0;
     for (const [url, file] of expectedUrls) {
-      const response = await cache.match(url);
+      const response = await this.byteStore.readResponse(cacheName, url);
       if (!response) throw new PhysicalPackError("repair_required", `${file.path} is missing from ${label.toLowerCase()}.`);
       const mediaType = responseMediaType(response);
       if (mediaType !== file.media_type) {
@@ -713,7 +706,7 @@ export class PhysicalPackManager {
       if (body.byteLength !== file.bytes) {
         throw new PhysicalPackError("corrupt", `${file.path} has an invalid stored byte length.`);
       }
-      if (await sha256Bytes(body, this.cryptoImpl) !== file.sha256) {
+      if (await this.digestService.sha256(body) !== file.sha256) {
         throw new PhysicalPackError("corrupt", `${file.path} failed stored SHA-256 verification.`);
       }
       bytes += body.byteLength;
@@ -761,7 +754,7 @@ export class PhysicalPackManager {
       message,
     });
     if (error?.code !== "incompatible_version" && rollbackCache && rollbackCache !== record.active_cache) {
-      await this.cacheStorage.delete(rollbackCache).catch(() => false);
+      await this.byteStore.deleteStore(rollbackCache).catch(() => false);
     }
     return next;
   }
@@ -924,7 +917,7 @@ export class PhysicalPackManager {
       updated_at: isoNow(this.clock),
     });
     try {
-      for (const cacheName of pending) await this.cacheStorage.delete(cacheName);
+      for (const cacheName of pending) await this.byteStore.deleteStore(cacheName);
       await this.registry.deleteRecord(packId);
       await this.appendHistory("remove", "completed", { pack_id: packId, caches: pending.length });
       await this.refreshSnapshot();
@@ -944,10 +937,10 @@ export class PhysicalPackManager {
   }
 
   async reconcileStartup() {
-    const cacheNames = new Set(await this.cacheStorage.keys());
+    const cacheNames = new Set(await this.byteStore.listStoreIdentities());
     for (const record of await this.registry.listRecords()) {
       if (["staging", "verifying"].includes(record.state) && record.staging_cache) {
-        if (record.staging_cache) await this.cacheStorage.delete(record.staging_cache).catch(() => false);
+        if (record.staging_cache) await this.byteStore.deleteStore(record.staging_cache).catch(() => false);
         if (record.previous_active?.active_cache && cacheNames.has(record.previous_active.active_cache)) {
           await this.registry.putRecord({
             ...record.previous_active,
@@ -970,7 +963,7 @@ export class PhysicalPackManager {
         continue;
       }
       if (record.state === "removing" || record.pending_deletions?.length && !record.active_cache) {
-        for (const cacheName of record.pending_deletions || []) await this.cacheStorage.delete(cacheName).catch(() => false);
+        for (const cacheName of record.pending_deletions || []) await this.byteStore.deleteStore(cacheName).catch(() => false);
         await this.registry.deleteRecord(record.pack_id);
         await this.appendHistory("startup-reconcile", "completed", { pack_id: record.pack_id, removal_completed: true });
         continue;
@@ -988,12 +981,12 @@ export class PhysicalPackManager {
     }
     const referenced = await this.registry.listRecords();
     const referencedNames = new Set(referenced.flatMap((record) => [record.active_cache, record.rollback_cache, record.staging_cache]).filter(Boolean));
-    for (const name of await this.cacheStorage.keys()) {
+    for (const name of await this.byteStore.listStoreIdentities()) {
       if (
-        (name.startsWith(`${CACHE_PREFIX}staging-`) || name.startsWith(`${CACHE_PREFIX}staging:`)) &&
+        (name.startsWith(`${this.cachePrefix}staging-`) || name.startsWith(`${this.cachePrefix}staging:`)) &&
         !referencedNames.has(name)
       ) {
-        await this.cacheStorage.delete(name).catch(() => false);
+        await this.byteStore.deleteStore(name).catch(() => false);
       }
     }
   }
@@ -1158,14 +1151,14 @@ export class PhysicalPackManager {
 
   async findOrphanCaches(records = []) {
     const referenced = new Set(records.flatMap((record) => [record.active_cache, record.rollback_cache, record.staging_cache, ...(record.pending_deletions || [])]).filter(Boolean));
-    return (await this.cacheStorage.keys()).filter((name) => name.startsWith(CACHE_PREFIX) && !referenced.has(name)).sort();
+    return (await this.byteStore.listStoreIdentities()).filter((name) => name.startsWith(this.cachePrefix) && !referenced.has(name)).sort();
   }
 
   async cleanup() {
     const orphans = await this.findOrphanCaches(await this.registry.listRecords());
     let removed = 0;
     for (const name of orphans) {
-      if (await this.cacheStorage.delete(name)) removed += 1;
+      if (await this.byteStore.deleteStore(name)) removed += 1;
     }
     await this.appendHistory("cleanup", "completed", { orphan_caches_removed: removed });
     await this.refreshSnapshot();
@@ -1227,8 +1220,7 @@ export class PhysicalPackManager {
     }
     const declared = record.active_manifest.files.some((file) => file.path === canonical);
     if (!declared) return unavailable("load_failed", `${canonical} is not declared by ${packId}.`);
-    const cache = await this.cacheStorage.open(record.active_cache);
-    const response = await cache.match(new URL(canonical, this.baseUrl).href);
+    const response = await this.byteStore.readResponse(record.active_cache, new URL(canonical, this.baseUrl).href);
     if (!response) {
       const error = new PhysicalPackError("repair_required", `${canonical} is missing from the active cache.`);
       await this.markInvalid(packId, error);
@@ -1239,6 +1231,8 @@ export class PhysicalPackManager {
       source_key: `${packId}@${record.pack_version}:${record.manifest_sha256}`,
       runtime_source: "managed_pack",
       pack_id: packId,
+      version: record.pack_version,
+      content_identity: record.manifest_sha256,
     };
   }
 }

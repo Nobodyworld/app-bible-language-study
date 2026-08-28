@@ -1,13 +1,18 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { webcrypto } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { resolveCapability, CAPABILITY_STATES } from "../src/capabilities.js";
 import { configurePhysicalPackResolver, tryFetchJson } from "../src/data-service.js";
-import { createPhysicalPackManager, PhysicalPackError } from "../src/physical-pack-manager.js";
+import { createPhysicalPackManager as createPhysicalPackManagerImpl, PhysicalPackError } from "../src/physical-pack-manager.js";
 import { MemoryPhysicalPackRegistry, PHYSICAL_PACK_DB_NAME } from "../src/physical-pack-registry.js";
+import { createWebDigestService } from "../src/platform/physical-services.js";
+
+const digestService = createWebDigestService(webcrypto);
+const createPhysicalPackManager = (options = {}) => createPhysicalPackManagerImpl({ digestService, ...options });
 
 const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const packageManifest = JSON.parse(await readFile(join(appRoot, "data", "package-manifest.json"), "utf8"));
