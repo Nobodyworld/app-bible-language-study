@@ -7,6 +7,7 @@ const sources = Object.fromEntries(await Promise.all(
   [
     ["index", "../app/index.html"],
     ["css", "../app/styles.css"],
+    ["portraitCss", "../app/styles-portrait.css"],
     ["contextCss", "../app/styles-context.css"],
     ["app", "../app/app.js"],
     ["activeWord", "../app/src/active-word-context.js"],
@@ -61,6 +62,25 @@ for (const [mode, value] of [
 assert(
   /grid-template-columns:\s*minmax\(0, 1fr\) minmax\(0, var\(--study-workspace-inline-size\)\)/.test(sources.css),
   "The desktop shell must consume the declarative study-workspace width.",
+);
+assert(
+  /\.detail-pane\s*{[\s\S]*?container-name:\s*study-workspace;[\s\S]*?container-type:\s*inline-size;/.test(sources.css) &&
+    (sources.css.match(/container-name:\s*study-workspace/g) || []).length === 1,
+  "The Detail pane must be the single named inline-size authority for the Study workspace.",
+);
+assert(
+  /@container\s+study-workspace\s*\(min-width:\s*320px\)/.test(sources.portraitCss) &&
+    /@container\s+study-workspace\s*\(min-width:\s*420px\)/.test(sources.portraitCss) &&
+    /--study-header-layout-band:\s*narrow/.test(sources.portraitCss) &&
+    /--study-header-layout-band:\s*constrained/.test(sources.portraitCss) &&
+    /--study-header-layout-band:\s*wide/.test(sources.portraitCss),
+  "Desktop Study headers must expose measured narrow, constrained, and wide container bands.",
+);
+assert(
+  /\.detail-header\s+:is\(h2, button, \.detail-mode-status, \.study-workspace-width-label\),[\s\S]*?word-break:\s*normal;[\s\S]*?overflow-wrap:\s*normal;[\s\S]*?hyphens:\s*none;/.test(sources.css) &&
+    !/\.detail-header-main h2\s*{[^}]*overflow-wrap:\s*anywhere/.test(sources.css) &&
+    !/study-header-layout-band/.test(`${sources.app}\n${sources.width}\n${sources.portrait}`),
+  "Study UI text must wrap only at normal boundaries and container-band ownership must remain CSS-only.",
 );
 assert(
   /@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]*?compact[\s\S]*?clamp\(300px, 32vw, 340px\)[\s\S]*?standard[\s\S]*?clamp\(340px, 38vw, 400px\)[\s\S]*?expanded[\s\S]*?clamp\(380px, 44vw, 440px\)/.test(sources.css),
@@ -264,4 +284,4 @@ assert(
   "The completed workspace must retain reduced-motion suppression.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 38 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 41 }, null, 2));

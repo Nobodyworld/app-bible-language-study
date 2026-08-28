@@ -607,6 +607,11 @@ button:disabled {
   container-type: inline-size;
 }
 
+.detail-pane {
+  container-name: study-workspace;
+  container-type: inline-size;
+}
+
 .reader-pane,
 .detail-pane {
   background: var(--panel);
@@ -648,9 +653,16 @@ button:disabled {
   min-width: 0;
 }
 
+.detail-header :is(h2, button, .detail-mode-status, .study-workspace-width-label),
+.panel-context-navigation :is(button, [role="tab"]),
+.detail-tool-surface-header :is(h3, button) {
+  word-break: normal;
+  overflow-wrap: normal;
+  hyphens: none;
+}
+
 .detail-header-main h2 {
   min-width: 0;
-  overflow-wrap: anywhere;
 }
 
 .study-workspace-width-controls {
