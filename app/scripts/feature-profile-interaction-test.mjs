@@ -72,6 +72,77 @@ function captureHealth(page, bucket) {
   });
 }
 
+async function exercisePhysicalCacheIsolation(page) {
+  return page.evaluate(async () => {
+    const managerUrl = new URL("./src/physical-pack-manager.js", document.baseURI).href;
+    const registryUrl = new URL("./src/physical-pack-registry.js", document.baseURI).href;
+    const [{ createPhysicalPackManager }, { MemoryPhysicalPackRegistry }] = await Promise.all([
+      import(managerUrl),
+      import(registryUrl),
+    ]);
+    const names = {
+      stableReferenced: "bibleapp-pack:active-edge:stable-ref:v1:1111111111111111",
+      stableOrphanActive: "bibleapp-pack:active-edge:stable-orphan:v1:2222222222222222",
+      stableOrphanStaging: "bibleapp-pack:staging-edge:stable-orphan:v1:3333333333333333",
+      labReferenced: "bibleapp-pack:lab:active-edge:lab-ref:v1:4444444444444444",
+      labOrphanActive: "bibleapp-pack:lab:active-edge:lab-orphan:v1:5555555555555555",
+      labOrphanStaging: "bibleapp-pack:lab:staging-edge:lab-orphan:v1:6666666666666666",
+      unrelated: "edge-cache-isolation:unrelated",
+      futureProfile: "bibleapp-pack:future:active-edge:future-ref:v1:7777777777777777",
+      stableStartupStaging: "bibleapp-pack:staging-edge-startup:stable-orphan:v1:8888888888888888",
+      labStartupStaging: "bibleapp-pack:lab:staging-edge-startup:lab-orphan:v1:9999999999999999",
+    };
+    const allNames = Object.values(names);
+    await Promise.all(allNames.map((name) => caches.delete(name)));
+    for (const name of allNames.slice(0, 8)) await caches.open(name);
+    let clock = Date.parse("2026-08-28T00:00:00.000Z");
+    const stableRegistry = new MemoryPhysicalPackRegistry({ records: [{ pack_id: "stable-ref", active_cache: names.stableReferenced }] });
+    const labRegistry = new MemoryPhysicalPackRegistry({ records: [{ pack_id: "lab-ref", active_cache: names.labReferenced }] });
+    const stableManager = createPhysicalPackManager({
+      registry: stableRegistry, cacheStorage: caches, cacheNamePrefix: "bibleapp-pack:", clock: () => ++clock,
+    });
+    const labManager = createPhysicalPackManager({
+      registry: labRegistry, cacheStorage: caches, cacheNamePrefix: "bibleapp-pack:lab:", clock: () => ++clock,
+    });
+    try {
+      const stableOrphansBefore = await stableManager.findOrphanCaches(await stableRegistry.listRecords());
+      const labOrphansBefore = await labManager.findOrphanCaches(await labRegistry.listRecords());
+      const stableCleanup = await stableManager.cleanup();
+      const afterStable = (await caches.keys()).sort();
+      const labCleanup = await labManager.cleanup();
+      const afterLab = (await caches.keys()).sort();
+
+      await caches.open(names.stableStartupStaging);
+      await caches.open(names.labStartupStaging);
+      const startupStableManager = createPhysicalPackManager({
+        registry: new MemoryPhysicalPackRegistry(), cacheStorage: caches,
+        cacheNamePrefix: "bibleapp-pack:", clock: () => ++clock,
+      });
+      const startupLabManager = createPhysicalPackManager({
+        registry: new MemoryPhysicalPackRegistry(), cacheStorage: caches,
+        cacheNamePrefix: "bibleapp-pack:lab:", clock: () => ++clock,
+      });
+      await startupStableManager.reconcileStartup();
+      const afterStableStartup = (await caches.keys()).sort();
+      await startupLabManager.reconcileStartup();
+      const afterLabStartup = (await caches.keys()).sort();
+      return {
+        names,
+        stableOrphansBefore,
+        labOrphansBefore,
+        stableCleanup,
+        labCleanup,
+        afterStable,
+        afterLab,
+        afterStableStartup,
+        afterLabStartup,
+      };
+    } finally {
+      await Promise.all(allNames.map((name) => caches.delete(name)));
+    }
+  });
+}
+
 async function auditProfileLayout(browser, url, scenario) {
   const context = await browser.newContext({
     viewport: scenario.viewport,
@@ -222,6 +293,43 @@ try {
   assert(unknown.profile === "stable" && unknown.diagnostic === "unknown_profile", `Unknown profile did not fall back safely: ${JSON.stringify(unknown)}`);
   pass("Unknown profile falls back to Stable with a testable diagnostic");
 
+  const physicalCacheIsolation = await exercisePhysicalCacheIsolation(page);
+  const cacheNames = physicalCacheIsolation.names;
+  assert(
+    JSON.stringify(physicalCacheIsolation.stableOrphansBefore) === JSON.stringify([cacheNames.stableOrphanActive, cacheNames.stableOrphanStaging].sort()),
+    `Stable claimed foreign Edge caches: ${JSON.stringify(physicalCacheIsolation)}`,
+  );
+  assert(
+    JSON.stringify(physicalCacheIsolation.labOrphansBefore) === JSON.stringify([cacheNames.labOrphanActive, cacheNames.labOrphanStaging].sort()),
+    `Lab claimed foreign Edge caches: ${JSON.stringify(physicalCacheIsolation)}`,
+  );
+  assert(physicalCacheIsolation.stableCleanup.orphan_caches_removed === 2, `Stable Edge cleanup count was wrong: ${JSON.stringify(physicalCacheIsolation)}`);
+  assert(
+    !physicalCacheIsolation.afterStable.includes(cacheNames.stableOrphanActive) &&
+      !physicalCacheIsolation.afterStable.includes(cacheNames.stableOrphanStaging) &&
+      [cacheNames.stableReferenced, cacheNames.labReferenced, cacheNames.labOrphanActive, cacheNames.labOrphanStaging, cacheNames.unrelated, cacheNames.futureProfile]
+        .every((name) => physicalCacheIsolation.afterStable.includes(name)),
+    `Stable Edge cleanup crossed its namespace: ${JSON.stringify(physicalCacheIsolation)}`,
+  );
+  assert(physicalCacheIsolation.labCleanup.orphan_caches_removed === 2, `Lab Edge cleanup count was wrong: ${JSON.stringify(physicalCacheIsolation)}`);
+  assert(
+    [cacheNames.stableReferenced, cacheNames.labReferenced, cacheNames.unrelated, cacheNames.futureProfile]
+      .every((name) => physicalCacheIsolation.afterLab.includes(name)),
+    `Lab Edge cleanup crossed its namespace: ${JSON.stringify(physicalCacheIsolation)}`,
+  );
+  assert(
+    !physicalCacheIsolation.afterStableStartup.includes(cacheNames.stableStartupStaging) &&
+      physicalCacheIsolation.afterStableStartup.includes(cacheNames.labStartupStaging),
+    `Stable Edge startup reconciliation crossed its namespace: ${JSON.stringify(physicalCacheIsolation)}`,
+  );
+  assert(
+    !physicalCacheIsolation.afterLabStartup.includes(cacheNames.labStartupStaging) &&
+      [cacheNames.stableReferenced, cacheNames.labReferenced, cacheNames.unrelated, cacheNames.futureProfile]
+        .every((name) => physicalCacheIsolation.afterLabStartup.includes(name)),
+    `Lab Edge startup reconciliation crossed its namespace: ${JSON.stringify(physicalCacheIsolation)}`,
+  );
+  pass("Real Edge Cache Storage cleanup and startup reconciliation remain Stable/Lab isolated");
+
   assert(Object.values(health).every((items) => items.length === 0), `Stable/Lab browser health failed: ${JSON.stringify(health)}`);
   await context.close();
 
@@ -274,6 +382,7 @@ try {
     checks,
     stable_identity: stableIdentity,
     lab_identity: labIdentity,
+    physical_cache_isolation: physicalCacheIsolation,
     health,
     disabled_health: disabledHealth,
     layout_scenarios: layoutScenarios,

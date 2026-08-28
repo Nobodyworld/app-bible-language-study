@@ -4,6 +4,7 @@ import {
   canonicalAggregateFrame,
   canonicalPackPath,
   createPhysicalRegistryRecord,
+  isOwnedPhysicalPackCacheName,
   normalizeSha256,
   physicalPackCacheName,
   validateDistributionManifest,
@@ -983,7 +984,7 @@ export class PhysicalPackManager {
     const referencedNames = new Set(referenced.flatMap((record) => [record.active_cache, record.rollback_cache, record.staging_cache]).filter(Boolean));
     for (const name of await this.byteStore.listStoreIdentities()) {
       if (
-        (name.startsWith(`${this.cachePrefix}staging-`) || name.startsWith(`${this.cachePrefix}staging:`)) &&
+        isOwnedPhysicalPackCacheName(name, this.cachePrefix, "staging") &&
         !referencedNames.has(name)
       ) {
         await this.byteStore.deleteStore(name).catch(() => false);
@@ -1151,7 +1152,7 @@ export class PhysicalPackManager {
 
   async findOrphanCaches(records = []) {
     const referenced = new Set(records.flatMap((record) => [record.active_cache, record.rollback_cache, record.staging_cache, ...(record.pending_deletions || [])]).filter(Boolean));
-    return (await this.byteStore.listStoreIdentities()).filter((name) => name.startsWith(this.cachePrefix) && !referenced.has(name)).sort();
+    return (await this.byteStore.listStoreIdentities()).filter((name) => isOwnedPhysicalPackCacheName(name, this.cachePrefix) && !referenced.has(name)).sort();
   }
 
   async cleanup() {

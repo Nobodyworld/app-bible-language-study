@@ -226,6 +226,68 @@ const cleanup = await recoveredManager.cleanup();
 assert.ok(cleanup.orphan_caches_removed >= 1);
 assert.ok(!(await cacheStorage.keys()).includes(orphanName));
 
+const sharedCacheStorage = new MemoryCacheStorage();
+const sharedStableNames = {
+  referenced: "bibleapp-pack:active-shared:stable-ref:v1:1111111111111111",
+  orphanActive: "bibleapp-pack:active-shared:stable-orphan:v1:2222222222222222",
+  orphanStaging: "bibleapp-pack:staging-shared:stable-orphan:v1:3333333333333333",
+};
+const sharedLabNames = {
+  referenced: "bibleapp-pack:lab:active-shared:lab-ref:v1:4444444444444444",
+  orphanActive: "bibleapp-pack:lab:active-shared:lab-orphan:v1:5555555555555555",
+  orphanStaging: "bibleapp-pack:lab:staging-shared:lab-orphan:v1:6666666666666666",
+};
+const sharedUnrelatedName = "unrelated:physical-pack:test";
+for (const name of [...Object.values(sharedStableNames), ...Object.values(sharedLabNames), sharedUnrelatedName]) {
+  await sharedCacheStorage.open(name);
+}
+const sharedStableRegistry = new MemoryPhysicalPackRegistry({ records: [{ pack_id: "stable-ref", active_cache: sharedStableNames.referenced }] });
+const sharedLabRegistry = new MemoryPhysicalPackRegistry({ records: [{ pack_id: "lab-ref", active_cache: sharedLabNames.referenced }] });
+const sharedStableManager = createPhysicalPackManager({
+  registry: sharedStableRegistry,
+  cacheStorage: sharedCacheStorage,
+  cacheNamePrefix: "bibleapp-pack:",
+  clock: () => ++now,
+});
+const sharedLabManager = createPhysicalPackManager({
+  registry: sharedLabRegistry,
+  cacheStorage: sharedCacheStorage,
+  cacheNamePrefix: "bibleapp-pack:lab:",
+  clock: () => ++now,
+});
+const stableOrphansBeforeCleanup = await sharedStableManager.findOrphanCaches(await sharedStableRegistry.listRecords());
+const labOrphansBeforeCleanup = await sharedLabManager.findOrphanCaches(await sharedLabRegistry.listRecords());
+assert.deepEqual(stableOrphansBeforeCleanup, [sharedStableNames.orphanActive, sharedStableNames.orphanStaging].sort());
+assert.deepEqual(labOrphansBeforeCleanup, [sharedLabNames.orphanActive, sharedLabNames.orphanStaging].sort());
+assert.equal((await sharedStableManager.cleanup()).orphan_caches_removed, 2);
+const sharedAfterStableCleanup = (await sharedCacheStorage.keys()).sort();
+assert.ok(sharedAfterStableCleanup.includes(sharedStableNames.referenced));
+assert.ok(Object.values(sharedLabNames).every((name) => sharedAfterStableCleanup.includes(name)));
+assert.ok(sharedAfterStableCleanup.includes(sharedUnrelatedName));
+assert.equal((await sharedLabManager.cleanup()).orphan_caches_removed, 2);
+const sharedAfterLabCleanup = (await sharedCacheStorage.keys()).sort();
+assert.deepEqual(sharedAfterLabCleanup, [sharedStableNames.referenced, sharedLabNames.referenced, sharedUnrelatedName].sort());
+
+const startupCacheStorage = new MemoryCacheStorage();
+const startupStableStaging = "bibleapp-pack:staging-startup:stable-orphan:v1:7777777777777777";
+const startupLabStaging = "bibleapp-pack:lab:staging-startup:lab-orphan:v1:8888888888888888";
+const startupUnrelated = "bibleapp-pack:future:staging-startup:future-orphan:v1:9999999999999999";
+for (const name of [startupStableStaging, startupLabStaging, startupUnrelated]) await startupCacheStorage.open(name);
+const startupStableManager = createPhysicalPackManager({
+  registry: new MemoryPhysicalPackRegistry(), cacheStorage: startupCacheStorage,
+  cacheNamePrefix: "bibleapp-pack:", clock: () => ++now,
+});
+const startupLabManager = createPhysicalPackManager({
+  registry: new MemoryPhysicalPackRegistry(), cacheStorage: startupCacheStorage,
+  cacheNamePrefix: "bibleapp-pack:lab:", clock: () => ++now,
+});
+await startupStableManager.reconcileStartup();
+const startupAfterStable = (await startupCacheStorage.keys()).sort();
+assert.deepEqual(startupAfterStable, [startupLabStaging, startupUnrelated].sort());
+await startupLabManager.reconcileStartup();
+const startupAfterLab = (await startupCacheStorage.keys()).sort();
+assert.deepEqual(startupAfterLab, [startupUnrelated]);
+
 const managedOptions = {
   physicalDataMode: "managed_cache_packs",
   assumeBundledFullAccess: false,
@@ -746,4 +808,16 @@ console.log(JSON.stringify({
   persisted_catalog_rejections: invalidStoredCatalogCases.map(([label]) => label),
   source_policy_rejections: 6,
   storage_estimates: ["sufficient", "insufficient-before-staging", "unavailable-safe"],
+  shared_cache_isolation: {
+    seed: { stable: sharedStableNames, lab: sharedLabNames, unrelated: sharedUnrelatedName },
+    stable_orphans_before_cleanup: stableOrphansBeforeCleanup,
+    lab_orphans_before_cleanup: labOrphansBeforeCleanup,
+    after_stable_cleanup: sharedAfterStableCleanup,
+    after_lab_cleanup: sharedAfterLabCleanup,
+  },
+  startup_cache_isolation: {
+    seed: [startupStableStaging, startupLabStaging, startupUnrelated],
+    after_stable: startupAfterStable,
+    after_lab: startupAfterLab,
+  },
 }, null, 2));

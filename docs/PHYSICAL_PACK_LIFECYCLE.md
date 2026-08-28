@@ -12,8 +12,12 @@ verified writes, deletion, existence checks, and path enumeration.
 
 Stable retains its existing registry and `bibleapp-pack:` byte identities for
 recovery compatibility. Lab uses a separate registry and
-`bibleapp-pack:lab:` identities. Cleanup and orphan classification are limited
-to the active profile prefix.
+`bibleapp-pack:lab:` identities. Cleanup and orphan classification require an
+exact profile prefix followed by the supported four-field cache grammar:
+`active[-operation]|staging[-operation]:pack-id:pack-version:16-hex-digest`.
+This preserves legacy plain `active`/`staging` Stable names while preventing
+either profile from claiming nested, malformed, unrelated, or future-profile
+names.
 
 ## Build and measurement
 

@@ -29,6 +29,9 @@ export const PHYSICAL_PACK_KINDS = Object.freeze({
 const IDENTIFIER_PATTERN = /^[a-z0-9]+(?:[._-][a-z0-9]+)*$/;
 const SHA256_PATTERN = /^sha256:[0-9a-f]{64}$/;
 const SEMANTIC_VERSION_PATTERN = /^(\d+)\.(\d+)\.(\d+)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
+const PHYSICAL_CACHE_PREFIX_PATTERN = /^bibleapp-pack:(?:[a-z0-9._-]+:)?$/;
+const PHYSICAL_CACHE_PHASE_PATTERN = /^(active|staging)(?:-[a-z0-9]+(?:[._-][a-z0-9]+)*)?$/;
+const PHYSICAL_CACHE_DIGEST_PATTERN = /^[0-9a-f]{16}$/;
 const textEncoder = new TextEncoder();
 
 function fail(message) {
@@ -125,8 +128,21 @@ export function physicalPackCacheName(packId, packVersion, manifestSha256, phase
   const normalizedPhase = normalizePackIdentifier(phase, "phase");
   const digest = normalizeSha256(manifestSha256, "manifestSha256").slice("sha256:".length, 23);
   const normalizedPrefix = String(prefix || "");
-  if (!/^bibleapp-pack:(?:[a-z0-9._-]+:)?$/.test(normalizedPrefix)) fail("physical pack cache prefix is invalid.");
+  if (!PHYSICAL_CACHE_PREFIX_PATTERN.test(normalizedPrefix)) fail("physical pack cache prefix is invalid.");
   return `${normalizedPrefix}${normalizedPhase}:${normalizedPackId}:${normalizedVersion}:${digest}`;
+}
+
+export function isOwnedPhysicalPackCacheName(cacheName, prefix = "bibleapp-pack:", expectedPhase = null) {
+  if (typeof cacheName !== "string") return false;
+  const normalizedPrefix = String(prefix || "");
+  if (!PHYSICAL_CACHE_PREFIX_PATTERN.test(normalizedPrefix) || !cacheName.startsWith(normalizedPrefix)) return false;
+  const [phase, packId, packVersion, digest, extra] = cacheName.slice(normalizedPrefix.length).split(":");
+  const phaseMatch = phase?.match(PHYSICAL_CACHE_PHASE_PATTERN);
+  if (extra !== undefined || !phaseMatch || !IDENTIFIER_PATTERN.test(packId || "") ||
+      !IDENTIFIER_PATTERN.test(packVersion || "") || !PHYSICAL_CACHE_DIGEST_PATTERN.test(digest || "")) {
+    return false;
+  }
+  return expectedPhase == null || phaseMatch[1] === expectedPhase;
 }
 
 function packageIdentity(value, label = "package_identity") {

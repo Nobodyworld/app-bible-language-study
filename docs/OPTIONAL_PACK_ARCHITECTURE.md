@@ -10,6 +10,10 @@ and `bibleapp-pack:` Cache Storage identities. Lab uses
 claim, mutate, repair, remove, or clean Stable physical state. The logical
 lifecycle remains single-sourced in the manager and pure contracts; the
 browser byte-store adapter only implements physical storage operations.
+Discovery ownership is not a parent-prefix match: after the exact profile
+prefix, a store must match the supported `active`/`staging` four-field cache
+grammar. Registry-recorded exact cache identities remain authoritative for
+direct recovery operations.
 
 ## Purpose
 
