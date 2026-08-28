@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-08-21
+Reviewed: 2026-08-27
 
 ## Authority
 
@@ -14,7 +14,7 @@ remove, or reclassify a maintained test.
 |---|---|
 | `npm run test:static` | Repository integrity and data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
 | `npm run test:domain` | Job, logical package, physical-pack contract and lifecycle, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
-| `npm run test:browser` | Desktop rendered interaction, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks/Meaning, and physical-pack Edge lifecycle flows. |
+| `npm run test:browser` | Desktop rendered interaction, Search-match contrast, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks/Meaning, and physical-pack Edge lifecycle flows. |
 | `npm run test:browser:mobile` | The maintained interaction journey in mobile mode. |
 | `npm test` | Static, desktop-browser, and mobile-browser suites. |
 | `npm run audit` | Public package/file audit through `app/tools/publish-audit.mjs`. |
@@ -38,6 +38,7 @@ composition above:
 | `npm run test:word-meaning-focus` | `app/scripts/word-meaning-focus-test.mjs`. |
 | `npm run test:study-workspace` | `app/scripts/study-workspace-interaction-test.mjs`. |
 | `npm run test:reader-data-loading` | `app/scripts/reader-data-loading-interaction-test.mjs`. |
+| `npm run test:search-highlight` | `app/scripts/search-highlight-interaction-test.mjs`. |
 | `npm run test:physical-packs` | Distribution, catalog, compatibility, pack-manifest, path, digest-framing, independent registry, complete lifecycle/recovery, resolver, capabilities, and logical/physical separation. |
 | `npm run test:physical-packs:edge` | Real Edge/IndexedDB/Cache Storage lifecycle, offline resolver, UI, focus, theme, responsive, and browser-health acceptance. |
 | `npm run physical-packs:check` | Deterministic fixture check plus two independent production Search/Commentary inventory builds with byte-for-byte catalog/manifest comparison and digest validation. |
@@ -105,6 +106,7 @@ entry.
 | Script | Invocation | Maintained coverage |
 |---|---|---|
 | `app/scripts/interaction-test.mjs` | Desktop and `--mobile` | Main rendered reader journey, including deliberately delayed Book → Chapter synchronization, authoritative route/native-control/active-option/focus convergence, selection, Study Marks, My Data, persistence, and cleanup. |
+| `app/scripts/search-highlight-interaction-test.mjs` | Edge desktop and narrow; light/dark, OS-preferred dark, and forced colors | Populated Search-match semantics, computed contrast, visible distinction, Search-only highlight scope, containment, overflow, and browser health. |
 | `app/scripts/reader-data-loading-interaction-test.mjs` | Desktop | Deferred reader-dataset request boundaries, first/repeat activation, stale-route suppression, retry behavior, reader-core preservation, and browser-error checks. |
 | `app/scripts/frozen-highlight-interaction-test.mjs` | Edge desktop, portrait, narrow, mobile/touch, light/dark, forced colors, and reduced motion | Locked/frozen reader-to-panel highlighting; exact phrase preservation through pointer, keyboard, touch, and same-verse tools; informational alignment semantics; browser-owned indexed Reader history with panel-only Detail history; truthful detail reset; zero/moderate/deep scroll restoration; long-chapter stability; responsive containment; and browser-error health. |
 | `app/scripts/original-language-study-interaction-test.mjs` | Desktop | Rendered Language Study data, lazy enhancement, references, history, and tooltip containment. |
