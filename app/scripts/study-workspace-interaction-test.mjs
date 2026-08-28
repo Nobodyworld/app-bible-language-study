@@ -7,6 +7,23 @@ import { startStaticAppServer } from "../tools/serve-app.mjs";
 
 const WIDTH_STORAGE_KEY = "bibleapp:study-workspace-width:v1";
 const WIDTH_MODES = Object.freeze(["compact", "standard", "expanded"]);
+const STUDY_HEADER_THRESHOLDS = Object.freeze([320, 420]);
+const STUDY_HEADER_SWEEP_WIDTHS = Object.freeze(
+  Array.from({ length: 61 }, (_, index) => 280 + (index * 8)),
+);
+const STUDY_HEADER_TITLES = Object.freeze([
+  "Details",
+  "Strong's",
+  "Language Study",
+  "Cross References",
+  "Commentary",
+  "Outline",
+  "Search",
+  "Tags",
+  "Local Processing",
+  "Advanced Diagnostics",
+]);
+const STUDY_HEADER_STRESS_TITLE = "Kontextualisierung Diagnosewerkzeuge Lokalisierungsprüfung";
 const SOURCE_TOKEN_TAGS = Object.freeze([
   "Command/Declaration",
   "Favorite",
@@ -430,6 +447,324 @@ function assertLayoutHealth(state, label, { mobile = false } = {}) {
     assert(state.reader.width >= 340, `${label}: scripture column is not practical`);
     assert(state.pane.height <= state.viewport.height + 1, `${label}: sticky detail pane exceeds viewport height`);
   }
+}
+
+function expectedStudyHeaderBand(width) {
+  if (width >= STUDY_HEADER_THRESHOLDS[1]) return "wide";
+  if (width >= STUDY_HEADER_THRESHOLDS[0]) return "constrained";
+  return "narrow";
+}
+
+function assertStudyHeaderAudit(audit, label) {
+  const expectedBand = expectedStudyHeaderBand(audit.containerWidth);
+  const expectedRows = { constrained: 2, narrow: 3, wide: 1 }[expectedBand];
+  assert.equal(audit.band, expectedBand, `${label}: unexpected container layout band`);
+  assert.equal(audit.rowCount, expectedRows, `${label}: unexpected semantic header row count`);
+  assert(audit.title.visible && audit.title.rect.width > 0, `${label}: title is not visible`);
+  assert.deepEqual(
+    audit.title.style,
+    { hyphens: "none", overflowWrap: "normal", wordBreak: "normal" },
+    `${label}: title uses an unsafe word-breaking policy`,
+  );
+  assert(
+    audit.title.words.length > 0 && audit.title.words.every((word) => word.rects.length === 1),
+    `${label}: a title word split across rendered lines: ${JSON.stringify(audit.title.words)}`,
+  );
+  assert(audit.title.insideBlock, `${label}: title escaped its title block`);
+  assert.deepEqual(audit.overlaps, [], `${label}: header elements overlap`);
+  assert.deepEqual(audit.clipped, [], `${label}: controls or title escape the header/panel`);
+  assert(audit.documentOverflow <= 1, `${label}: document has horizontal overflow`);
+  assert(audit.paneOverflow <= 1, `${label}: Study panel has horizontal overflow`);
+  assert(!audit.staleLoading, `${label}: stale loading state remains visible`);
+  assert(
+    audit.header.height >= 53 && audit.header.height <= 220,
+    `${label}: header height is outside the bounded responsive range: ${audit.header.height}`,
+  );
+}
+
+async function setStudyHeaderTestWidth(page, width) {
+  await page.evaluate((requestedWidth) => {
+    const root = document.documentElement;
+    const pane = document.querySelector(".detail-pane");
+    const chromeWidth = pane ? pane.offsetWidth - pane.clientWidth : 0;
+    root.style.setProperty("--study-workspace-inline-size", `${requestedWidth + chromeWidth}px`);
+  }, width);
+  await waitForFrames(page, 2);
+}
+
+async function auditStudyHeader(page) {
+  return page.evaluate(() => {
+    const rect = (node) => {
+      const bounds = typeof node?.getBoundingClientRect === "function" ? node.getBoundingClientRect() : node;
+      return bounds
+        ? { bottom: bounds.bottom, height: bounds.height, left: bounds.left, right: bounds.right, top: bounds.top, width: bounds.width }
+        : null;
+    };
+    const intersects = (first, second) => {
+      if (!first || !second) return false;
+      return Math.min(first.right, second.right) - Math.max(first.left, second.left) > 0.5 &&
+        Math.min(first.bottom, second.bottom) - Math.max(first.top, second.top) > 0.5;
+    };
+    const contains = (outer, inner, tolerance = 1) => Boolean(
+      outer && inner &&
+      inner.left >= outer.left - tolerance && inner.right <= outer.right + tolerance &&
+      inner.top >= outer.top - tolerance && inner.bottom <= outer.bottom + tolerance
+    );
+    const title = document.querySelector("#detailTitle");
+    const titleBlock = document.querySelector(".detail-title-block");
+    const mode = document.querySelector(".detail-mode-status");
+    const widthControls = document.querySelector(".study-workspace-width-controls");
+    const actions = document.querySelector(".detail-header-actions");
+    const clear = document.querySelector("#clearDetail");
+    const hide = document.querySelector("#hideStudyWorkspace");
+    const header = document.querySelector(".detail-header");
+    const pane = document.querySelector(".detail-pane");
+    const titleRect = rect(title);
+    const titleBlockRect = rect(titleBlock);
+    const modeRect = rect(mode);
+    const widthRect = rect(widthControls);
+    const actionsRect = rect(actions);
+    const clearRect = rect(clear);
+    const hideRect = rect(hide);
+    const headerRect = rect(header);
+    const paneRect = rect(pane);
+    const titleWords = [];
+    const text = title?.textContent || "";
+    const textNode = title?.firstChild;
+    const expression = /\S+/g;
+    let match;
+    while (textNode && (match = expression.exec(text))) {
+      const range = document.createRange();
+      range.setStart(textNode, match.index);
+      range.setEnd(textNode, match.index + match[0].length);
+      titleWords.push({
+        text: match[0],
+        rects: [...range.getClientRects()].map(rect),
+      });
+    }
+    const rowTops = [titleBlockRect, widthRect, actionsRect]
+      .map((bounds) => bounds.top)
+      .sort((first, second) => first - second)
+      .reduce((tops, top) => {
+        if (!tops.length || Math.abs(tops.at(-1) - top) > 1) tops.push(top);
+        return tops;
+      }, []);
+    const semanticRows = new Set(
+      [titleBlock, widthControls, actions].map((node) => getComputedStyle(node).gridRowStart),
+    );
+    const namedRects = { actions: actionsRect, clear: clearRect, hide: hideRect, mode: modeRect, title: titleRect, titleBlock: titleBlockRect, width: widthRect };
+    const overlapPairs = [
+      ["title", "mode"],
+      ["titleBlock", "width"],
+      ["titleBlock", "actions"],
+      ["width", "actions"],
+      ["width", "clear"],
+      ["width", "hide"],
+      ["clear", "hide"],
+    ];
+    const overlaps = overlapPairs
+      .filter(([first, second]) => intersects(namedRects[first], namedRects[second]))
+      .map(([first, second]) => `${first}/${second}`);
+    const clipped = Object.entries(namedRects)
+      .filter(([name, bounds]) => name !== "mode" && (!contains(headerRect, bounds) || !contains(paneRect, bounds)))
+      .map(([name]) => name);
+    const titleStyle = getComputedStyle(title);
+    return {
+      band: getComputedStyle(header).getPropertyValue("--study-header-layout-band").trim(),
+      clipped,
+      containerWidth: pane.clientWidth,
+      documentOverflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - window.innerWidth,
+      header: headerRect,
+      mode: pane.dataset.panelMode || "",
+      modeLabel: mode.textContent.trim(),
+      overlaps,
+      pane: paneRect,
+      paneOverflow: pane.scrollWidth - pane.clientWidth,
+      rowCount: semanticRows.size,
+      rowTops,
+      staleLoading: document.body.textContent.includes("Loading data"),
+      title: {
+        insideBlock: contains(titleBlockRect, titleRect),
+        lineCount: new Set(titleWords.flatMap((word) => word.rects.map((bounds) => Math.round(bounds.top)))).size,
+        rect: titleRect,
+        style: { hyphens: titleStyle.hyphens, overflowWrap: titleStyle.overflowWrap, wordBreak: titleStyle.wordBreak },
+        text: text.trim(),
+        visible: getComputedStyle(title).visibility !== "hidden" && getComputedStyle(title).display !== "none",
+        words: titleWords,
+      },
+      viewport: { height: window.innerHeight, width: window.innerWidth },
+      widthMode: document.documentElement.dataset.studyWorkspaceWidth || "",
+    };
+  });
+}
+
+async function substituteStudyHeaderTitle(page, title) {
+  await page.locator("#detailTitle").evaluate((node, value) => {
+    node.textContent = value;
+  }, title);
+  await waitForFrames(page, 2);
+}
+
+async function exerciseStudyHeaderFocusOrder(page) {
+  const selectors = [
+    '[data-study-workspace-width-mode="compact"]',
+    '[data-study-workspace-width-mode="standard"]',
+    '[data-study-workspace-width-mode="expanded"]',
+    "#clearDetail",
+    "#hideStudyWorkspace",
+  ];
+  const expected = ["compact", "standard", "expanded", "clearDetail", "hideStudyWorkspace"];
+  await page.locator(selectors[0]).focus();
+  const actual = [];
+  for (let index = 0; index < selectors.length; index += 1) {
+    if (index > 0) await page.keyboard.press("Tab");
+    actual.push(await page.evaluate(() => document.activeElement?.dataset.studyWorkspaceWidthMode || document.activeElement?.id || ""));
+  }
+  assert.deepEqual(actual, expected, "773px: header Tab order diverges from DOM and visual order");
+  const focusEvidence = [];
+  for (const selector of selectors) {
+    const control = page.locator(selector);
+    await control.focus();
+    focusEvidence.push(await control.evaluate((node) => {
+      const bounds = node.getBoundingClientRect();
+      const header = document.querySelector(".detail-header").getBoundingClientRect();
+      const pane = document.querySelector(".detail-pane").getBoundingClientRect();
+      const style = getComputedStyle(node);
+      const outline = Number.parseFloat(style.outlineWidth) || 0;
+      return {
+        focused: document.activeElement === node,
+        id: node.dataset.studyWorkspaceWidthMode || node.id,
+        outline,
+        unclipped: bounds.left - outline >= header.left - 1 && bounds.right + outline <= header.right + 1 &&
+          bounds.top - outline >= header.top - 1 && bounds.bottom + outline <= header.bottom + 1 &&
+          bounds.left - outline >= pane.left - 1 && bounds.right + outline <= pane.right + 1,
+      };
+    }));
+  }
+  assert(focusEvidence.every((item) => item.focused && item.unclipped), `773px: focus treatment is clipped: ${JSON.stringify(focusEvidence)}`);
+  return { actual, focusEvidence };
+}
+
+async function exerciseResponsiveStudyHeader(page) {
+  await page.setViewportSize({ width: 773, height: 900 });
+  await setWidthMode(page, "standard", "click");
+  await page.locator("#clearDetail").click();
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Details" && document.querySelector(".detail-pane")?.dataset.panelMode === "follow");
+  await waitForFrames(page, 2);
+  const knownFollowing = await auditStudyHeader(page);
+  assertStudyHeaderAudit(knownFollowing, "773px/Details/Following");
+  const focus = await exerciseStudyHeaderFocusOrder(page);
+
+  await openStrongFromLanguageStudy(page);
+  const knownLocked = await auditStudyHeader(page);
+  assertStudyHeaderAudit(knownLocked, "773px/Strong's/Locked");
+
+  await page.setViewportSize({ width: 1600, height: 1000 });
+  await page.locator("#clearDetail").click();
+  await page.waitForFunction(() => document.querySelector(".detail-pane")?.dataset.panelMode === "follow");
+  await substituteStudyHeaderTitle(page, "Cross References");
+  const followingSweep = [];
+  for (const width of STUDY_HEADER_SWEEP_WIDTHS) {
+    await setStudyHeaderTestWidth(page, width);
+    const audit = await auditStudyHeader(page);
+    assert.equal(audit.containerWidth, width, `Following sweep did not reach ${width}px`);
+    assertStudyHeaderAudit(audit, `Following/Cross References/${width}px`);
+    followingSweep.push(audit);
+  }
+
+  await openStrongFromLanguageStudy(page);
+  await substituteStudyHeaderTitle(page, STUDY_HEADER_STRESS_TITLE);
+  const lockedSweep = [];
+  for (const width of STUDY_HEADER_SWEEP_WIDTHS) {
+    await setStudyHeaderTestWidth(page, width);
+    const audit = await auditStudyHeader(page);
+    assert.equal(audit.containerWidth, width, `Locked sweep did not reach ${width}px`);
+    assertStudyHeaderAudit(audit, `Locked/pseudo-localized/${width}px`);
+    lockedSweep.push(audit);
+  }
+
+  const thresholdWidths = STUDY_HEADER_THRESHOLDS.flatMap((threshold) => [threshold - 1, threshold, threshold + 1]);
+  const representativeWidths = [280, ...thresholdWidths, 400, 760];
+  const titleMatrix = [];
+  for (const title of [...STUDY_HEADER_TITLES, STUDY_HEADER_STRESS_TITLE]) {
+    await substituteStudyHeaderTitle(page, title);
+    for (const width of representativeWidths) {
+      await setStudyHeaderTestWidth(page, width);
+      const audit = await auditStudyHeader(page);
+      assertStudyHeaderAudit(audit, `${title}/${width}px`);
+      titleMatrix.push({ band: audit.band, height: audit.header.height, lineCount: audit.title.lineCount, title, width });
+    }
+  }
+
+  await page.evaluate(() => document.documentElement.style.removeProperty("--study-workspace-inline-size"));
+  await page.setViewportSize({ width: 773, height: 900 });
+  await page.locator("#clearDetail").click();
+  await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Details");
+  const viewportResults = [];
+  for (const viewportWidth of [769, 773, 820, 960, 1024, 1280]) {
+    await page.setViewportSize({ width: viewportWidth, height: 900 });
+    await waitForFrames(page, 2);
+    const audit = await auditStudyHeader(page);
+    assertStudyHeaderAudit(audit, `viewport/${viewportWidth}px`);
+    viewportResults.push({ band: audit.band, headerHeight: audit.header.height, paneWidth: audit.containerWidth, viewportWidth });
+  }
+
+  for (const viewportWidth of [640, 768]) {
+    await page.setViewportSize({ width: viewportWidth, height: 844 });
+    await page.locator("#openStudyPanel").click();
+    await page.waitForFunction(() => {
+      const pane = document.querySelector(".detail-pane");
+      const bounds = pane?.getBoundingClientRect();
+      return pane?.classList.contains("visible") && bounds?.left <= 1 && bounds?.top <= 1;
+    });
+    await waitForFrames(page, 2);
+    const mobile = await page.evaluate(() => {
+      const pane = document.querySelector(".detail-pane");
+      const header = document.querySelector(".detail-header");
+      const title = document.querySelector("#detailTitle");
+      const clear = document.querySelector("#clearDetail");
+      const hide = document.querySelector("#hideStudyWorkspace");
+      const paneRect = pane.getBoundingClientRect();
+      return {
+        band: getComputedStyle(header).getPropertyValue("--study-header-layout-band").trim(),
+        clearHeight: clear.getBoundingClientRect().height,
+        fullScreen: paneRect.left <= 1 && paneRect.top <= 1 && paneRect.width >= innerWidth - 1 && paneRect.height >= innerHeight - 1,
+        hideHeight: hide.getBoundingClientRect().height,
+        titlePolicy: { hyphens: getComputedStyle(title).hyphens, overflowWrap: getComputedStyle(title).overflowWrap, wordBreak: getComputedStyle(title).wordBreak },
+        widthControlsHidden: getComputedStyle(document.querySelector(".study-workspace-width-controls")).display === "none",
+      };
+    });
+    assert.deepEqual(mobile.titlePolicy, { hyphens: "none", overflowWrap: "normal", wordBreak: "normal" }, `${viewportWidth}px mobile title policy changed`);
+    assert(mobile.fullScreen && mobile.clearHeight >= 44 && mobile.hideHeight >= 44 && mobile.widthControlsHidden, `${viewportWidth}px mobile drawer contract changed: ${JSON.stringify(mobile)}`);
+    assert.equal(mobile.band, "", `${viewportWidth}px mobile drawer was captured by a desktop container band`);
+    viewportResults.push({ mobile, viewportWidth });
+    await page.locator("#hideStudyWorkspace").click();
+    await page.waitForFunction(() => !document.querySelector(".detail-pane")?.classList.contains("visible"));
+  }
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.locator("#clearDetail").click();
+  await waitForFrames(page, 2);
+  const bandHeights = Object.fromEntries(["narrow", "constrained", "wide"].map((band) => {
+    const values = [...followingSweep, ...lockedSweep].filter((audit) => audit.band === band).map((audit) => audit.header.height);
+    return [band, { max: Math.max(...values), min: Math.min(...values) }];
+  }));
+  return {
+    bandHeights,
+    focus,
+    known773: { following: knownFollowing, locked: knownLocked },
+    sweep: {
+      increment: 8,
+      maximum: STUDY_HEADER_SWEEP_WIDTHS.at(-1),
+      minimum: STUDY_HEADER_SWEEP_WIDTHS[0],
+      states: ["Following", "Locked"],
+      titles: ["Cross References", STUDY_HEADER_STRESS_TITLE],
+      widths: STUDY_HEADER_SWEEP_WIDTHS.length,
+    },
+    thresholdMatrix: titleMatrix.filter((entry) => thresholdWidths.includes(entry.width)),
+    titleMatrix: titleMatrix.filter((entry) => [280, 400, 760].includes(entry.width)),
+    viewportResults,
+  };
 }
 
 async function setWidthMode(page, mode, activation = "click") {
@@ -1466,6 +1801,8 @@ async function runPrimaryScenario(browser, baseUrl) {
     assert.deepEqual(defaultState.pressed, ["standard"], "Default Standard control is not active");
     assertLayoutHealth(defaultState, "desktop-wide/default-standard");
 
+    const responsiveHeader = await exerciseResponsiveStudyHeader(page);
+
     const beforeWidthData = await readUserDataSnapshot(page);
     await openLanguageStudy(page);
     await openStrongFromLanguageStudy(page);
@@ -1507,7 +1844,7 @@ async function runPrimaryScenario(browser, baseUrl) {
     const mobile = await exerciseMobileDrawer(page, selectors);
     await exerciseClearAndRouteCleanup(page, baseUrl);
     health.assertHealthy();
-    return { mobile, responsive };
+    return { mobile, responsive, responsiveHeader };
   } finally {
     await context.close();
   }
@@ -1557,9 +1894,11 @@ async function main() {
         "default-switch-persist-anchor-selection-history-lock-scroll",
         "contained-study-marks-and-meaning",
         "focus-escape-replacement-back-forward-clear-route",
+        "responsive-study-header-container-bands-and-text-containment",
         "light-dark-reduced-motion-overflow",
         "malformed-and-throwing-storage",
       ],
+      responsiveHeader: primary.responsiveHeader,
       viewportResults: [...primary.responsive, primary.mobile],
     }, null, 2));
   } finally {
