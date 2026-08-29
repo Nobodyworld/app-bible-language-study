@@ -1,5 +1,10 @@
 import { DEFAULT_TAGS, JOB_TYPES, STORAGE_KEYS } from "./config.js?v=pr13-live-qa-20260711e";
 import {
+  createBrowserUserStorageAdapter,
+  createMemoryUserStorageAdapter,
+  USER_STORE_NAMES,
+} from "./platform/browser-user-storage.js";
+import {
   createSourceTokenTarget,
   createVerseTarget,
   createTagAssertion,
@@ -19,32 +24,13 @@ const USER_DATA_EXPORT_KIND = "bibleapp:user-data";
 const USER_DATA_EXPORT_VERSION = 3;
 const LEGACY_APP_PREFIX = `${["open", "bible"].join("")}-clean-app`;
 const LEGACY_USER_DATA_EXPORT_KINDS = new Set([`${LEGACY_APP_PREFIX}:user-data`]);
-const LEGACY_STORAGE_KEYS = {
-  tags: `${LEGACY_APP_PREFIX}:verse-tags:v1`,
-};
 const JOB_STATES = new Set(["planned", "queued", "running", "completed", "failed", "cancelled", "simulation_only"]);
 const LEGACY_JOB_STATUS_TO_STATE = {
   pending: "queued",
   reviewed: "planned",
   processed: "simulation_only",
 };
-const USER_DB_NAME = "bibleapp";
-const USER_DB_VERSION = 2;
-const USER_DB_STORE = "user_stores";
-const USER_STORE_NAMES = {
-  tags: "tags",
-  workspace: "workspace",
-  assertions: "assertions",
-  polls: "polls",
-  packages: "packages",
-  importBackups: "importBackups",
-};
-
-let userDbPromise = null;
-const INDEXED_DB_TIMEOUT_MS = 3000;
-let userDataBroadcast = null;
-let userDataStorageMode = "localStorage";
-let userDataStorageFailure = null;
+let userStorageAdapter = null;
 
 function clone(value) {
   return JSON.parse(JSON.stringify(value));
@@ -63,98 +49,34 @@ function appendConflict(store, conflict) {
   return conflict;
 }
 
-function getUserDataBroadcast() {
-  if (typeof BroadcastChannel === "undefined") return null;
-  if (!userDataBroadcast) {
-    userDataBroadcast = new BroadcastChannel("bibleapp:user-data");
-    userDataBroadcast.unref?.();
-  }
-  return userDataBroadcast;
+function resolveUserStorageAdapter() {
+  if (userStorageAdapter) return userStorageAdapter;
+  userStorageAdapter = globalThis.window
+    ? createBrowserUserStorageAdapter({ profileId: "stable", windowObject: globalThis.window })
+    : createMemoryUserStorageAdapter();
+  return userStorageAdapter;
 }
 
-function publishUserDataChange(storeName) {
-  try {
-    getUserDataBroadcast()?.postMessage({
-      type: "user-data-changed",
-      store: storeName,
-      changed_at: nowIso(),
-    });
-  } catch {
-    // BroadcastChannel is advisory; persistence remains authoritative.
+export function configureUserStorageAdapter(adapter) {
+  if (!adapter || typeof adapter.initialize !== "function" || typeof adapter.save !== "function") {
+    throw new Error("A user-storage adapter with initialize() and save() is required.");
   }
+  userStorageAdapter = adapter;
+  return userStorageAdapter;
 }
 
 function loadStorage(key, fallback) {
-  try {
-    const raw = window.localStorage.getItem(key);
-    if (!raw) return clone(fallback);
-    return { ...clone(fallback), ...JSON.parse(raw) };
-  } catch {
-    return clone(fallback);
-  }
+  const storeName = storeNameForStorageKey(key);
+  return storeName ? resolveUserStorageAdapter().readCurrent(storeName, fallback) : clone(fallback);
 }
 
-function loadStorageWithLegacy(key, legacyKey, fallback) {
-  const current = loadStorage(key, null);
-  if (current) return { ...clone(fallback), ...current };
-  const legacy = loadStorage(legacyKey, null);
-  if (!legacy) return clone(fallback);
-  const normalized = { ...clone(fallback), ...legacy };
-  if (writeLocalStorage(key, normalized)) removeLocalStorageMirror(legacyKey);
-  return normalized;
-}
-
-function writeLocalStorage(key, value) {
-  try {
-    window.localStorage.setItem(key, JSON.stringify(value));
-    return true;
-  } catch (error) {
-    if (typeof window !== "undefined") {
-      userDataStorageFailure = error?.message || `Could not write ${key} to localStorage fallback.`;
-    }
-    return false;
-  }
-}
-
-function removeLocalStorageMirror(key) {
-  try {
-    window.localStorage.removeItem(key);
-  } catch {
-    // Legacy migration cleanup is best-effort only.
-  }
+function loadStorageWithLegacy(key, _legacyKey, fallback) {
+  return loadStorage(key, fallback);
 }
 
 function saveStorage(key, value) {
   const storeName = storeNameForStorageKey(key);
-  if (storeName) {
-    if (canUseIndexedDb() && userDataStorageMode !== "localStorage") {
-      void writeIndexedStore(storeName, value)
-        .then(() => publishUserDataChange(storeName))
-        .catch((error) => {
-          userDataStorageMode = "localStorage";
-          userDataStorageFailure = error?.message || `Could not write ${storeName} to IndexedDB.`;
-          writeLocalStorage(key, value);
-          publishUserDataChange(storeName);
-        });
-      return;
-    }
-    writeLocalStorage(key, value);
-    publishUserDataChange(storeName);
-    return;
-  }
-  writeLocalStorage(key, value);
-}
-
-function canUseIndexedDb() {
-  return typeof window !== "undefined" && Boolean(window.indexedDB);
-}
-
-function withTimeout(promise, message) {
-  let timer;
-  const timeout = new Promise((_, reject) => {
-    timer = window.setTimeout(() => reject(new Error(message)), INDEXED_DB_TIMEOUT_MS);
-  });
-  return Promise.race([promise, timeout]).finally(() => window.clearTimeout(timer));
+  if (storeName) resolveUserStorageAdapter().save(storeName, value);
 }
 
 function storeNameForStorageKey(key) {
@@ -165,53 +87,6 @@ function storeNameForStorageKey(key) {
   if (key === STORAGE_KEYS.packages) return USER_STORE_NAMES.packages;
   if (key === STORAGE_KEYS.importBackups) return USER_STORE_NAMES.importBackups;
   return null;
-}
-
-function openUserDb() {
-  if (!canUseIndexedDb()) return Promise.reject(new Error("IndexedDB is not available."));
-  if (userDbPromise) return userDbPromise;
-
-  userDbPromise = new Promise((resolve, reject) => {
-    const request = window.indexedDB.open(USER_DB_NAME, USER_DB_VERSION);
-
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(USER_DB_STORE)) {
-        db.createObjectStore(USER_DB_STORE, { keyPath: "name" });
-      }
-    };
-
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error || new Error("Could not open user data store."));
-    request.onblocked = () => reject(new Error("User data store upgrade was blocked."));
-  });
-
-  return userDbPromise;
-}
-
-async function readIndexedStore(storeName) {
-  const db = await openUserDb();
-  return new Promise((resolve, reject) => {
-    const transaction = db.transaction(USER_DB_STORE, "readonly");
-    const request = transaction.objectStore(USER_DB_STORE).get(storeName);
-    request.onsuccess = () => resolve(request.result?.value || null);
-    request.onerror = () => reject(request.error || new Error(`Could not read ${storeName}.`));
-  });
-}
-
-async function writeIndexedStore(storeName, value) {
-  const db = await openUserDb();
-  await new Promise((resolve, reject) => {
-    const transaction = db.transaction(USER_DB_STORE, "readwrite");
-    const request = transaction.objectStore(USER_DB_STORE).put({
-      name: storeName,
-      value: clone(value),
-      updated_at: nowIso(),
-    });
-    request.onsuccess = () => resolve();
-    request.onerror = () => reject(request.error || new Error(`Could not write ${storeName}.`));
-    transaction.onerror = () => reject(transaction.error || new Error(`Could not commit ${storeName}.`));
-  });
 }
 
 function slugify(value) {
@@ -589,86 +464,27 @@ export function deletePollResponse(state, proposition, options = {}) {
   return state.pollStore.responses[responseId];
 }
 
-export async function initStores(state) {
-  const localTagStore = normalizeTagStore(
-    loadStorageWithLegacy(STORAGE_KEYS.tags, LEGACY_STORAGE_KEYS.tags, createDefaultTagStore()),
-  );
-  const localWorkspaceStore = normalizeWorkspaceStore(loadStorage(STORAGE_KEYS.workspace, createDefaultWorkspaceStore()));
-  const localAssertionStore = normalizeAssertionStore(
-    loadStorage(STORAGE_KEYS.assertions, createDefaultAssertionStore()),
-    localTagStore.tag_assertions,
-  );
-  const localPollStore = normalizePollStore(loadStorage(STORAGE_KEYS.polls, createDefaultPollStore()));
-  const localPackageStore = normalizeLocalPackageStore(loadStorage(STORAGE_KEYS.packages, createDefaultLocalPackageStore()));
-
-  if (!canUseIndexedDb()) {
-    state.tagStore = localTagStore;
-    state.workspaceStore = localWorkspaceStore;
-    state.assertionStore = localAssertionStore;
-    state.pollStore = localPollStore;
-    state.packageStore = localPackageStore;
-    userDataStorageMode = "localStorage";
-    userDataStorageFailure = "IndexedDB is not available.";
-    state.userStoreBackend = "localStorage";
-    state.userStoreMigration = "indexeddb-unavailable";
-    return;
-  }
-
-  try {
-    const [indexedTags, indexedWorkspace, indexedAssertions, indexedPolls, indexedPackages] =
-      await withTimeout(
-        Promise.all([
-          readIndexedStore(USER_STORE_NAMES.tags),
-          readIndexedStore(USER_STORE_NAMES.workspace),
-          readIndexedStore(USER_STORE_NAMES.assertions),
-          readIndexedStore(USER_STORE_NAMES.polls),
-          readIndexedStore(USER_STORE_NAMES.packages),
-        ]),
-        "IndexedDB initialization timed out.",
-      );
-    state.tagStore = normalizeTagStore(indexedTags || localTagStore);
-    state.workspaceStore = normalizeWorkspaceStore(indexedWorkspace || localWorkspaceStore);
-    state.assertionStore = normalizeAssertionStore(indexedAssertions || localAssertionStore, state.tagStore.tag_assertions);
-    state.pollStore = normalizePollStore(indexedPolls || localPollStore);
-    state.packageStore = normalizeLocalPackageStore(indexedPackages || localPackageStore);
-    userDataStorageMode = "indexedDB";
-    userDataStorageFailure = null;
-    state.userStoreBackend = "indexedDB";
-    state.userStoreMigration =
-      indexedTags && indexedWorkspace && indexedAssertions && indexedPolls && indexedPackages
-        ? "already-indexed"
-        : "migrated-from-localStorage";
-
-    const migrations = [];
-    if (!indexedTags) migrations.push(writeIndexedStore(USER_STORE_NAMES.tags, state.tagStore));
-    if (!indexedWorkspace) migrations.push(writeIndexedStore(USER_STORE_NAMES.workspace, state.workspaceStore));
-    if (!indexedAssertions) {
-      migrations.push(writeIndexedStore(USER_STORE_NAMES.assertions, state.assertionStore));
-    }
-    if (!indexedPolls) migrations.push(writeIndexedStore(USER_STORE_NAMES.polls, state.pollStore));
-    if (!indexedPackages) migrations.push(writeIndexedStore(USER_STORE_NAMES.packages, state.packageStore));
-    if (migrations.length) {
-      await withTimeout(Promise.all(migrations), "IndexedDB migration timed out.");
-    }
-    [
-      STORAGE_KEYS.tags,
-      LEGACY_STORAGE_KEYS.tags,
-      STORAGE_KEYS.workspace,
-      STORAGE_KEYS.assertions,
-      STORAGE_KEYS.polls,
-      STORAGE_KEYS.packages,
-    ].forEach(removeLocalStorageMirror);
-  } catch (error) {
-    state.tagStore = localTagStore;
-    state.workspaceStore = localWorkspaceStore;
-    state.assertionStore = localAssertionStore;
-    state.pollStore = localPollStore;
-    state.packageStore = localPackageStore;
-    userDataStorageMode = "localStorage";
-    userDataStorageFailure = error?.message || "Could not open IndexedDB.";
-    state.userStoreBackend = "localStorage";
-    state.userStoreMigration = "indexeddb-open-failed";
-  }
+export async function initStores(state, adapter = null) {
+  const storage = adapter ? configureUserStorageAdapter(adapter) : resolveUserStorageAdapter();
+  const initialized = await storage.initialize([
+    { name: USER_STORE_NAMES.tags, fallback: createDefaultTagStore() },
+    { name: USER_STORE_NAMES.workspace, fallback: createDefaultWorkspaceStore() },
+    { name: USER_STORE_NAMES.assertions, fallback: createDefaultAssertionStore() },
+    { name: USER_STORE_NAMES.polls, fallback: createDefaultPollStore() },
+    { name: USER_STORE_NAMES.packages, fallback: createDefaultLocalPackageStore() },
+    { name: USER_STORE_NAMES.importBackups, fallback: createDefaultImportBackupStore(), requiredForAuthority: false },
+  ]);
+  const values = initialized.values;
+  state.tagStore = normalizeTagStore(values.tags);
+  state.workspaceStore = normalizeWorkspaceStore(values.workspace);
+  state.assertionStore = normalizeAssertionStore(values.assertions, state.tagStore.tag_assertions);
+  state.pollStore = normalizePollStore(values.polls);
+  state.packageStore = normalizeLocalPackageStore(values.packages);
+  state.userStoreBackend = initialized.backend;
+  state.userStoreAuthority = initialized.authority;
+  state.userStoreMigration = initialized.migration;
+  state.userStoreFailure = initialized.failure;
+  state.userStorageProfile = initialized.profileId;
 }
 
 function createDefaultImportBackupStore() {
@@ -717,26 +533,21 @@ export function createUserDataBackup(state, reason = "manual") {
 }
 
 export function listenForUserDataChanges(state, onChange = null) {
-  const channel = getUserDataBroadcast();
-  if (!channel) {
+  const unsubscribe = resolveUserStorageAdapter().listen((change) => {
+    state.lastExternalUserDataChange = change;
+    if (onChange) onChange(change);
+  });
+  if (!unsubscribe) {
     state.userDataBroadcast = "unavailable";
     return null;
   }
   state.userDataBroadcast = "active";
-  const handler = (event) => {
-    if (event?.data?.type !== "user-data-changed") return;
-    state.lastExternalUserDataChange = event.data;
-    if (onChange) onChange(event.data);
-  };
-  channel.addEventListener("message", handler);
-  return () => channel.removeEventListener("message", handler);
+  return unsubscribe;
 }
 
 export function ensureStores(state) {
   if (!state.tagStore) {
-    state.tagStore = normalizeTagStore(
-      loadStorageWithLegacy(STORAGE_KEYS.tags, LEGACY_STORAGE_KEYS.tags, createDefaultTagStore()),
-    );
+    state.tagStore = normalizeTagStore(loadStorageWithLegacy(STORAGE_KEYS.tags, null, createDefaultTagStore()));
   }
   if (!state.workspaceStore) {
     state.workspaceStore = normalizeWorkspaceStore(loadStorage(STORAGE_KEYS.workspace, createDefaultWorkspaceStore()));
@@ -753,10 +564,12 @@ export function ensureStores(state) {
   if (!state.packageStore) {
     state.packageStore = normalizeLocalPackageStore(loadStorage(STORAGE_KEYS.packages, createDefaultLocalPackageStore()));
   }
-  state.userStoreBackend = state.userStoreBackend || "localStorage";
-  state.userStoreMigration = state.userStoreMigration || "sync-fallback";
-  state.userStoreAuthority = userDataStorageMode;
-  state.userStoreFailure = userDataStorageFailure;
+  const storageStatus = resolveUserStorageAdapter().status();
+  state.userStoreBackend = state.userStoreBackend || storageStatus.backend;
+  state.userStoreMigration = state.userStoreMigration || storageStatus.migration || "sync-fallback";
+  state.userStoreAuthority = storageStatus.authority;
+  state.userStoreFailure = storageStatus.failure;
+  state.userStorageProfile = storageStatus.profileId;
 }
 
 function hasPendingJob(events, type, payload) {
@@ -1227,9 +1040,9 @@ export function getUserDataSummary(state) {
     tag_jobs: tagJobs,
     workspace_jobs: workspaceJobs,
     user_store_backend: state.userStoreBackend || "localStorage",
-    user_store_authority: state.userStoreAuthority || userDataStorageMode,
+    user_store_authority: state.userStoreAuthority || resolveUserStorageAdapter().status().authority,
     user_store_migration: state.userStoreMigration || "unknown",
-    user_store_failure: state.userStoreFailure || userDataStorageFailure,
+    user_store_failure: state.userStoreFailure || resolveUserStorageAdapter().status().failure,
   };
 }
 

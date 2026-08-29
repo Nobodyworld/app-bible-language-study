@@ -14,6 +14,7 @@ import {
   canonicalPackPath,
   compareSemanticVersions,
   createPhysicalRegistryRecord,
+  isOwnedPhysicalPackCacheName,
   physicalPackCacheName,
   resolvePhysicalFeaturePackIds,
   validateDistributionManifest,
@@ -237,6 +238,26 @@ assert.equal(managedPackIds.length, packageManifest.feature_packs.length - 1);
 const incompleteRecord = { ...activeRecord, verified_files: 1 };
 assert.deepEqual(verifiedActivePhysicalPackIds([incompleteRecord]), []);
 
+const cacheOwnershipCases = [
+  ["Stable current active cache", "bibleapp-pack:active-op-cache-1:search-verses:v1-deadbeef:0123456789abcdef", true, false],
+  ["Stable current staging cache", "bibleapp-pack:staging-op-cache-1:search-verses:v1-deadbeef:0123456789abcdef", true, false],
+  ["Stable legacy-compatible active form", "bibleapp-pack:active:search-verses:v1-deadbeef:0123456789abcdef", true, false],
+  ["Stable legacy-compatible staging form", "bibleapp-pack:staging:search-verses:v1-deadbeef:0123456789abcdef", true, false],
+  ["Lab active cache", "bibleapp-pack:lab:active-op-cache-1:search-verses:v1-deadbeef:0123456789abcdef", false, true],
+  ["Lab staging cache", "bibleapp-pack:lab:staging-op-cache-1:search-verses:v1-deadbeef:0123456789abcdef", false, true],
+  ["Malformed cache name", "bibleapp-pack:active:search-verses:v1-deadbeef:not-a-digest", false, false],
+  ["Unrelated cache", "unrelated:active:search-verses:v1-deadbeef:0123456789abcdef", false, false],
+  ["Unknown/future profile cache", "bibleapp-pack:future:active-op-cache-1:search-verses:v1-deadbeef:0123456789abcdef", false, false],
+  ["Prefix-only string", "bibleapp-pack:", false, false],
+];
+for (const [label, cacheName, stableOwned, labOwned] of cacheOwnershipCases) {
+  assert.equal(isOwnedPhysicalPackCacheName(cacheName, "bibleapp-pack:"), stableOwned, `${label}: Stable ownership mismatch`);
+  assert.equal(isOwnedPhysicalPackCacheName(cacheName, "bibleapp-pack:lab:"), labOwned, `${label}: Lab ownership mismatch`);
+}
+assert.equal(isOwnedPhysicalPackCacheName(cacheOwnershipCases[0][1], "bibleapp-pack:", "active"), true);
+assert.equal(isOwnedPhysicalPackCacheName(cacheOwnershipCases[0][1], "bibleapp-pack:", "staging"), false);
+assert.equal(isOwnedPhysicalPackCacheName(cacheOwnershipCases[1][1], "bibleapp-pack:", "staging"), true);
+
 const compatibility = (minimum, maximum) => ({
   minimum_app_version: minimum,
   maximum_app_version_exclusive: maximum,
@@ -256,5 +277,6 @@ console.log(JSON.stringify({
   bundled_feature_packs: bundledPackIds.length,
   canonical_fixture_paths: normalizedManifest.files.map(({ path }) => path),
   cache_name: activeRecord.active_cache,
+  cache_ownership: cacheOwnershipCases.map(([label, cacheName, stable, lab]) => ({ label, cacheName, stable, lab })),
   managed_active_feature_packs: verifiedActivePhysicalPackIds([activeRecord]),
 }, null, 2));

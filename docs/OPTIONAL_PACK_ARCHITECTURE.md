@@ -4,6 +4,17 @@ Status: implemented lifecycle contract for issue #63
 Implementation baseline: `afdd22a57d8c8cca874947b97ac021e588867e68`
 Implementation branch: `feat/physical-pack-lifecycle`
 
+Profile note: Stable retains the existing `bibleapp-physical-packs` registry
+and `bibleapp-pack:` Cache Storage identities. Lab uses
+`bibleapp-physical-packs-lab` and `bibleapp-pack:lab:` so experiments cannot
+claim, mutate, repair, remove, or clean Stable physical state. The logical
+lifecycle remains single-sourced in the manager and pure contracts; the
+browser byte-store adapter only implements physical storage operations.
+Discovery ownership is not a parent-prefix match: after the exact profile
+prefix, a store must match the supported `active`/`staging` four-field cache
+grammar. Registry-recorded exact cache identities remain authoritative for
+direct recovery operations.
+
 ## Purpose
 
 Bible App Reader currently ships one complete static application package. Its

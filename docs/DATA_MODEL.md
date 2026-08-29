@@ -125,6 +125,28 @@ tags, assertions, poll responses, package operations, legacy verse drafts,
 personal token renderings, and local job events live in browser storage and can
 be exported as portable JSON.
 
+### Profile storage authority
+
+Stable preserves the existing production identities exactly: IndexedDB
+`bibleapp`, object store `user_stores`, the existing `bibleapp:` localStorage
+keys, notification channel `bibleapp:user-data`, physical registry
+`bibleapp-physical-packs`, and physical bytes under `bibleapp-pack:`. Existing
+IndexedDB authority, localStorage fallback, and legacy Stable migration remain
+unchanged; valid Stable data is not rewritten to symmetric new keys.
+
+Lab uses deterministic isolated identities: IndexedDB `bibleapp-lab`,
+`bibleapp:lab:*` fallback keys, notification channel
+`bibleapp:lab:user-data`, physical registry
+`bibleapp-physical-packs-lab`, and byte stores under `bibleapp-pack:lab:`.
+This includes Study Marks, Meaning, drafts, import-recovery backups, package
+operations, compatibility poll records, physical registry records, and pack
+bytes. No automatic Stable/Lab copy or migration exists.
+
+Theme (`bibleAppTheme`) and Study workspace width
+(`bibleapp:study-workspace-width:v1`) remain shared presentation preferences;
+they do not contain personal study records. A deliberate version-3 export and
+import is the only supported cross-profile data movement.
+
 ### Personal meanings
 
 `workspaceStore.token_renderings` stores optional personal meanings for exact

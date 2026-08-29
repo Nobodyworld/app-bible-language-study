@@ -4,6 +4,21 @@ Issue #63 delivers an opt-in browser-local physical lifecycle for Search and
 Commentary while the public application remains a complete
 `bundled_static_data` distribution.
 
+The lifecycle manager consumes explicit registry, physical byte-store,
+source-loading, SHA-256, storage-estimate, base-URL, clock, and cancellation
+services. It does not acquire the browser Cache Storage global. The browser
+byte-store adapter implements immutable store creation, listing, reads,
+verified writes, deletion, existence checks, and path enumeration.
+
+Stable retains its existing registry and `bibleapp-pack:` byte identities for
+recovery compatibility. Lab uses a separate registry and
+`bibleapp-pack:lab:` identities. Cleanup and orphan classification require an
+exact profile prefix followed by the supported four-field cache grammar:
+`active[-operation]|staging[-operation]:pack-id:pack-version:16-hex-digest`.
+This preserves legacy plain `active`/`staging` Stable names while preventing
+either profile from claiming nested, malformed, unrelated, or future-profile
+names.
+
 ## Build and measurement
 
 Production artifacts are generated outside the tracked application tree:

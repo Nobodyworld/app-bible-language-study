@@ -12,6 +12,12 @@ import { resolveInterlinearVerseTokens } from "../strongs.js?v=pr13-live-qa-2026
 import { createSourceTokenTarget, createVerseTarget } from "../semantic-targets.js?v=pr13-live-qa-20260711e";
 import { strongSectionControlState } from "../strong-section-lifecycle.js?v=pr13-live-qa-20260711e";
 import { fetchLexiconEntry, fetchVerseBook, fetchWordMapBook } from "../data-service.js?v=pr13-live-qa-20260711e";
+import { panelActionFeature } from "../feature-ui.js";
+
+function toolEnabled(ctx, toolId) {
+  const featureId = panelActionFeature(toolId);
+  return !featureId || ctx.isFeatureEnabled?.(featureId) !== false;
+}
 
 function getVerseText(ctx, verse) {
   return ctx.state.verseBook?.chapters?.[ctx.state.chapter]?.[verse] || "";
@@ -315,13 +321,14 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
     .filter((scope) => scope === "word" || scope === "verse")
     .forEach((scope) => {
       const { group, controls } = createScopeGroup(scope);
-      const tools =
+      const tools = (
         scope === "word"
           ? panelToolsForWordContext(wordContext, {
               bookId: ctx.state.bookId,
               sources: ctx.state.manifest?.original_language_sources,
             })
-          : panelToolsForScope(scope);
+          : panelToolsForScope(scope)
+      ).filter((tool) => toolEnabled(ctx, tool.id));
       const appendTool = (tool) => {
         const button = appendActionButton(
           ctx,
@@ -346,32 +353,36 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
           ctx.state.translationId,
         );
         if (sourceTarget) {
-          const marks = ctx.detailViews.renderStudyMarksTrigger(sourceTarget, {
-            align: "right",
-            boundary: "detail-pane",
-            label: `selected source word in ${reference}`,
-            onChange: () => {
-              ctx.renderChapter();
-              ctx.syncFavoriteButtons?.();
-            },
-          });
-          marks.dataset.panelAction = "study-marks";
-          controls.append(marks);
+          if (ctx.isFeatureEnabled?.("study-marks") !== false) {
+            const marks = ctx.detailViews.renderStudyMarksTrigger(sourceTarget, {
+              align: "right",
+              boundary: "detail-pane",
+              label: `selected source word in ${reference}`,
+              onChange: () => {
+                ctx.renderChapter();
+                ctx.syncFavoriteButtons?.();
+              },
+            });
+            marks.dataset.panelAction = "study-marks";
+            controls.append(marks);
+          }
           relatedTools.forEach(appendTool);
 
-          const meaning = ctx.detailViews.renderWordMeaningControl({
-            target: sourceTarget,
-            token: wordContext.token,
-            presentation: "detail-pane",
-            label: `selected source word in ${reference}`,
-            loadExactMappedEnglish: () => exactMappedBsbMeaning(ctx, wordContext.token, verse),
-            loadLexicon: wordContext.token.strong_code
-              ? () => fetchLexiconEntry(wordContext.token.strong_code)
-              : null,
-          });
-          if (meaning) {
-            meaning.dataset.panelAction = "meaning";
-            controls.append(meaning);
+          if (ctx.isFeatureEnabled?.("meaning") !== false) {
+            const meaning = ctx.detailViews.renderWordMeaningControl({
+              target: sourceTarget,
+              token: wordContext.token,
+              presentation: "detail-pane",
+              label: `selected source word in ${reference}`,
+              loadExactMappedEnglish: () => exactMappedBsbMeaning(ctx, wordContext.token, verse),
+              loadLexicon: wordContext.token.strong_code
+                ? () => fetchLexiconEntry(wordContext.token.strong_code)
+                : null,
+            });
+            if (meaning) {
+              meaning.dataset.panelAction = "meaning";
+              controls.append(meaning);
+            }
           }
         } else {
           relatedTools.forEach(appendTool);
@@ -386,17 +397,19 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
           },
           ctx.state.translationId,
         );
-        const marks = ctx.detailViews.renderStudyMarksTrigger(verseTarget, {
-          align: "right",
-          boundary: "detail-pane",
-          label: `verse ${reference}`,
-          onChange: () => {
-            ctx.renderChapter();
-            ctx.syncFavoriteButtons?.();
-          },
-        });
-        marks.dataset.panelAction = "study-marks";
-        controls.append(marks);
+        if (ctx.isFeatureEnabled?.("study-marks") !== false) {
+          const marks = ctx.detailViews.renderStudyMarksTrigger(verseTarget, {
+            align: "right",
+            boundary: "detail-pane",
+            label: `verse ${reference}`,
+            onChange: () => {
+              ctx.renderChapter();
+              ctx.syncFavoriteButtons?.();
+            },
+          });
+          marks.dataset.panelAction = "study-marks";
+          controls.append(marks);
+        }
         relatedTools.forEach(appendTool);
       } else {
         relatedTools.forEach(appendTool);

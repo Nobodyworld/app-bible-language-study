@@ -89,16 +89,6 @@ function renderTechnicalSummary(summary) {
   return section;
 }
 
-function downloadUserData(exportText) {
-  const blob = new Blob([exportText], { type: "application/json" });
-  const url = URL.createObjectURL(blob);
-  const link = document.createElement("a");
-  link.href = url;
-  link.download = `bibleapp-user-data-${new Date().toISOString().slice(0, 10)}.json`;
-  link.click();
-  URL.revokeObjectURL(url);
-}
-
 function renderCapabilityManager(ctx, refresh) {
   const section = document.createElement("section");
   section.className = "diagnostic-section";
@@ -222,11 +212,22 @@ function createReplaceConfirmation(onConfirm) {
 
 export function createUserDataView(ctx, options = {}) {
   return function showUserData() {
+    const files = ctx.platform?.files;
+    const profile = ctx.state.featureProfile || ctx.platform?.profile;
     const wrap = document.createElement("div");
     wrap.className = "user-data-panel";
+    wrap.dataset.featureProfile = profile?.id || "stable";
     const heading = document.createElement("h3");
     heading.textContent = "My Data";
     wrap.append(heading);
+
+    if (profile?.isLab) {
+      const warning = document.createElement("p");
+      warning.className = "lab-data-warning";
+      warning.setAttribute("role", "status");
+      warning.textContent = "Lab data is isolated from Stable. Nothing is copied between profiles unless you explicitly export and import a backup.";
+      wrap.append(warning);
+    }
 
     const summarySlot = document.createElement("div");
     const currentExportText = () => JSON.stringify(createUserDataExport(ctx.state), null, 2);
@@ -246,7 +247,16 @@ export function createUserDataView(ctx, options = {}) {
     download.type = "button";
     download.className = "mini-button primary-action";
     download.textContent = "Download backup";
-    download.addEventListener("click", () => downloadUserData(currentExportText()));
+    download.addEventListener("click", async () => {
+      const result = await files?.saveTextFile({
+        text: currentExportText(),
+        suggestedName: `bibleapp-user-data-${new Date().toISOString().slice(0, 10)}.json`,
+        mimeType: "application/json",
+      });
+      if (result?.status === "error") {
+        download.title = result.message;
+      }
+    });
 
     const exportDetails = document.createElement("details");
     exportDetails.className = "manual-json-panel";
@@ -271,10 +281,10 @@ export function createUserDataView(ctx, options = {}) {
     copyStatus.className = "inline-status";
     copy.addEventListener("click", async () => {
       refreshExportArea();
-      try {
-        await navigator.clipboard.writeText(exportArea.value);
+      const result = await files?.copyText(exportArea.value);
+      if (result?.status === "copied") {
         copyStatus.textContent = "Copied.";
-      } catch {
+      } else {
         exportArea.focus();
         exportArea.select();
         copyStatus.textContent = "Select and copy the highlighted JSON.";
@@ -328,17 +338,17 @@ export function createUserDataView(ctx, options = {}) {
       }
     };
 
-    fileInput.addEventListener("change", () => {
-      const file = fileInput.files?.[0];
-      if (!file) return;
-      file.text().then((text) => {
-        importArea.value = text;
-        status.textContent = `Loaded ${file.name}. Choose Merge backup or Replace all local data.`;
+    fileInput.addEventListener("change", async () => {
+      const result = await files?.openTextFile({ input: fileInput, accept: "application/json,.json" });
+      if (!result || result.status === "cancelled") return;
+      if (result.status === "opened") {
+        importArea.value = result.text;
+        status.textContent = `Loaded ${result.name}. Choose Merge backup or Replace all local data.`;
         status.className = "import-status";
-      }).catch(() => {
-        status.textContent = "Could not read that backup file. No local data was changed.";
-        status.className = "import-status error";
-      });
+        return;
+      }
+      status.textContent = `${result.message || "Could not read that backup file."} No local data was changed.`;
+      status.className = "import-status error";
     });
 
     const importActions = document.createElement("div");
@@ -424,27 +434,32 @@ export function createUserDataView(ctx, options = {}) {
 
     const diagnostics = document.createElement("details");
     diagnostics.className = "advanced-diagnostics";
+    diagnostics.dataset.featureId = "advanced-diagnostics";
     const diagnosticsSummary = document.createElement("summary");
     diagnosticsSummary.textContent = "Advanced diagnostics";
     const diagnosticsIntro = document.createElement("p");
-    diagnosticsIntro.textContent = "Inspect browser storage, package capabilities, and technical local job controls.";
+    diagnosticsIntro.textContent = profile?.isLab
+      ? "Lab exposes the complete experimental browser storage, physical-pack, capability, and local-job controls against isolated Lab state."
+      : "Inspect browser storage, package capabilities, and technical local job controls for compatibility and recovery.";
     const diagnosticsSlot = document.createElement("div");
     const refreshDiagnostics = () => {
       const summary = getUserDataSummary(ctx.state);
       const jobsTitle = document.createElement("h4");
       jobsTitle.textContent = "Local job console";
-      diagnosticsSlot.replaceChildren(
-        renderTechnicalSummary(summary),
-        renderPhysicalPackManager(ctx),
-        renderCapabilityManager(ctx, refreshDiagnostics),
-        jobsTitle,
-        renderJobsDiagnostics(ctx, refreshDiagnostics),
-      );
+      const sections = [renderTechnicalSummary(summary)];
+      if (ctx.isFeatureEnabled?.("physical-pack-management") !== false) sections.push(renderPhysicalPackManager(ctx));
+      if (ctx.isFeatureEnabled?.("capability-controls") !== false) sections.push(renderCapabilityManager(ctx, refreshDiagnostics));
+      if (ctx.isFeatureEnabled?.("local-jobs") !== false) sections.push(jobsTitle, renderJobsDiagnostics(ctx, refreshDiagnostics));
+      diagnosticsSlot.replaceChildren(...sections);
     };
     diagnostics.addEventListener("toggle", () => {
       if (diagnostics.open && !diagnosticsSlot.childNodes.length) refreshDiagnostics();
     });
     diagnostics.append(diagnosticsSummary, diagnosticsIntro, diagnosticsSlot);
+    if (profile?.isLab) {
+      diagnostics.open = true;
+      refreshDiagnostics();
+    }
     wrap.append(diagnostics);
 
     setDetail("My Data", wrap, { viewId: DETAIL_VIEW_IDS.myData });

@@ -8,6 +8,7 @@ const LANGUAGE_METADATA_VERSION = "clean-app-v1-sofit4";
 const STUDY_DATA_VERSION = "clean-app-v1-strongs-restore1";
 let physicalResolver = null;
 let physicalResolverEpoch = 0;
+let dataAdapter = null;
 
 // Translations that ship a Strong's overlay (word-to-word tagging) like BSB.
 const STRONGS_OVERLAY_TRANSLATIONS = new Set(["bsb", "kjv", "ylt"]);
@@ -18,6 +19,16 @@ function versionedStudyPath(path) {
 
 export function configurePhysicalPackResolver(resolver = null) {
   physicalResolver = resolver;
+  physicalResolverEpoch += 1;
+  pendingCache.clear();
+  sourceByPath.clear();
+}
+
+export function configureDataAdapter(adapter) {
+  if (!adapter || typeof adapter.fetchResponse !== "function") {
+    throw new Error("A data adapter with fetchResponse(path) is required.");
+  }
+  dataAdapter = adapter;
   physicalResolverEpoch += 1;
   pendingCache.clear();
   sourceByPath.clear();
@@ -43,10 +54,13 @@ export async function fetchJson(path) {
       source_key: sourceKey,
       runtime_source: managed?.runtime_source || "bundled_static_data",
       pack_id: managed?.pack_id || null,
+      version: managed?.version || null,
+      content_identity: managed?.content_identity || sourceKey,
     }));
     const cacheKey = `${sourceKey}|${path}`;
     if (cache.has(cacheKey)) return cache.get(cacheKey);
-    const response = managed?.response || await fetch(path);
+    if (!managed?.response && !dataAdapter) throw new Error("Static data adapter is not configured.");
+    const response = managed?.response || await dataAdapter.fetchResponse(path);
     if (!response.ok) throw new Error(`Could not load ${path}`);
     const value = await response.json();
     cache.set(cacheKey, value);

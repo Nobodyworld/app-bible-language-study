@@ -261,7 +261,8 @@ export function renderPhysicalPackManager(ctx) {
     catalogLabel.textContent = "Catalog URL";
     const catalogInput = document.createElement("input");
     catalogInput.type = "url";
-    catalogInput.value = snapshot.catalog_url || new URL(location.href).searchParams.get("physicalPackCatalog") || "";
+    const applicationUrl = ctx.platform?.environment?.currentUrl || ctx.platform?.environment?.baseUrl || "http://localhost/";
+    catalogInput.value = snapshot.catalog_url || new URL(applicationUrl).searchParams.get("physicalPackCatalog") || "";
     catalogInput.placeholder = "./data/physical-pack-fixtures/catalog-v1.json";
     catalogInput.disabled = busy;
     catalogLabel.append(catalogInput);
