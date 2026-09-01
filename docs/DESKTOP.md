@@ -52,9 +52,12 @@ npm run desktop:build
 ```
 
 `desktop:test` installs its pinned `tauri-driver` and matching Microsoft-signed
-EdgeDriver only under ignored `.desktop-tools/` when absent. It builds and drives
-a debug binary with an isolated debug-only data root. The release binary has no
-test plugin, test command, broad permission, or WebDriver-only control.
+EdgeDriver only under ignored `.desktop-tools/` when absent. By default it builds
+and drives a debug binary with an isolated debug-only data root. Exact
+installed-artifact acceptance may instead supply `BIBLEAPP_E2E_APPLICATION`, set
+`BIBLEAPP_E2E_SKIP_BUILD=1`, and optionally select the validated `stable` or
+`lab` profile. The release binary has no test plugin, test command, broad
+permission, or WebDriver-only control.
 
 `desktop:build` creates one current-user x64 NSIS installer. Output under
 `src-tauri/target/` is local validation evidence and must not be committed or
@@ -71,17 +74,30 @@ checkout credentials disabled, and then runs:
 - deterministic desktop preparation;
 - `desktop:check`, including Rust formatting, Clippy with warnings denied, Rust
   tests, and JavaScript desktop contracts;
-- the native debug WebDriver relaunch and persistence journey;
 - `npm audit --audit-level=low`;
 - the unsigned x64 NSIS build;
-- an exact installer count plus byte length and SHA-256 record in the job log.
+- exact installer and target-specific release-executable byte-length and SHA-256
+  records in the job log;
+- the source-built debug WebDriver relaunch and persistence journey;
+- silent current-user installation of that exact NSIS artifact on the clean
+  runner;
+- installed-location and current-user uninstall-registry verification;
+- byte-for-byte SHA-256 equality between the target-specific release executable
+  and the installed executable;
+- the same Reader, Language Study, Strong's, Study Marks, Meaning, route-resume,
+  and native persistence journey against the installed release executable;
+- a separate installed launch and normal main-window close observation;
+- silent uninstall plus installed-program and uninstall-registry cleanup checks,
+  with retained profile data classified rather than silently deleted.
 
 The workflow does not upload, publish, sign, release, or retain the installer as
-a downloadable artifact. A green hosted desktop job is reproducible native build
-and automated runtime evidence; it does not replace installed-release manual QA,
-native Open/Save dialog observation, actual system-browser observation, external
-network-denial proof, installed Stable/Lab directory inspection, real-window
-visual/accessibility review, or normal uninstall verification.
+a downloadable artifact. A green hosted desktop job establishes reproducible
+native build, clean-runner installation, installed-release automated behavior,
+and uninstall cleanup evidence. It does not replace native Open/Save dialog
+observation, actual system-browser observation, strict external-network-denial
+proof, installed Stable/Lab directory inspection, real-window
+visual/accessibility review, normal GUI installer/uninstaller observation, or an
+optional owner-machine compatibility check.
 
 ## User data and backup
 
@@ -127,8 +143,10 @@ Current limitations are intentional:
 Browser authority remains `npm run verify` on Node 20 and Node 24. Desktop
 authority is `desktop:prepare:check`, `desktop:check`, `desktop:test`, the
 explicit Cargo format/clippy/test gates, `desktop:build`, and the path-scoped
-`Desktop Verify` workflow on the exact candidate. Installed manual QA must use
-the release installer and executable, record SHA-256 hashes, verify offline data
-and profile isolation, and uninstall normally. Automated debug E2E and hosted
-build evidence do not replace native dialog, installed-app, visual, or uninstall
-QA.
+`Desktop Verify` workflow on the exact candidate. The hosted workflow includes
+both source-built debug and installed-release WebDriver journeys, exact payload
+identity, independent installed launch, and uninstall cleanup. Installed manual
+QA must still use the release installer and executable to observe native dialogs,
+strict offline behavior, real Stable/Lab directories, system-browser handoff,
+and the native visual/accessibility matrix. Automated installed acceptance does
+not replace those human-observable gates.
