@@ -9,8 +9,17 @@ import { fileURLToPath } from "node:url";
 import { ensureDesktopWebDriverTooling } from "./desktop-webdriver-tooling.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
-const BINARY = path.join(REPO_ROOT, "src-tauri", "target", "debug", "bible-app-reader.exe");
+const BINARY = process.env.BIBLEAPP_E2E_APPLICATION
+  ? path.resolve(process.env.BIBLEAPP_E2E_APPLICATION)
+  : path.join(REPO_ROOT, "src-tauri", "target", "debug", "bible-app-reader.exe");
+const SKIP_BUILD = process.env.BIBLEAPP_E2E_SKIP_BUILD === "1";
+const PROFILE_ID = process.env.BIBLEAPP_E2E_PROFILE || "stable";
 const MEANING = "Desktop E2E exact meaning";
+
+assert.match(PROFILE_ID, /^(stable|lab)$/, "Desktop E2E profile must be stable or lab");
+if (SKIP_BUILD) {
+  assert.ok(process.env.BIBLEAPP_E2E_APPLICATION, "BIBLEAPP_E2E_APPLICATION is required when BIBLEAPP_E2E_SKIP_BUILD=1");
+}
 
 function delay(milliseconds) {
   return new Promise((resolve) => setTimeout(resolve, milliseconds));
@@ -148,11 +157,12 @@ async function installErrorCapture(client) {
 
 async function readNativeStores(client) {
   return client.executeAsync(`
+    const profileId = arguments[0];
     const done = arguments[arguments.length - 1];
     Promise.all(['tags', 'workspace'].map(storeId =>
-      window['__TA' + 'URI__'].core.invoke('read_user_store', { profileId: 'stable', storeId })
+      window['__TA' + 'URI__'].core.invoke('read_user_store', { profileId, storeId })
     )).then(values => done({ tags: values[0], workspace: values[1] }), error => done({ error: String(error?.message || error) }));
-  `);
+  `, [PROFILE_ID]);
 }
 
 function persistedState(stores, targetId) {
@@ -234,7 +244,9 @@ const runId = `${Date.now()}-${process.pid}`;
 const runRoot = path.join(tooling.toolsRoot, "e2e", `bibleapp-e2e-${runId}`);
 const logsRoot = path.join(runRoot, "logs");
 await fs.mkdir(logsRoot, { recursive: true });
-await runLogged(process.execPath, [path.join(REPO_ROOT, "node_modules", "@tauri-apps", "cli", "tauri.js"), "build", "--debug", "--no-bundle"], path.join(logsRoot, "build.log"));
+if (!SKIP_BUILD) {
+  await runLogged(process.execPath, [path.join(REPO_ROOT, "node_modules", "@tauri-apps", "cli", "tauri.js"), "build", "--debug", "--no-bundle"], path.join(logsRoot, "build.log"));
+}
 await fs.access(BINARY);
 
 const driverPort = await freePort();
@@ -246,7 +258,7 @@ const driver = spawn(tooling.tauriDriver.binary, [
   "--native-driver", tooling.edgeDriver.binary,
 ], {
   cwd: REPO_ROOT,
-  env: { ...process.env, BIBLEAPP_E2E_ROOT: runRoot },
+  env: SKIP_BUILD ? { ...process.env } : { ...process.env, BIBLEAPP_E2E_ROOT: runRoot },
   stdio: ["ignore", "pipe", "pipe"],
   windowsHide: true,
 });
@@ -270,16 +282,20 @@ try {
   await driverLog.close();
 }
 
-const nativeLog = await fs.readFile(path.join(runRoot, "logs", "bible-app-reader.log"), "utf8").catch(() => "");
-assert.equal(/panic|backtrace|fatal/i.test(nativeLog), false, "Native E2E log contains a panic or fatal marker");
+if (!SKIP_BUILD) {
+  const nativeLog = await fs.readFile(path.join(runRoot, "logs", "bible-app-reader.log"), "utf8").catch(() => "");
+  assert.equal(/panic|backtrace|fatal/i.test(nativeLog), false, "Native E2E log contains a panic or fatal marker");
+}
 console.log(JSON.stringify({
   desktop_e2e: "PASS",
+  application_mode: SKIP_BUILD ? "supplied" : "debug-build",
+  profile_id: PROFILE_ID,
   driver: "tauri-driver",
   tauri_driver_version: tooling.tauriDriver.version,
   webview2_version: tooling.webviewVersion,
   edge_driver_version: tooling.edgeDriver.version,
   edge_driver_sha256: tooling.edgeDriver.sha256,
-  binary: path.relative(REPO_ROOT, BINARY),
+  binary: SKIP_BUILD ? path.basename(BINARY) : path.relative(REPO_ROOT, BINARY),
   target_id: targetId,
   route_restored: "#/read/bsb/proverbs/1/1",
   marker_persisted: true,
