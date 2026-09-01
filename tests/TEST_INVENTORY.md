@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-08-28
+Reviewed: 2026-09-01
 
 ## Authority
 
@@ -12,7 +12,7 @@ remove, or reclassify a maintained test.
 
 | Command | Current composition |
 |---|---|
-| `npm run test:static` | Repository integrity, feature registry/profile/platform contracts, data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
+| `npm run test:static` | Repository integrity, feature registry/profile/browser-and-desktop platform contracts, data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
 | `npm run test:domain` | Job, logical package, physical-pack contract and lifecycle, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
 | `npm run test:browser` | Desktop rendered interaction, Stable/Lab/disabled-profile behavior, Search-match contrast, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks/Meaning, and physical-pack Edge lifecycle flows. |
 | `npm run test:browser:mobile` | The maintained interaction journey in mobile mode. |
@@ -58,7 +58,7 @@ composition above:
 
 | Script or authority | Maintained coverage |
 |---|---|
-| `tests/desktop-platform-contracts.mjs` | Valid/malformed bridge selection, environment mapping, native storage initialization/isolation/flush/failure/corrupt recovery, dialog cancellation, installed-data path rejection, bundled-only physical services, close-time flush, and no runtime Tauri-global access outside the bridge. |
+| `tests/desktop-platform-contracts.mjs` | Valid/malformed bridge selection, environment mapping, native storage initialization/isolation/flush/failure/corrupt recovery, sticky per-store write failures, one-shot corrupt-recovery authorization, dialog cancellation, installed-data path rejection, bundled-only physical services, close-time flush, and no runtime Tauri-global access outside the bridge. This pure-JavaScript contract also runs in ordinary `test:static`/hosted verification. |
 | `tests/desktop-staging.mjs` | Full-corpus split inventory, deterministic staged paths, exclusions, CSP transform, symlink rejection evidence, and measured frontend/resource bytes. |
 | `src-tauri/src/*` unit tests | Profile/store IDs, containment, size limits, atomic replacement, interrupted/corrupt preservation, import/export, sanitized errors, installed-resource containment, environment path primitives, and external URL/navigation policy. |
 | `app/tools/run-desktop-e2e.mjs` | Actual debug native binary launch, Proverbs 1:1 Language Study and Strong's, exact source-token Favorite and Meaning writes, native persistence observation, clean relaunch, route restoration, and persisted controls with captured logs/screenshots. Test data roots and injected error capture are debug/E2E-only and absent from release behavior. |
@@ -76,6 +76,7 @@ order:
 | `tests/feature-registry.mjs` | Complete static feature inventory, lifecycle values, dependencies, ownership, profile closure, test ownership, and actionable invalid-fixture diagnostics. |
 | `tests/feature-profiles.mjs` | Deterministic Stable/Lab resolution, recovery/compatibility access, unknown fallback, disabled-feature closure, unchanged Stable identities, and isolated Lab identities. |
 | `tests/platform-contracts.mjs` | Platform shape, user-storage isolation, profile-scoped notifications, browser file/data operations, digest/source/estimate services, profile-scoped physical registry identity, and explicit byte-store operations. |
+| `tests/desktop-platform-contracts.mjs` | Tauri bridge selection, profile-scoped native storage, failure and recovery safety, native dialog contracts, packaged-data restrictions, bundled-only physical services, and close-time persistence without requiring Rust or Windows compilation. |
 | `tests/capabilities.mjs` | Capability declarations and availability behavior. |
 | `tests/analysis.mjs` | Generated analysis data and manifest contracts. |
 | `tests/interlinear.mjs` | Internal interlinear records, token resolution, marked Greek glyphs, and Hebrew analysis behavior. |
