@@ -89,7 +89,8 @@ checkout credentials disabled, and then runs:
   installed executable;
 - the same Reader, Language Study, Strong's, Study Marks, Meaning, route-resume,
   and native persistence journey against the installed release executable;
-- a separate installed launch and normal main-window close observation;
+- a separate headless-safe observation that the installed executable launches
+  independently and remains alive outside the WebDriver session;
 - silent uninstall plus installed-program and uninstall-registry cleanup checks,
   with retained profile data classified rather than silently deleted.
 
@@ -99,14 +100,21 @@ the installed executable are therefore expected to have different hashes. The
 workflow treats the deterministically reconstructed NSIS-patched payload—not the
 restored file—as the executable identity authority.
 
+GitHub-hosted Windows runners do not expose an interactive user desktop.
+`WaitForInputIdle` and `CloseMainWindow` are therefore not reliable evidence of a
+normal GUI close in Actions. The installed-release WebDriver journey exercises
+the actual installed application window; the separate process check proves an
+ordinary independent launch and then terminates that observation process for
+runner cleanup. Normal user-driven window close remains a manual acceptance item.
+
 The workflow does not upload, publish, sign, release, or retain the installer as
 a downloadable artifact. A green hosted desktop job establishes reproducible
 native build, clean-runner installation, installed-release automated behavior,
-and uninstall cleanup evidence. It does not replace native Open/Save dialog
-observation, actual system-browser observation, strict external-network-denial
-proof, installed Stable/Lab directory inspection, real-window
-visual/accessibility review, normal GUI installer/uninstaller observation, or an
-optional owner-machine compatibility check.
+independent launch, and uninstall cleanup evidence. It does not replace native
+Open/Save dialog observation, actual system-browser observation, strict
+external-network-denial proof, installed Stable/Lab directory inspection,
+real-window visual/accessibility review, normal GUI close or installer/uninstaller
+observation, or an optional owner-machine compatibility check.
 
 ## User data and backup
 
@@ -157,5 +165,5 @@ both source-built debug and installed-release WebDriver journeys, exact payload
 identity, independent installed launch, and uninstall cleanup. Installed manual
 QA must still use the release installer and executable to observe native dialogs,
 strict offline behavior, real Stable/Lab directories, system-browser handoff,
-and the native visual/accessibility matrix. Automated installed acceptance does
-not replace those human-observable gates.
+normal user-driven window close, and the native visual/accessibility matrix.
+Automated installed acceptance does not replace those human-observable gates.
