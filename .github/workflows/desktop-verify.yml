@@ -90,10 +90,32 @@ jobs:
       - name: Build unsigned NSIS preview installer
         run: npm run desktop:build
 
-      - name: Record installer and release-executable evidence
+      - name: Record installer and exact NSIS-payload evidence
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
+
+          function Find-BytePattern {
+            param(
+              [Parameter(Mandatory)][byte[]]$Haystack,
+              [Parameter(Mandatory)][byte[]]$Needle
+            )
+            $matches = [System.Collections.Generic.List[int]]::new()
+            for ($offset = 0; $offset -le $Haystack.Length - $Needle.Length; $offset++) {
+              $matched = $true
+              for ($index = 0; $index -lt $Needle.Length; $index++) {
+                if ($Haystack[$offset + $index] -ne $Needle[$index]) {
+                  $matched = $false
+                  break
+                }
+              }
+              if ($matched) {
+                $matches.Add($offset)
+              }
+            }
+            return $matches.ToArray()
+          }
+
           $bundleRoot = Join-Path $PWD 'src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis'
           $installers = @(Get-ChildItem -LiteralPath $bundleRoot -Filter '*.exe' -File)
           if ($installers.Count -ne 1) {
@@ -104,17 +126,40 @@ jobs:
           if (-not (Test-Path -LiteralPath $releaseExe -PathType Leaf)) {
             throw "The target-specific release executable is missing: $releaseExe"
           }
+
+          # Tauri packages an NSIS-marker-patched executable, then restores the
+          # unpatched target/release file. Reconstruct that exact unsigned payload
+          # deterministically so the installed executable can be compared byte for byte.
+          $unknownMarker = [Text.Encoding]::ASCII.GetBytes('__TAURI_BUNDLE_TYPE_VAR_UNK')
+          $nsisMarker = [Text.Encoding]::ASCII.GetBytes('__TAURI_BUNDLE_TYPE_VAR_NSS')
+          if ($unknownMarker.Length -ne $nsisMarker.Length) {
+            throw 'The Tauri bundle markers must have identical byte lengths.'
+          }
+          $payloadBytes = [IO.File]::ReadAllBytes($releaseExe)
+          $markerMatches = @(Find-BytePattern -Haystack $payloadBytes -Needle $unknownMarker)
+          if ($markerMatches.Count -ne 1) {
+            throw "Expected exactly one unpatched Tauri bundle marker; found $($markerMatches.Count)."
+          }
+          [Array]::Copy($nsisMarker, 0, $payloadBytes, $markerMatches[0], $nsisMarker.Length)
+          $expectedPayload = Join-Path $env:RUNNER_TEMP "bible-app-reader-$($env:DESKTOP_CANDIDATE_SHA)-nsis.exe"
+          [IO.File]::WriteAllBytes($expectedPayload, $payloadBytes)
+
           $installerHash = Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256
           $releaseHash = Get-FileHash -LiteralPath $releaseExe -Algorithm SHA256
+          $payloadHash = Get-FileHash -LiteralPath $expectedPayload -Algorithm SHA256
           "DESKTOP_INSTALLER_PATH=$($installer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           "DESKTOP_RELEASE_EXE=$releaseExe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_EXPECTED_INSTALLED_EXE=$expectedPayload" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           [pscustomobject]@{
             installer = $installer.Name
             installer_bytes = $installer.Length
             installer_sha256 = $installerHash.Hash
-            release_executable = Split-Path -Leaf $releaseExe
-            release_executable_bytes = (Get-Item -LiteralPath $releaseExe).Length
-            release_executable_sha256 = $releaseHash.Hash
+            restored_release_executable = Split-Path -Leaf $releaseExe
+            restored_release_executable_bytes = (Get-Item -LiteralPath $releaseExe).Length
+            restored_release_executable_sha256 = $releaseHash.Hash
+            expected_nsis_payload_bytes = (Get-Item -LiteralPath $expectedPayload).Length
+            expected_nsis_payload_sha256 = $payloadHash.Hash
+            tauri_bundle_marker = 'NSS'
             head = $env:DESKTOP_CANDIDATE_SHA
             image_os = $env:ImageOS
             image_version = $env:ImageVersion
@@ -148,6 +193,15 @@ jobs:
             throw "The NSIS uninstaller was not found at $uninstaller."
           }
 
+          # Record cleanup state immediately after a complete installation so the
+          # always() step can remove it even when a later identity assertion fails.
+          "BIBLEAPP_E2E_APPLICATION=$installedExe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "BIBLEAPP_E2E_SKIP_BUILD=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "BIBLEAPP_E2E_PROFILE=stable" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_UNINSTALLER_PATH=$uninstaller" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_INSTALL_SUCCEEDED=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
           $registryEntries = @(
             Get-ChildItem -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
               ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue } |
@@ -161,23 +215,16 @@ jobs:
             throw "Registry install location mismatch: expected $installRoot, found $registryInstallLocation."
           }
 
-          $releaseHash = Get-FileHash -LiteralPath $env:DESKTOP_RELEASE_EXE -Algorithm SHA256
+          $payloadHash = Get-FileHash -LiteralPath $env:DESKTOP_EXPECTED_INSTALLED_EXE -Algorithm SHA256
           $installedHash = Get-FileHash -LiteralPath $installedExe -Algorithm SHA256
-          if ($releaseHash.Hash -ne $installedHash.Hash) {
-            throw "Installed executable SHA-256 does not match the target-specific release executable."
+          if ($payloadHash.Hash -ne $installedHash.Hash) {
+            throw "Installed executable SHA-256 does not match the deterministically reconstructed NSIS payload."
           }
-          $releaseBytes = (Get-Item -LiteralPath $env:DESKTOP_RELEASE_EXE).Length
+          $payloadBytes = (Get-Item -LiteralPath $env:DESKTOP_EXPECTED_INSTALLED_EXE).Length
           $installedBytes = (Get-Item -LiteralPath $installedExe).Length
-          if ($releaseBytes -ne $installedBytes) {
-            throw "Installed executable byte length does not match the target-specific release executable."
+          if ($payloadBytes -ne $installedBytes) {
+            throw "Installed executable byte length does not match the deterministically reconstructed NSIS payload."
           }
-
-          "BIBLEAPP_E2E_APPLICATION=$installedExe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "BIBLEAPP_E2E_SKIP_BUILD=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "BIBLEAPP_E2E_PROFILE=stable" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "DESKTOP_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "DESKTOP_UNINSTALLER_PATH=$uninstaller" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
-          "DESKTOP_INSTALL_SUCCEEDED=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
 
           [pscustomobject]@{
             installed = $true
@@ -186,7 +233,7 @@ jobs:
             executable = Split-Path -Leaf $installedExe
             executable_bytes = $installedBytes
             executable_sha256 = $installedHash.Hash
-            release_payload_match = $true
+            expected_nsis_payload_match = $true
             uninstaller_present = $true
           } | ConvertTo-Json -Compress
 
