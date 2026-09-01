@@ -60,6 +60,29 @@ test plugin, test command, broad permission, or WebDriver-only control.
 `src-tauri/target/` is local validation evidence and must not be committed or
 published by this issue.
 
+## Hosted desktop verification
+
+`.github/workflows/desktop-verify.yml` is the path-scoped Windows-native check for
+changes that can affect the shared desktop frontend, Tauri source, desktop tests,
+or package inputs. It checks out and asserts the exact pull-request head (or the
+exact push/workflow-dispatch SHA), uses read-only repository permissions with
+checkout credentials disabled, and then runs:
+
+- deterministic desktop preparation;
+- `desktop:check`, including Rust formatting, Clippy with warnings denied, Rust
+  tests, and JavaScript desktop contracts;
+- the native debug WebDriver relaunch and persistence journey;
+- `npm audit --audit-level=low`;
+- the unsigned x64 NSIS build;
+- an exact installer count plus byte length and SHA-256 record in the job log.
+
+The workflow does not upload, publish, sign, release, or retain the installer as
+a downloadable artifact. A green hosted desktop job is reproducible native build
+and automated runtime evidence; it does not replace installed-release manual QA,
+native Open/Save dialog observation, actual system-browser observation, external
+network-denial proof, installed Stable/Lab directory inspection, real-window
+visual/accessibility review, or normal uninstall verification.
+
 ## User data and backup
 
 The native backend accepts only `stable` or `lab` and one of six logical store
@@ -103,7 +126,9 @@ Current limitations are intentional:
 
 Browser authority remains `npm run verify` on Node 20 and Node 24. Desktop
 authority is `desktop:prepare:check`, `desktop:check`, `desktop:test`, the
-explicit Cargo format/clippy/test gates, and `desktop:build`. Installed manual QA
-must use the release installer and executable, record SHA-256 hashes, verify
-offline data and profile isolation, and uninstall normally. Automated debug E2E
-evidence does not replace native dialog, installed-app, visual, or uninstall QA.
+explicit Cargo format/clippy/test gates, `desktop:build`, and the path-scoped
+`Desktop Verify` workflow on the exact candidate. Installed manual QA must use
+the release installer and executable, record SHA-256 hashes, verify offline data
+and profile isolation, and uninstall normally. Automated debug E2E and hosted
+build evidence do not replace native dialog, installed-app, visual, or uninstall
+QA.
