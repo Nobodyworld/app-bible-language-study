@@ -76,19 +76,28 @@ checkout credentials disabled, and then runs:
   tests, and JavaScript desktop contracts;
 - `npm audit --audit-level=low`;
 - the unsigned x64 NSIS build;
-- exact installer and target-specific release-executable byte-length and SHA-256
-  records in the job log;
+- exact installer and restored target-specific release-executable byte-length
+  and SHA-256 records in the job log;
+- deterministic reconstruction of the unsigned executable that Tauri actually
+  places into the NSIS installer by replacing the single unknown bundle marker
+  with the NSIS marker;
 - the source-built debug WebDriver relaunch and persistence journey;
 - silent current-user installation of that exact NSIS artifact on the clean
   runner;
 - installed-location and current-user uninstall-registry verification;
-- byte-for-byte SHA-256 equality between the target-specific release executable
-  and the installed executable;
+- byte-for-byte SHA-256 equality between the reconstructed NSIS payload and the
+  installed executable;
 - the same Reader, Language Study, Strong's, Study Marks, Meaning, route-resume,
   and native persistence journey against the installed release executable;
 - a separate installed launch and normal main-window close observation;
 - silent uninstall plus installed-program and uninstall-registry cleanup checks,
   with retained profile data classified rather than silently deleted.
+
+Tauri temporarily patches the bundle-type marker before creating NSIS and then
+restores the target-specific release executable. The restored release file and
+the installed executable are therefore expected to have different hashes. The
+workflow treats the deterministically reconstructed NSIS-patched payload—not the
+restored file—as the executable identity authority.
 
 The workflow does not upload, publish, sign, release, or retain the installer as
 a downloadable artifact. A green hosted desktop job establishes reproducible
