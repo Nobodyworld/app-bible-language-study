@@ -90,7 +90,7 @@ jobs:
       - name: Build unsigned NSIS preview installer
         run: npm run desktop:build
 
-      - name: Record installer evidence
+      - name: Record installer and release-executable evidence
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
@@ -100,15 +100,171 @@ jobs:
             throw "Expected exactly one NSIS installer under $bundleRoot; found $($installers.Count)."
           }
           $installer = $installers[0]
-          $hash = Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256
+          $releaseExe = Join-Path $PWD 'src-tauri\target\x86_64-pc-windows-msvc\release\bible-app-reader.exe'
+          if (-not (Test-Path -LiteralPath $releaseExe -PathType Leaf)) {
+            throw "The target-specific release executable is missing: $releaseExe"
+          }
+          $installerHash = Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256
+          $releaseHash = Get-FileHash -LiteralPath $releaseExe -Algorithm SHA256
+          "DESKTOP_INSTALLER_PATH=$($installer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_RELEASE_EXE=$releaseExe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
           [pscustomobject]@{
             installer = $installer.Name
-            bytes = $installer.Length
-            sha256 = $hash.Hash
+            installer_bytes = $installer.Length
+            installer_sha256 = $installerHash.Hash
+            release_executable = Split-Path -Leaf $releaseExe
+            release_executable_bytes = (Get-Item -LiteralPath $releaseExe).Length
+            release_executable_sha256 = $releaseHash.Hash
             head = $env:DESKTOP_CANDIDATE_SHA
             image_os = $env:ImageOS
             image_version = $env:ImageVersion
           } | ConvertTo-Json -Compress
 
-      - name: Run desktop WebDriver acceptance
+      - name: Run source-built debug WebDriver acceptance
         run: npm run desktop:test
+
+      - name: Install exact NSIS artifact and verify installed payload
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installRoot = Join-Path $env:LOCALAPPDATA 'Bible App Reader'
+          $installedExe = Join-Path $installRoot 'bible-app-reader.exe'
+          $uninstaller = Join-Path $installRoot 'uninstall.exe'
+          if (Test-Path -LiteralPath $installRoot) {
+            throw "Expected a clean runner install location, but $installRoot already exists."
+          }
+          $install = Start-Process -FilePath $env:DESKTOP_INSTALLER_PATH -ArgumentList '/S' -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            throw "The NSIS installer exited with code $($install.ExitCode)."
+          }
+          $deadline = (Get-Date).AddSeconds(45)
+          while ((Get-Date) -lt $deadline -and (-not (Test-Path -LiteralPath $installedExe -PathType Leaf) -or -not (Test-Path -LiteralPath $uninstaller -PathType Leaf))) {
+            Start-Sleep -Milliseconds 250
+          }
+          if (-not (Test-Path -LiteralPath $installedExe -PathType Leaf)) {
+            throw "The installed executable was not found at $installedExe."
+          }
+          if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
+            throw "The NSIS uninstaller was not found at $uninstaller."
+          }
+
+          $registryEntries = @(
+            Get-ChildItem -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+              ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue } |
+              Where-Object { $_.DisplayName -eq 'Bible App Reader' }
+          )
+          if ($registryEntries.Count -ne 1) {
+            throw "Expected exactly one current-user uninstall record for Bible App Reader; found $($registryEntries.Count)."
+          }
+          $registryInstallLocation = ([string]$registryEntries[0].InstallLocation).Trim('"')
+          if ([IO.Path]::GetFullPath($registryInstallLocation) -ne [IO.Path]::GetFullPath($installRoot)) {
+            throw "Registry install location mismatch: expected $installRoot, found $registryInstallLocation."
+          }
+
+          $releaseHash = Get-FileHash -LiteralPath $env:DESKTOP_RELEASE_EXE -Algorithm SHA256
+          $installedHash = Get-FileHash -LiteralPath $installedExe -Algorithm SHA256
+          if ($releaseHash.Hash -ne $installedHash.Hash) {
+            throw "Installed executable SHA-256 does not match the target-specific release executable."
+          }
+          $releaseBytes = (Get-Item -LiteralPath $env:DESKTOP_RELEASE_EXE).Length
+          $installedBytes = (Get-Item -LiteralPath $installedExe).Length
+          if ($releaseBytes -ne $installedBytes) {
+            throw "Installed executable byte length does not match the target-specific release executable."
+          }
+
+          "BIBLEAPP_E2E_APPLICATION=$installedExe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "BIBLEAPP_E2E_SKIP_BUILD=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "BIBLEAPP_E2E_PROFILE=stable" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_UNINSTALLER_PATH=$uninstaller" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_INSTALL_SUCCEEDED=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          [pscustomobject]@{
+            installed = $true
+            install_mode = 'currentUser'
+            registry_scope = 'HKCU'
+            executable = Split-Path -Leaf $installedExe
+            executable_bytes = $installedBytes
+            executable_sha256 = $installedHash.Hash
+            release_payload_match = $true
+            uninstaller_present = $true
+          } | ConvertTo-Json -Compress
+
+      - name: Run installed-release WebDriver acceptance
+        run: node ./app/tools/run-desktop-e2e.mjs
+
+      - name: Observe independent installed launch and close
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $application = Start-Process -FilePath $env:BIBLEAPP_E2E_APPLICATION -PassThru
+          try {
+            [void]$application.WaitForInputIdle(15000)
+            Start-Sleep -Seconds 3
+            $application.Refresh()
+            if ($application.HasExited) {
+              throw "The independently launched installed application exited before observation completed."
+            }
+            if (-not $application.CloseMainWindow()) {
+              throw "The independently launched installed application did not expose a closable main window."
+            }
+            if (-not $application.WaitForExit(15000)) {
+              throw "The independently launched installed application did not close normally."
+            }
+            [pscustomobject]@{
+              installed_launch = 'PASS'
+              close_main_window = 'PASS'
+              exit_code = $application.ExitCode
+            } | ConvertTo-Json -Compress
+          } finally {
+            $application.Refresh()
+            if (-not $application.HasExited) {
+              Stop-Process -Id $application.Id -Force -ErrorAction SilentlyContinue
+            }
+          }
+
+      - name: Uninstall installed preview and verify cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-Process -Name 'bible-app-reader' -ErrorAction SilentlyContinue |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+
+          if ($env:DESKTOP_INSTALL_SUCCEEDED -ne '1') {
+            Write-Host 'No completed installation was recorded; uninstall cleanup is not required.'
+            exit 0
+          }
+          if (-not (Test-Path -LiteralPath $env:DESKTOP_UNINSTALLER_PATH -PathType Leaf)) {
+            throw "The expected uninstaller is missing: $env:DESKTOP_UNINSTALLER_PATH"
+          }
+          $uninstall = Start-Process -FilePath $env:DESKTOP_UNINSTALLER_PATH -ArgumentList '/S' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) {
+            throw "The NSIS uninstaller exited with code $($uninstall.ExitCode)."
+          }
+          $installedExe = Join-Path $env:DESKTOP_INSTALL_ROOT 'bible-app-reader.exe'
+          $deadline = (Get-Date).AddSeconds(45)
+          while ((Get-Date) -lt $deadline -and ((Test-Path -LiteralPath $installedExe) -or (Test-Path -LiteralPath $env:DESKTOP_UNINSTALLER_PATH))) {
+            Start-Sleep -Milliseconds 250
+          }
+          if (Test-Path -LiteralPath $installedExe) {
+            throw "The installed executable remains after uninstall: $installedExe"
+          }
+          if (Test-Path -LiteralPath $env:DESKTOP_UNINSTALLER_PATH) {
+            throw "The uninstaller remains after uninstall: $env:DESKTOP_UNINSTALLER_PATH"
+          }
+          $registryEntries = @(
+            Get-ChildItem -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+              ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue } |
+              Where-Object { $_.DisplayName -eq 'Bible App Reader' }
+          )
+          if ($registryEntries.Count -ne 0) {
+            throw "The current-user uninstall record remains after uninstall."
+          }
+          $appDataRoot = Join-Path $env:APPDATA 'com.nobodyworld.bibleappreader'
+          [pscustomobject]@{
+            uninstall = 'PASS'
+            installed_executable_removed = $true
+            uninstall_record_removed = $true
+            profile_data_retained = Test-Path -LiteralPath $appDataRoot
+          } | ConvertTo-Json -Compress
