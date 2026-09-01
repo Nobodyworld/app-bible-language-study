@@ -59,6 +59,15 @@ The required public-repository security baseline is:
 - Dependabot alerts and security updates;
 - the Windows Node 20 and Node 24 `Verify` workflow matrix.
 
+Desktop-affecting changes also trigger the path-scoped `Desktop Verify` workflow.
+That workflow checks out and asserts the exact candidate SHA, disables persisted
+checkout credentials, runs Rust and JavaScript desktop contracts, drives the
+native debug application through its relaunch/persistence journey, audits npm
+dependencies, and builds and hashes the unsigned NSIS preview without publishing
+it. It is supporting desktop evidence rather than a replacement for installed
+manual security, accessibility, offline, dialog, system-browser, or uninstall
+review.
+
 CodeQL Default Setup is intentionally disabled for the current public preview by
 owner decision. Local and hosted static verification, dependency auditing,
 complete-history secret scanning, pinned Actions, and manual security review
