@@ -226,6 +226,44 @@ assert.equal(contextPrevented, true);
 await closeListener({ preventDefault() {} });
 assert.equal(destroyed, 1, "A successful bounded flush must precede native window destruction");
 
+let blockedCloseListener = null;
+let blockedDestroyed = 0;
+let flushShouldFail = true;
+let closeConfirmations = 0;
+const blockedRuntime = createTauriRuntimeService({
+  bridge: {
+    invoke: async () => null,
+    onCloseRequested: async (listener) => { blockedCloseListener = listener; return () => {}; },
+    destroyCurrentWindow: async () => { blockedDestroyed += 1; },
+  },
+  userStorage: {
+    save() {},
+    async flush() {
+      if (flushShouldFail) throw new Error("tags: [local path]");
+      return { status: "flushed" };
+    },
+  },
+  windowObject: {
+    location: { href: "http://tauri.localhost/", hash: "" },
+    history: { state: null, replaceState() {} },
+    confirm() {
+      closeConfirmations += 1;
+      return false;
+    },
+  },
+});
+await blockedRuntime.start({
+  documentObject: {
+    addEventListener() {},
+  },
+});
+await blockedCloseListener({ preventDefault() {} });
+assert.equal(blockedDestroyed, 0, "A rejected native flush must keep the window open when the user declines data loss");
+assert.equal(closeConfirmations, 1);
+flushShouldFail = false;
+await blockedCloseListener({ preventDefault() {} });
+assert.equal(blockedDestroyed, 1, "A later successful flush must allow a new close request to complete");
+
 const platformHarness = createNativeHarness();
 const platformWindow = {
   location: { href: "http://tauri.localhost/index.html?profile=lab", hash: "" },
@@ -267,4 +305,5 @@ console.log(JSON.stringify({
   packaged_data_boundary: "PASS",
   bundled_physical_mode: "PASS",
   bounded_close_flush: "PASS",
+  failed_flush_blocks_close_until_retry: "PASS",
 }, null, 2));
