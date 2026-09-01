@@ -25,15 +25,26 @@ Include:
 
 ## Current Posture
 
-Bible App Reader is a static, local-first browser application. It has no backend,
-server-side secrets, account system, analytics service, payment flow, or remote
-write API. User-created study data is stored in browser storage and can be
-exported as JSON.
+Bible App Reader is a static, local-first browser application with an unsigned
+Tauri 2 Windows public-preview shell. It has no backend, server-side secrets,
+account system, analytics service, payment flow, or remote write API.
+User-created study data is stored in the selected browser or desktop profile and
+can be exported as version-3 JSON.
 
 The static app includes a Content Security Policy and commentary HTML
 sanitization. These controls reduce risk, but they are not substitutes for
 reviewing changes that touch HTML rendering, data import, persistence, or
 third-party bundled content.
+
+The desktop shell exposes only allowlisted commands for environment reporting,
+profile/store-scoped JSON, installed `data/` resources, version-3 backup
+dialogs, flush status, and exact-host HTTPS external references. Caller-supplied
+paths, arbitrary filesystem reads/writes, shell/process execution, unrestricted
+network access, updater authority, and native physical-pack mutation are not
+exposed. External navigation is rejected unless it is an application URL;
+approved GitHub references open through the system handler. Logs contain bounded
+event codes rather than user content or absolute paths. Release CSP and HTML CSP
+remain narrow and exclude `unsafe-eval`.
 
 ## Repository Security Controls
 

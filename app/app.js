@@ -61,11 +61,20 @@ import {
   bindStudyWorkspaceWidthControls,
   initializeStudyWorkspaceWidth,
 } from "./src/study-workspace-width.js";
-import { createBrowserPlatform } from "./src/platform/browser-platform.js";
+import {
+  renderPlatformStartupFailure,
+  resolveApplicationPlatform,
+} from "./src/platform/application-platform.js";
 import { featureEnabled } from "./src/feature-profiles.js";
 import { applyFeatureProfileToDocument } from "./src/feature-ui.js";
 
-const platform = createBrowserPlatform({ applicationVersion: "1.0.0" });
+let platform;
+try {
+  platform = await resolveApplicationPlatform({ applicationVersion: "1.0.0" });
+} catch (error) {
+  renderPlatformStartupFailure(document, error);
+  throw error;
+}
 configureDataAdapter(platform.data);
 applyFeatureProfileToDocument(document, platform.profile);
 const storageIdentity = platform.userStorage.status().identities;
@@ -1127,6 +1136,7 @@ async function navigateToRoute(route, options = {}) {
     }
     ctx.studyContext = {}; // Clear study context when going home
     showHomePage(options);
+    platform.runtime?.persistRoute?.(state, "#/home");
     return true;
   }
   clearReaderHighlight();
@@ -1234,6 +1244,7 @@ async function navigateToRoute(route, options = {}) {
   if (!loaded || navigationGeneration !== state.navigationGeneration) return false;
 
   activeReaderRoute = { ...next };
+  platform.runtime?.persistRoute?.(state, readerRouteHash(next));
   if (canRestore) await restoreReaderNavigationSnapshot(restorationSnapshot);
   persistCurrentReaderSnapshot();
   return true;
@@ -1657,6 +1668,8 @@ function bindEvents() {
 
 async function init() {
   await initStores(state, platform.userStorage);
+  platform.runtime?.restoreRoute?.(state);
+  await platform.runtime?.start?.({ documentObject: document, state });
   listenForUserDataChanges(state, () => {
     setStatus("User data changed in another tab");
   });

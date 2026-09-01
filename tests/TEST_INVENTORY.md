@@ -19,6 +19,10 @@ remove, or reclassify a maintained test.
 | `npm test` | Static, desktop-browser, and mobile-browser suites. |
 | `npm run audit` | Public package/file audit through `app/tools/publish-audit.mjs`. |
 | `npm run verify` | `npm test` followed by the public package audit. |
+| `npm run desktop:prepare` | Deterministic split staging of the embedded shell and complete installer-owned data resources. |
+| `npm run desktop:check` | Desktop staging verification, Rust format/clippy/tests, and focused Tauri platform/staging contracts. |
+| `npm run desktop:test` | Official direct `tauri-driver` flow against the debug WRY binary, including exact-token mark/Meaning persistence and route restoration across relaunch. |
+| `npm run desktop:build` | Unsigned Windows x64 NSIS release build; it is intentionally outside ordinary browser verification. |
 
 ## Focused Aliases
 
@@ -48,6 +52,16 @@ composition above:
 | `npm run physical-packs:check` | Deterministic fixture check plus two independent production Search/Commentary inventory builds with byte-for-byte catalog/manifest comparison and digest validation. |
 | `npm run physical-packs:scenarios:check` | Maintained five-scenario file/raw/transfer measurement reconciliation. |
 | `npm run test:ui` | UI, compact panel-context, workspace-width model, and contained-surface source contracts. |
+| `npm run desktop:webdriver:prepare` | Project-local official `tauri-driver` plus Microsoft-signed EdgeDriver matched to installed WebView2. |
+
+## Desktop Tests
+
+| Script or authority | Maintained coverage |
+|---|---|
+| `tests/desktop-platform-contracts.mjs` | Valid/malformed bridge selection, environment mapping, native storage initialization/isolation/flush/failure/corrupt recovery, dialog cancellation, installed-data path rejection, bundled-only physical services, close-time flush, and no runtime Tauri-global access outside the bridge. |
+| `tests/desktop-staging.mjs` | Full-corpus split inventory, deterministic staged paths, exclusions, CSP transform, symlink rejection evidence, and measured frontend/resource bytes. |
+| `src-tauri/src/*` unit tests | Profile/store IDs, containment, size limits, atomic replacement, interrupted/corrupt preservation, import/export, sanitized errors, installed-resource containment, environment path primitives, and external URL/navigation policy. |
+| `app/tools/run-desktop-e2e.mjs` | Actual debug native binary launch, Proverbs 1:1 Language Study and Strong's, exact source-token Favorite and Meaning writes, native persistence observation, clean relaunch, route restoration, and persisted controls with captured logs/screenshots. Test data roots and injected error capture are debug/E2E-only and absent from release behavior. |
 
 ## Static and Source-Level Tests
 

@@ -1,0 +1,18 @@
+{
+  "app": {
+    "windows": [
+      {
+        "label": "main",
+        "title": "Bible App Reader Lab",
+        "url": "index.html?profile=lab",
+        "width": 1280,
+        "height": 820,
+        "minWidth": 390,
+        "minHeight": 640,
+        "resizable": true,
+        "fullscreen": false,
+        "devtools": false
+      }
+    ]
+  }
+}

@@ -38,3 +38,8 @@
 *.pyc
 
 .playwright-mcp/
+/.desktop-dist/
+/.desktop-resources/
+/.desktop-tools/
+/src-tauri/target/
+/src-tauri/gen/

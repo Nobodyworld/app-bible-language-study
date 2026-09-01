@@ -1,6 +1,6 @@
 # UI Feature Contract
 
-The browser UI remains one static DOM application. Feature profiles decide
+The browser and Tauri Windows UI remain one static DOM application. Feature profiles decide
 whether a module participates; capability state separately decides whether an
 enabled module's required data can currently be used.
 
@@ -39,6 +39,12 @@ Reader startup.
 The fixed disabled-feature profile used by maintained browser automation is
 available only through an in-memory test flag on loopback hosts. It is not a
 URL-selectable or hosted production profile override.
+
+The Windows window is one resizable WebView2 surface with a 390 by 640 minimum.
+It preserves the same 768px mobile-drawer boundary and 769px/773px responsive
+contracts as the browser. Release builds disable DevTools and the ordinary
+context menu. Native Open/Save replaces the browser file picker/download only
+inside the Tauri composition; visible backup semantics remain version 3.
 
 ## Unavailable behavior
 

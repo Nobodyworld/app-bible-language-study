@@ -1,0 +1,36 @@
+[package]
+name = "bible-app-reader"
+version = "1.0.0"
+description = "Installed Windows shell for the local-first Bible App Reader"
+authors = ["Nobody Production"]
+license = "MIT"
+repository = "https://github.com/Nobodyworld/app-bible-language-study"
+edition = "2021"
+rust-version = "1.85"
+
+[lib]
+name = "bible_app_reader"
+crate-type = ["rlib"]
+
+[[bin]]
+name = "bible-app-reader"
+path = "src/main.rs"
+
+[build-dependencies]
+tauri-build = { version = "=2.6.3", features = [] }
+
+[dependencies]
+rfd = "=0.17.2"
+serde = { version = "=1.0.229", features = ["derive"] }
+serde_json = { version = "=1.0.151", features = ["preserve_order"] }
+tauri = { version = "=2.11.5", features = [] }
+tauri-plugin-opener = { version = "=2.5.5", features = [] }
+url = { version = "=2.5.8", features = ["serde"] }
+windows-sys = { version = "=0.61.2", features = ["Win32_Storage_FileSystem"] }
+
+[profile.release]
+codegen-units = 1
+lto = true
+opt-level = "s"
+panic = "abort"
+strip = true

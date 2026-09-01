@@ -42,7 +42,16 @@
     "verify": "npm test && npm run audit",
     "serve": "node ./app/tools/serve-app.mjs",
     "serve:publish": "node ./app/tools/serve-app.mjs --mode publish",
-    "screenshots:public": "node ./tools/capture-public-screenshots.mjs"
+    "screenshots:public": "node ./tools/capture-public-screenshots.mjs",
+    "desktop:prepare": "node ./app/tools/prepare-desktop-frontend.mjs",
+    "desktop:prepare:check": "node ./app/tools/prepare-desktop-frontend.mjs --check",
+    "desktop:icons": "tauri icon ./src-tauri/icons/icon.svg --output ./src-tauri/icons",
+    "desktop:dev": "tauri dev",
+    "desktop:dev:lab": "tauri dev --config ./src-tauri/tauri.lab.conf.json",
+    "desktop:check": "npm run desktop:prepare:check && cargo fmt --manifest-path ./src-tauri/Cargo.toml --all -- --check && cargo clippy --manifest-path ./src-tauri/Cargo.toml --all-targets --all-features -- -D warnings && cargo test --manifest-path ./src-tauri/Cargo.toml --all-features && node ./tests/desktop-platform-contracts.mjs && node ./tests/desktop-staging.mjs",
+    "desktop:webdriver:prepare": "node ./app/tools/desktop-webdriver-tooling.mjs",
+    "desktop:test": "node ./app/tools/run-desktop-e2e.mjs",
+    "desktop:build": "tauri build --bundles nsis --target x86_64-pc-windows-msvc"
   },
   "keywords": [
     "bible",
@@ -64,6 +73,7 @@
   },
   "homepage": "https://github.com/Nobodyworld/app-bible-language-study#readme",
   "devDependencies": {
+    "@tauri-apps/cli": "2.11.4",
     "playwright-core": "^1.62.1"
   }
 }

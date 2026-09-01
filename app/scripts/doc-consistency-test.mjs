@@ -59,6 +59,11 @@ const DOCUMENT_MODEL = Object.freeze([
     roles: ["current-product", "runtime-facing", "data-model"],
   },
   {
+    path: "docs/DESKTOP.md",
+    classification: "maintained",
+    roles: ["current-product", "runtime-facing", "technical", "security", "test-inventory"],
+  },
+  {
     path: "docs/OPTIONAL_PACK_ARCHITECTURE.md",
     classification: "maintained",
     roles: ["technical", "data-model"],

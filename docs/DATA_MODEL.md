@@ -122,8 +122,8 @@ maintained scenario source is `app/data/physical-pack-scenarios.json`.
 
 User-created study state is separate from bundled canonical data. Favorites,
 tags, assertions, poll responses, package operations, legacy verse drafts,
-personal token renderings, and local job events live in browser storage and can
-be exported as portable JSON.
+personal token renderings, and local job events live in the selected platform's
+profile storage and can be exported as portable JSON.
 
 ### Profile storage authority
 
@@ -141,6 +141,15 @@ Lab uses deterministic isolated identities: IndexedDB `bibleapp-lab`,
 This includes Study Marks, Meaning, drafts, import-recovery backups, package
 operations, compatibility poll records, physical registry records, and pack
 bytes. No automatic Stable/Lab copy or migration exists.
+
+On Windows desktop, Stable and Lab use separate Tauri-resolved native JSON
+directories and `native-json:<profile>` identities. Six allowlisted logical
+stores (`tags`, `workspace`, `assertions`, `polls`, `packages`, and
+`importBackups`) are each wrapped in an internal schema-1 envelope containing
+the exact profile and store identity. Writes use same-directory temporary files
+and atomic replacement. Malformed existing JSON is preserved and blocks
+ordinary overwrite until a deliberate valid version-3 import begins recovery.
+Browser IndexedDB/localStorage identities and migration behavior do not change.
 
 Theme (`bibleAppTheme`) and Study workspace width
 (`bibleapp:study-workspace-width:v1`) remain shared presentation preferences;
@@ -172,11 +181,12 @@ including exports with legacy token-rendering records or verse drafts.
 The My Data surface reports user-owned records before implementation history:
 custom labels, tagged verses, Study Mark assertions, active Study Marks,
 personal meanings, and preserved legacy verse drafts. These stores remain local
-to the current browser profile and are not associated with an online account.
+to the current browser or desktop profile and are not associated with an online
+account.
 
 Portable backups retain kind `bibleapp:user-data` and version `3`. Download,
 raw JSON copy, file selection, pasted JSON, merge, and replace all use the same
-export/import contract. Replace creates a browser-local recovery backup before
+export/import contract. Replace creates a profile-local recovery backup before
 overwriting current stores. Import normalization and compatibility checks occur
 before mutation; malformed, foreign, or unsupported future-version payloads do
 not partially change current stores.
