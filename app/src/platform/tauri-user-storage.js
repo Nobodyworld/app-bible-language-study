@@ -91,7 +91,7 @@ export class TauriUserStorageAdapter {
   }
 
   enqueue(storeName, value) {
-    const recoverCorrupt = this.recoveryStores.has(storeName);
+    const recoverCorrupt = this.recoveryStores.delete(storeName);
     const operation = this.queue.then(async () => {
       if (this.blockedStores.has(storeName) && !recoverCorrupt) {
         throw new Error(`${storeName} has preserved corrupt native data; use an explicit backup import to recover it.`);
@@ -104,14 +104,12 @@ export class TauriUserStorageAdapter {
       });
       if (response?.status !== "saved") throw new Error(`Native storage did not confirm ${storeName}.`);
       this.blockedStores.delete(storeName);
-      this.recoveryStores.delete(storeName);
       this.unresolvedWriteFailures.delete(storeName);
       this.failure = null;
     }).catch((error) => {
       const message = safeMessage(error, `Could not persist ${storeName}.`);
       this.unresolvedWriteFailures.set(storeName, message);
       this.failure = message;
-      if (recoverCorrupt) this.recoveryStores.delete(storeName);
       throw error;
     });
     this.pending.add(operation);
