@@ -42,6 +42,9 @@ await assert.rejects(
 function createNativeHarness(options = {}) {
   const stores = options.stores || new Map();
   const calls = [];
+  const remainingWriteFailures = new Map(
+    Object.entries(options.failWriteCounts || {}).map(([storeName, count]) => [storeName, Number(count)]),
+  );
   const bridge = {
     async invoke(command, args = {}) {
       calls.push({ command, args: structuredClone(args) });
@@ -62,7 +65,11 @@ function createNativeHarness(options = {}) {
         return stores.has(key) ? { status: "ok", value: structuredClone(stores.get(key)), temporaryFiles: 0 } : { status: "missing", temporaryFiles: 0 };
       }
       if (command === "write_user_store") {
-        if (options.failWrite) throw Object.assign(new Error("C:\\private\\owner\\denied"), { code: "write_failed" });
+        const remainingFailures = remainingWriteFailures.get(args.storeId) || 0;
+        if (options.failWrite || remainingFailures > 0) {
+          if (remainingFailures > 0) remainingWriteFailures.set(args.storeId, remainingFailures - 1);
+          throw Object.assign(new Error("C:\\private\\owner\\denied"), { code: "write_failed" });
+        }
         stores.set(`${args.profileId}:${args.storeId}`, structuredClone(args.value));
         return { status: "saved", recoveredCorrupt: Boolean(args.recoverCorrupt) };
       }
@@ -109,6 +116,21 @@ failingStorage.save("tags", { version: 1, records: { unsafe: true } });
 await assert.rejects(failingStorage.flush(), /\[local path\]/);
 assert.equal(failingStorage.status().failure.includes("private"), false, "Native errors must not disclose selected local paths");
 
+const stickyHarness = createNativeHarness({ failWriteCounts: { tags: 1 } });
+const stickyStorage = createTauriUserStorageAdapter({ bridge: stickyHarness.bridge, profileId: "stable" });
+await stickyStorage.initialize(definitions);
+stickyStorage.save("tags", { version: 1, records: { first_attempt: true } });
+stickyStorage.save("workspace", { version: 1, last_reader_route: "#/read/bsb/psalms/23" });
+await assert.rejects(stickyStorage.flush(), /tags: \[local path\]/);
+assert.equal(stickyHarness.stores.has("stable:tags"), false, "A failed store must remain visibly unsaved");
+assert.equal(stickyHarness.stores.get("stable:workspace").last_reader_route, "#/read/bsb/psalms/23");
+assert.deepEqual(stickyStorage.status().unresolvedWriteStores, ["tags"]);
+stickyStorage.save("tags", { version: 1, records: { retry_succeeded: true } });
+assert.equal((await stickyStorage.flush()).status, "flushed");
+assert.equal(stickyHarness.stores.get("stable:tags").records.retry_succeeded, true);
+assert.deepEqual(stickyStorage.status().unresolvedWriteStores, []);
+assert.equal(stickyStorage.status().failure, null);
+
 const corruptHarness = createNativeHarness({ corruptStore: "tags" });
 const corruptStorage = createTauriUserStorageAdapter({ bridge: corruptHarness.bridge, profileId: "stable" });
 const corruptInit = await corruptStorage.initialize(definitions);
@@ -119,6 +141,22 @@ corruptStorage.beginRecovery(["tags"]);
 corruptStorage.save("tags", { version: 1, records: { recovered: true } });
 await corruptStorage.flush();
 assert.equal(corruptHarness.stores.get("stable:tags").records.recovered, true);
+
+const recoveryHarness = createNativeHarness({ corruptStore: "tags", failWriteCounts: { tags: 1 } });
+const recoveryStorage = createTauriUserStorageAdapter({ bridge: recoveryHarness.bridge, profileId: "stable" });
+await recoveryStorage.initialize(definitions);
+recoveryStorage.beginRecovery(["tags"]);
+recoveryStorage.save("tags", { version: 1, records: { failed_recovery: true } });
+await assert.rejects(recoveryStorage.flush(), /tags: \[local path\]/);
+assert.deepEqual(recoveryStorage.status().recoveryStores, [], "A failed recovery write must consume its authorization");
+recoveryStorage.save("tags", { version: 1, records: { unauthorized_retry: true } });
+await assert.rejects(recoveryStorage.flush(), /preserved corrupt native data/);
+assert.equal(recoveryHarness.stores.has("stable:tags"), false);
+recoveryStorage.beginRecovery(["tags"]);
+recoveryStorage.save("tags", { version: 1, records: { authorized_retry: true } });
+assert.equal((await recoveryStorage.flush()).status, "flushed");
+assert.equal(recoveryHarness.stores.get("stable:tags").records.authorized_retry, true);
+assert.deepEqual(recoveryStorage.status().unresolvedWriteStores, []);
 
 const fileHarness = createNativeHarness();
 const fileService = createTauriFileService({ bridge: fileHarness.bridge, windowObject: { navigator: {} } });
@@ -221,6 +259,8 @@ console.log(JSON.stringify({
   desktop_platform_contracts: "PASS",
   browser_detection_without_tauri: "PASS",
   stable_lab_native_isolation: "PASS",
+  native_write_failures_stay_sticky_until_same_store_retry: "PASS",
+  recovery_authorization_is_one_shot: "PASS",
   corruption_recovery_gate: "PASS",
   native_dialog_cancellation: "PASS",
   native_backup_open_and_atomic_rejection: "PASS",
