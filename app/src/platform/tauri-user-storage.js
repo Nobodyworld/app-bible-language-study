@@ -38,6 +38,7 @@ export class TauriUserStorageAdapter {
     this.listeners = new Set();
     this.blockedStores = new Set();
     this.recoveryStores = new Set();
+    this.unresolvedWriteFailures = new Map();
     this.pending = new Set();
     this.queue = Promise.resolve();
     this.failure = null;
@@ -46,6 +47,14 @@ export class TauriUserStorageAdapter {
 
   assertStore(storeName) {
     if (!ALLOWED_STORES.has(storeName)) throw new TypeError(`Unknown native logical store: ${storeName}`);
+  }
+
+  unresolvedFailureMessage() {
+    if (!this.unresolvedWriteFailures.size) return null;
+    return [...this.unresolvedWriteFailures.entries()]
+      .sort(([left], [right]) => left.localeCompare(right))
+      .map(([storeName, message]) => `${storeName}: ${message}`)
+      .join("; ");
   }
 
   async initialize(definitions) {
@@ -96,9 +105,13 @@ export class TauriUserStorageAdapter {
       if (response?.status !== "saved") throw new Error(`Native storage did not confirm ${storeName}.`);
       this.blockedStores.delete(storeName);
       this.recoveryStores.delete(storeName);
+      this.unresolvedWriteFailures.delete(storeName);
       this.failure = null;
     }).catch((error) => {
-      this.failure = safeMessage(error, `Could not persist ${storeName}.`);
+      const message = safeMessage(error, `Could not persist ${storeName}.`);
+      this.unresolvedWriteFailures.set(storeName, message);
+      this.failure = message;
+      if (recoverCorrupt) this.recoveryStores.delete(storeName);
       throw error;
     });
     this.pending.add(operation);
@@ -127,7 +140,8 @@ export class TauriUserStorageAdapter {
 
   async flush() {
     await this.queue;
-    if (this.failure) throw new Error(this.failure);
+    const failure = this.unresolvedFailureMessage() || this.failure;
+    if (failure) throw new Error(failure);
     return this.bridge.invoke("native_flush_status", {
       profileId: this.profileId,
       pendingWrites: this.pending.size,
@@ -151,14 +165,17 @@ export class TauriUserStorageAdapter {
   }
 
   status() {
+    const unresolvedFailure = this.unresolvedFailureMessage();
     return {
       backend: "native-json",
       authority: "native-json",
       migration: "native-no-browser-migration",
-      failure: this.failure,
+      failure: unresolvedFailure || this.failure,
       profileId: this.profileId,
       identities: this.identities,
       blockedStores: [...this.blockedStores].sort(),
+      recoveryStores: [...this.recoveryStores].sort(),
+      unresolvedWriteStores: [...this.unresolvedWriteFailures.keys()].sort(),
       temporaryFiles: this.temporaryFiles,
       pendingWrites: this.pending.size,
     };
