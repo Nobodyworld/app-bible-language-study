@@ -158,6 +158,21 @@ assert.equal((await recoveryStorage.flush()).status, "flushed");
 assert.equal(recoveryHarness.stores.get("stable:tags").records.authorized_retry, true);
 assert.deepEqual(recoveryStorage.status().unresolvedWriteStores, []);
 
+const queuedRecoveryHarness = createNativeHarness({ corruptStore: "tags", failWriteCounts: { tags: 1 } });
+const queuedRecoveryStorage = createTauriUserStorageAdapter({ bridge: queuedRecoveryHarness.bridge, profileId: "stable" });
+await queuedRecoveryStorage.initialize(definitions);
+queuedRecoveryStorage.beginRecovery(["tags"]);
+queuedRecoveryStorage.save("tags", { version: 1, records: { failed_recovery: true } });
+queuedRecoveryStorage.save("tags", { version: 1, records: { unauthorized_queued_retry: true } });
+await assert.rejects(queuedRecoveryStorage.flush(), /preserved corrupt native data/);
+assert.equal(
+  queuedRecoveryHarness.stores.has("stable:tags"),
+  false,
+  "A second queued write must not reuse the first recovery authorization",
+);
+assert.deepEqual(queuedRecoveryStorage.status().recoveryStores, []);
+assert.deepEqual(queuedRecoveryStorage.status().unresolvedWriteStores, ["tags"]);
+
 const fileHarness = createNativeHarness();
 const fileService = createTauriFileService({ bridge: fileHarness.bridge, windowObject: { navigator: {} } });
 assert.deepEqual(await fileService.saveTextFile({ text: "{}", suggestedName: "../owner:backup" }), { status: "cancelled" });
@@ -299,6 +314,7 @@ console.log(JSON.stringify({
   stable_lab_native_isolation: "PASS",
   native_write_failures_stay_sticky_until_same_store_retry: "PASS",
   recovery_authorization_is_one_shot: "PASS",
+  queued_recovery_cannot_reuse_authorization: "PASS",
   corruption_recovery_gate: "PASS",
   native_dialog_cancellation: "PASS",
   native_backup_open_and_atomic_rejection: "PASS",
