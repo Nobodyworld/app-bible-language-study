@@ -4776,6 +4776,67 @@ button.user-data-summary-item {
   }
 }
 
+@media (max-width: 240px) {
+  .app-header {
+    grid-template-areas:
+      "brand brand"
+      "compact-status theme"
+      "controls controls"
+      "status status";
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 4px;
+    row-gap: 6px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-mark {
+    flex: 0 0 40px;
+  }
+
+  .action-group:first-child {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chapter-content {
+    padding-inline: 8px;
+  }
+
+  .verse-row {
+    grid-template-columns: 32px minmax(0, 1fr) 28px;
+    gap: 4px;
+    padding-inline: 0;
+  }
+
+  .verse-line.indent1,
+  .verse-line.indent1stline,
+  .verse-line.indentred1,
+  .verse-line.indent1stlinered {
+    padding-left: 8px;
+  }
+
+  .verse-line.indent2,
+  .verse-line.indentred2,
+  .verse-line.selah,
+  .verse-line.inscrip {
+    padding-left: 12px;
+  }
+
+  .verse-line.list1,
+  .verse-line.list1stline {
+    padding-left: 10px;
+  }
+
+  .verse-line.list2,
+  .verse-line.tab1,
+  .verse-line.tab1stline,
+  .verse-line.tab1stlinered {
+    padding-left: 16px;
+  }
+}
+
 @media (hover: none), (pointer: coarse) {
   .fn-marker::before {
     width: 44px;

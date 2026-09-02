@@ -1403,6 +1403,7 @@ async function runQa(page) {
     const originalViewport = { width: 1280, height: 720 };
     const originalTheme = await evaluate(page, "document.documentElement.getAttribute('data-theme') || 'light'");
     const statusGeometryProfiles = [
+      { name: "390 native at 200% zoom", width: 195, height: 410 },
       { name: "minimum", width: 390, height: 844 },
       { name: "compact transition - 1", width: 639, height: 900 },
       { name: "compact transition", width: 640, height: 900 },
@@ -1564,11 +1565,16 @@ async function runQa(page) {
           result.targets.bookPicker,
           result.targets.chapterPicker,
         ].every((box) => box && box.width > 0 && box.height >= 36 && box.left >= 0 && box.right <= result.clientWidth + 1);
+        const headerIdentityIsUsable = result.targets.brand && result.targets.brand.width > 0 &&
+          result.targets.brand.height >= 40 && result.targets.brand.left >= 0 &&
+          result.targets.brand.right <= result.clientWidth + 1 &&
+          result.targets.theme && result.targets.theme.width > 0 && result.targets.theme.height >= 44 &&
+          result.targets.theme.left >= 0 && result.targets.theme.right <= result.clientWidth + 1;
         const compactContract = result.liveRegionCount === 1 && result.compactAriaHidden === 'true' &&
           result.compactHidden === (result.name !== 'loaded');
         const contained = result.intersections.length === 0 &&
           result.scrollWidth <= result.clientWidth + 1 && result.bodyScrollWidth <= result.clientWidth + 1;
-        if (presentedStatusIsReadable && navigationIsUsable && compactContract && contained) return [];
+        if (presentedStatusIsReadable && navigationIsUsable && headerIdentityIsUsable && compactContract && contained) return [];
         return [{ profile: profile.name, width: profile.width, theme: measurement.theme, result }];
       })
     );
