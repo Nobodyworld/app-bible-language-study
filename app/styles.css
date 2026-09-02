@@ -4574,9 +4574,10 @@ button.user-data-summary-item {
 @media (max-width: 640px) {
   .app-header {
     grid-template-areas:
-      "brand theme"
-      "controls controls"
-      "status status";
+      "brand compact-status theme"
+      "controls controls controls"
+      "status status status";
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 8px;
     padding: 10px 12px 12px;
   }
@@ -4586,7 +4587,13 @@ button.user-data-summary-item {
   }
 
   .brand {
-    width: max-content;
+    justify-self: stretch;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .brand > div {
     min-width: 0;
   }
 
@@ -4616,8 +4623,15 @@ button.user-data-summary-item {
   }
 
   .reader-control-status:not([hidden]) {
-    display: inline;
+    grid-area: compact-status;
+    display: inline-block;
+    align-self: center;
+    justify-self: end;
     overflow: hidden;
+    padding: 4px 7px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel-alt);
     color: var(--accent-dark);
     font-size: 10px;
     font-weight: 800;
