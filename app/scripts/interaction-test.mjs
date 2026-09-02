@@ -1582,6 +1582,79 @@ async function runQa(page) {
       geometryFailures.length === 0,
       `reader status geometry must remain readable and separate from primary navigation: ${JSON.stringify(geometryFailures)}`,
     );
+    const minimumZoomDetailHeaderMatrix = [];
+    await page.setViewportSize({ width: 195, height: 410 });
+    for (const theme of ["light", "dark"]) {
+      const activeTheme = await evaluate(page, "document.documentElement.getAttribute('data-theme') || 'light'");
+      if (activeTheme !== theme) await click(page, "#themeToggle");
+      await evaluate(page, "document.querySelector('.strong-token')?.click()");
+      await waitFor(page, "document.querySelector('#detailTitle')?.textContent === \"Strong's\"");
+      await delay(180);
+      minimumZoomDetailHeaderMatrix.push(await evaluate(
+        page,
+        `(() => {
+          const rect = (selector) => {
+            const node = document.querySelector(selector);
+            if (!node) return null;
+            const bounds = node.getBoundingClientRect();
+            const style = getComputedStyle(node);
+            return {
+              selector,
+              left: bounds.left,
+              top: bounds.top,
+              right: bounds.right,
+              bottom: bounds.bottom,
+              width: bounds.width,
+              height: bounds.height,
+              clientWidth: node.clientWidth,
+              scrollWidth: node.scrollWidth,
+              clientHeight: node.clientHeight,
+              scrollHeight: node.scrollHeight,
+              wordBreak: style.wordBreak,
+              overflowWrap: style.overflowWrap
+            };
+          };
+          const intersects = (a, b) => Boolean(
+            a && b && a.right > b.left && b.right > a.left && a.bottom > b.top && b.bottom > a.top
+          );
+          const title = rect('#detailTitle');
+          const clear = rect('#clearDetail');
+          const close = rect('#hideStudyWorkspace');
+          const detail = rect('#detailPane');
+          return {
+            theme: document.documentElement.getAttribute('data-theme'),
+            viewport: { width: innerWidth, height: innerHeight },
+            title,
+            clear,
+            close,
+            detail,
+            titleActionIntersections: [clear, close].filter((action) => intersects(title, action)).map((action) => action.selector),
+            actionIntersection: intersects(clear, close),
+            pageOverflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - document.documentElement.clientWidth
+          };
+        })()`,
+      ));
+      await click(page, "#hideStudyWorkspace");
+      await waitFor(page, "document.querySelector('#detailPane')?.classList.contains('visible') === false");
+    }
+    await page.setViewportSize(originalViewport);
+    const detailHeaderRestoredTheme = await evaluate(page, "document.documentElement.getAttribute('data-theme') || 'light'");
+    if (detailHeaderRestoredTheme !== originalTheme) await click(page, "#themeToggle");
+    qaEvidence.minimumZoomDetailHeaderMatrix = minimumZoomDetailHeaderMatrix;
+    const detailHeaderFailures = minimumZoomDetailHeaderMatrix.filter((measurement) =>
+      measurement.viewport.width !== 195 || measurement.viewport.height !== 410 ||
+      !measurement.title || measurement.title.width <= 1 || measurement.title.clientWidth + 1 < measurement.title.scrollWidth ||
+      measurement.title.wordBreak === 'break-all' || measurement.title.overflowWrap === 'anywhere' ||
+      !measurement.clear || measurement.clear.height < 43.5 || measurement.clear.left < 0 || measurement.clear.right > measurement.detail.right + 1 ||
+      !measurement.close || measurement.close.height < 43.5 || measurement.close.left < 0 || measurement.close.right > measurement.detail.right + 1 ||
+      measurement.titleActionIntersections.length > 0 || measurement.actionIntersection ||
+      measurement.detail.scrollWidth > measurement.detail.clientWidth + 1 || measurement.pageOverflow > 1
+    );
+    assert(
+      detailHeaderFailures.length === 0,
+      `minimum native-width detail header must keep its title and primary actions readable at 200% zoom: ${JSON.stringify(detailHeaderFailures)}`,
+    );
+    pass("minimum native-width detail header at 200% zoom");
     pass("reader status geometry across states, themes, and responsive transitions");
   }
   await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "none" });
