@@ -41,6 +41,7 @@ await assert.rejects(
 
 function createNativeHarness(options = {}) {
   const stores = options.stores || new Map();
+  const nativeProfile = options.nativeProfile || "stable";
   const calls = [];
   const remainingWriteFailures = new Map(
     Object.entries(options.failWriteCounts || {}).map(([storeName, count]) => [storeName, Number(count)]),
@@ -52,16 +53,16 @@ function createNativeHarness(options = {}) {
         return {
           applicationId: "com.nobodyworld.bibleappreader",
           applicationVersion: "1.0.0",
-          profileId: args.profileId,
-          persistentDataPath: `native-data/${args.profileId}`,
+          profileId: nativeProfile,
+          persistentDataPath: `native-data/${nativeProfile}`,
           logsPath: "native-logs",
-          temporaryPath: `native-temp/${args.profileId}`,
+          temporaryPath: `native-temp/${nativeProfile}`,
           distributionPath: "packaged-assets",
         };
       }
       if (command === "read_user_store") {
         if (options.corruptStore === args.storeId) return { status: "corrupt", temporaryFiles: 1 };
-        const key = `${args.profileId}:${args.storeId}`;
+        const key = `${nativeProfile}:${args.storeId}`;
         return stores.has(key) ? { status: "ok", value: structuredClone(stores.get(key)), temporaryFiles: 0 } : { status: "missing", temporaryFiles: 0 };
       }
       if (command === "write_user_store") {
@@ -70,10 +71,10 @@ function createNativeHarness(options = {}) {
           if (remainingFailures > 0) remainingWriteFailures.set(args.storeId, remainingFailures - 1);
           throw Object.assign(new Error("C:\\private\\owner\\denied"), { code: "write_failed" });
         }
-        stores.set(`${args.profileId}:${args.storeId}`, structuredClone(args.value));
+        stores.set(`${nativeProfile}:${args.storeId}`, structuredClone(args.value));
         return { status: "saved", recoveredCorrupt: Boolean(args.recoverCorrupt) };
       }
-      if (command === "native_flush_status") return { status: "flushed", profileId: args.profileId, pendingWrites: args.pendingWrites };
+      if (command === "native_flush_status") return { status: "flushed", profileId: nativeProfile, pendingWrites: args.pendingWrites };
       if (command === "read_packaged_data") return { status: "ok", text: '{"ok":true}', mediaType: "application/json; charset=utf-8" };
       if (command === "save_backup") return options.saveResult || { status: "cancelled" };
       if (command === "open_backup") {
@@ -93,7 +94,7 @@ const definitions = [
 ];
 const shared = new Map();
 const stableHarness = createNativeHarness({ stores: shared });
-const labHarness = createNativeHarness({ stores: shared });
+const labHarness = createNativeHarness({ stores: shared, nativeProfile: "lab" });
 const stableStorage = createTauriUserStorageAdapter({ bridge: stableHarness.bridge, profileId: "stable" });
 const labStorage = createTauriUserStorageAdapter({ bridge: labHarness.bridge, profileId: "lab" });
 await stableStorage.initialize(definitions);
@@ -279,9 +280,9 @@ flushShouldFail = false;
 await blockedCloseListener({ preventDefault() {} });
 assert.equal(blockedDestroyed, 1, "A later successful flush must allow a new close request to complete");
 
-const platformHarness = createNativeHarness();
+const platformHarness = createNativeHarness({ nativeProfile: "lab" });
 const platformWindow = {
-  location: { href: "http://tauri.localhost/index.html?profile=lab", hash: "" },
+  location: { href: "http://tauri.localhost/?profile=stable", hash: "" },
   document: { baseURI: "http://tauri.localhost/" },
   fetch: async () => new Response("{}", { status: 200 }),
   crypto: webcrypto,
@@ -294,8 +295,14 @@ assert.equal(platform.kind, "tauri-windows");
 assert.equal(platform.profile.id, "lab");
 assert.equal(platform.environment.profileId, "lab");
 assert.equal(platform.environment.persistentDataPath, "native-data/lab");
+assert.deepEqual(platformHarness.calls[0], { command: "desktop_environment", args: {} });
 assert.equal(platform.files.nativeDialogs, true);
 assert.equal((await platform.userStorage.initialize(definitions)).backend, "native-json");
+assert.equal(platformHarness.calls.at(-1).args.profileId, undefined, "Native storage must not accept a frontend-selected profile");
+await assert.rejects(
+  createTauriPlatform({ windowObject: platformWindow, bridge: createNativeHarness({ nativeProfile: "unsupported" }).bridge }),
+  /unsupported startup profile/,
+);
 const currentWindow = { onCloseRequested: async () => () => {}, destroy: async () => {} };
 const resolvedPlatform = await resolveApplicationPlatform({
   windowObject: {
@@ -312,6 +319,7 @@ console.log(JSON.stringify({
   desktop_platform_contracts: "PASS",
   browser_detection_without_tauri: "PASS",
   stable_lab_native_isolation: "PASS",
+  native_selected_startup_profile: "PASS",
   native_write_failures_stay_sticky_until_same_store_retry: "PASS",
   recovery_authorization_is_one_shot: "PASS",
   queued_recovery_cannot_reuse_authorization: "PASS",

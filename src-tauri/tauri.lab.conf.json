@@ -4,14 +4,18 @@
       {
         "label": "main",
         "title": "Bible App Reader Lab",
-        "url": "index.html?profile=lab",
+        "url": "index.html",
         "width": 1280,
         "height": 820,
         "minWidth": 390,
         "minHeight": 640,
         "resizable": true,
         "fullscreen": false,
-        "devtools": false
+        "maximized": false,
+        "decorations": true,
+        "zoomHotkeysEnabled": true,
+        "devtools": false,
+        "visible": true
       }
     ]
   }

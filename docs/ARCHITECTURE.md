@@ -33,11 +33,13 @@ from Core, ordinary compatibility-only UI, and missing test ownership.
 
 `app/src/feature-profiles.js` deterministically resolves Stable and Lab. Stable
 is the default and exposes Core/Stable features ordinarily while retaining
-frozen/Lab diagnostics as collapsed recovery access. Lab is explicit through
-`?profile=lab`, includes Core and Stable, and exposes the experimental controls
-against isolated state. Unknown profile values fall back to Stable with a
-testable diagnostic. Interpretation polls remain compatibility-only and own no
-ordinary UI.
+frozen/Lab diagnostics as collapsed recovery access. In the browser, Lab is
+explicit through `?profile=lab`. In Tauri, the supported Lab command selects a
+native `lab-profile` build feature and the native environment supplies the only
+desktop profile authority. Lab includes Core and Stable and exposes the
+experimental controls against isolated state. Unknown browser profile values
+fall back to Stable with a testable diagnostic. Interpretation polls remain
+compatibility-only and own no ordinary UI.
 
 ## Platform Composition
 

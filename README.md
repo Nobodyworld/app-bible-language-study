@@ -20,11 +20,13 @@ browser-local data without requiring an account, hosted backend, analytics
 service, or remote application API.
 
 The default Stable profile preserves the existing experience and storage
-identities. An explicit local Lab profile (`?profile=lab` before the hash route)
-enables complete experimental diagnostics with isolated personal-data,
-notification, physical-registry, and physical-byte namespaces. Both profiles
-remain static, local-first, offline-capable browser products and use the same
-portable `bibleapp:user-data` version-3 contract.
+identities. In a browser, an explicit local Lab profile uses `?profile=lab`
+before the hash route. The supported desktop Lab command selects the same
+profile through a native build feature so the frontend cannot redirect native
+storage to another profile. Lab enables complete experimental diagnostics with
+isolated personal-data, notification, physical-registry, and physical-byte
+namespaces. Both profiles remain static, local-first, offline-capable products
+and use the same portable `bibleapp:user-data` version-3 contract.
 
 The app keeps the reader primary while deeper material remains close at hand.
 Reader words, references, source-language forms, morphology, transliteration
@@ -227,8 +229,9 @@ ships the complete existing corpus as installer-owned resources; normal use is
 offline after installation when WebView2 is already available. Native user data
 is profile-scoped JSON under Tauri-resolved application directories, and native
 Open/Save dialogs preserve the portable `bibleapp:user-data` version-3 backup
-contract. Native physical-pack management is deferred to issue #81; the desktop
-preview remains bundled-only.
+contract. Stable and Lab explicitly enable WebView2's genuine page-zoom
+accelerators. Native physical-pack management is deferred to issue #81; the
+desktop preview remains bundled-only.
 
 ## Verification
 

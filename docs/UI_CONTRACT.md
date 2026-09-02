@@ -27,10 +27,12 @@ Stable is the default and does not show a profile badge. Its Advanced
 diagnostics element stays collapsed and retains physical-pack recovery,
 capability, and local-job access without creating another ordinary destination.
 
-Lab is selected with `?profile=lab` before the hash route. It shows a compact
-`Lab · isolated local data` badge and a My Data isolation warning. Advanced
-diagnostics is expanded so the complete experimental controls are available
-against Lab-only state. Controls are not duplicated between profiles.
+In the browser, Lab is selected with `?profile=lab` before the hash route. The
+supported Tauri Lab command selects Lab natively while loading the same shared
+frontend. It shows a compact `Lab · isolated local data` badge and a My Data
+isolation warning. Advanced diagnostics is expanded so the complete
+experimental controls are available against Lab-only state. Controls are not
+duplicated between profiles.
 
 Unknown profile values resolve to Stable, set the testable
 `data-profile-diagnostic="unknown_profile"` document state, and do not prevent

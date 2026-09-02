@@ -157,12 +157,11 @@ async function installErrorCapture(client) {
 
 async function readNativeStores(client) {
   return client.executeAsync(`
-    const profileId = arguments[0];
     const done = arguments[arguments.length - 1];
     Promise.all(['tags', 'workspace'].map(storeId =>
-      window['__TA' + 'URI__'].core.invoke('read_user_store', { profileId, storeId })
+      window['__TA' + 'URI__'].core.invoke('read_user_store', { storeId })
     )).then(values => done({ tags: values[0], workspace: values[1] }), error => done({ error: String(error?.message || error) }));
-  `, [PROFILE_ID]);
+  `);
 }
 
 function persistedState(stores, targetId) {
@@ -245,7 +244,11 @@ const runRoot = path.join(tooling.toolsRoot, "e2e", `bibleapp-e2e-${runId}`);
 const logsRoot = path.join(runRoot, "logs");
 await fs.mkdir(logsRoot, { recursive: true });
 if (!SKIP_BUILD) {
-  await runLogged(process.execPath, [path.join(REPO_ROOT, "node_modules", "@tauri-apps", "cli", "tauri.js"), "build", "--debug", "--no-bundle"], path.join(logsRoot, "build.log"));
+  const buildArgs = [path.join(REPO_ROOT, "node_modules", "@tauri-apps", "cli", "tauri.js"), "build", "--debug", "--no-bundle"];
+  if (PROFILE_ID === "lab") {
+    buildArgs.push("--features", "lab-profile", "--config", path.join(REPO_ROOT, "src-tauri", "tauri.lab.conf.json"));
+  }
+  await runLogged(process.execPath, buildArgs, path.join(logsRoot, "build.log"));
 }
 await fs.access(BINARY);
 

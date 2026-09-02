@@ -5,7 +5,7 @@
   "identifier": "com.nobodyworld.bibleappreader",
   "mainBinaryName": "bible-app-reader",
   "build": {
-    "beforeDevCommand": "npm run desktop:prepare",
+    "beforeDevCommand": null,
     "beforeBuildCommand": "npm run desktop:prepare",
     "frontendDist": "../.desktop-dist"
   },
@@ -23,6 +23,7 @@
         "fullscreen": false,
         "maximized": false,
         "decorations": true,
+        "zoomHotkeysEnabled": true,
         "devtools": false,
         "visible": true
       }

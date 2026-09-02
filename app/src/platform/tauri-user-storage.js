@@ -63,7 +63,6 @@ export class TauriUserStorageAdapter {
     for (const definition of definitions) {
       this.assertStore(definition.name);
       const response = await this.bridge.invoke("read_user_store", {
-        profileId: this.profileId,
         storeId: definition.name,
       });
       this.temporaryFiles += Number(response?.temporaryFiles || 0);
@@ -97,7 +96,6 @@ export class TauriUserStorageAdapter {
         throw new Error(`${storeName} has preserved corrupt native data; use an explicit backup import to recover it.`);
       }
       const response = await this.bridge.invoke("write_user_store", {
-        profileId: this.profileId,
         storeId: storeName,
         value,
         recoverCorrupt,
@@ -141,7 +139,6 @@ export class TauriUserStorageAdapter {
     const failure = this.unresolvedFailureMessage() || this.failure;
     if (failure) throw new Error(failure);
     return this.bridge.invoke("native_flush_status", {
-      profileId: this.profileId,
       pendingWrites: this.pending.size,
     });
   }

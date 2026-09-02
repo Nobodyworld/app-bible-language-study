@@ -125,6 +125,7 @@ pub struct AppState {
     pub logger: Arc<NativeLogger>,
     pub application_id: String,
     pub application_version: String,
+    pub startup_profile: ProfileId,
 }
 
 impl AppState {
@@ -134,6 +135,7 @@ impl AppState {
         Ok(Self {
             application_id: app.config().identifier.clone(),
             application_version: app.package_info().version.to_string(),
+            startup_profile: ProfileId::for_build(),
             paths,
             logger,
         })

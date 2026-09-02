@@ -20,14 +20,11 @@ pub enum ProfileId {
 }
 
 impl ProfileId {
-    pub fn parse(value: &str) -> Result<Self, NativeError> {
-        match value {
-            "stable" => Ok(Self::Stable),
-            "lab" => Ok(Self::Lab),
-            _ => Err(NativeError::new(
-                "invalid_profile",
-                "The requested desktop profile is not supported.",
-            )),
+    pub const fn for_build() -> Self {
+        if cfg!(feature = "lab-profile") {
+            Self::Lab
+        } else {
+            Self::Stable
         }
     }
 
@@ -382,11 +379,11 @@ mod tests {
     }
 
     #[test]
-    fn accepts_only_known_profiles_and_stores() {
-        assert_eq!(ProfileId::parse("stable").unwrap(), ProfileId::Stable);
-        assert_eq!(ProfileId::parse("lab").unwrap(), ProfileId::Lab);
-        assert!(ProfileId::parse("../stable").is_err());
-        assert!(ProfileId::parse("stable/../../owner").is_err());
+    fn build_profile_is_fixed_and_only_known_stores_are_accepted() {
+        #[cfg(feature = "lab-profile")]
+        assert_eq!(ProfileId::for_build(), ProfileId::Lab);
+        #[cfg(not(feature = "lab-profile"))]
+        assert_eq!(ProfileId::for_build(), ProfileId::Stable);
         for store in [
             "tags",
             "workspace",

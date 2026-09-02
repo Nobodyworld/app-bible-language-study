@@ -1,5 +1,5 @@
 import { CAPABILITY_REGISTRY } from "../capabilities.js";
-import { resolveBrowserFeatureProfile } from "../feature-profiles.js";
+import { resolveFeatureProfile } from "../feature-profiles.js";
 import { assertPlatformContract } from "./platform-contract.js";
 import { createTauriDataAdapter } from "./tauri-data.js";
 import { createTauriFileService } from "./tauri-files.js";
@@ -17,12 +17,11 @@ const REQUIRED_ENVIRONMENT_FIELDS = Object.freeze([
   "distributionPath",
 ]);
 
-function validateEnvironment(value, expectedProfile) {
+function validateEnvironment(value) {
   if (!value || typeof value !== "object") throw new Error("The native environment response is missing.");
   for (const field of REQUIRED_ENVIRONMENT_FIELDS) {
     if (typeof value[field] !== "string" || !value[field]) throw new Error(`The native environment response is missing ${field}.`);
   }
-  if (value.profileId !== expectedProfile) throw new Error("The native environment returned the wrong storage profile.");
   return value;
 }
 
@@ -31,11 +30,11 @@ export async function createTauriPlatform(options = {}) {
   const windowObject = options.windowObject || globalThis.window;
   const documentObject = options.documentObject || windowObject.document;
   const currentUrl = options.currentUrl || windowObject.location.href;
-  const profile = options.profile || resolveBrowserFeatureProfile(currentUrl);
-  const nativeEnvironment = validateEnvironment(
-    await options.bridge.invoke("desktop_environment", { profileId: profile.id }),
-    profile.id,
-  );
+  const nativeEnvironment = validateEnvironment(await options.bridge.invoke("desktop_environment", {}));
+  const profile = resolveFeatureProfile(nativeEnvironment.profileId);
+  if (profile.id !== nativeEnvironment.profileId || profile.diagnostics.length) {
+    throw new Error("The native environment returned an unsupported startup profile.");
+  }
   const baseUrl = new URL(options.baseUrl || "./", documentObject.baseURI);
   const userStorage = createTauriUserStorageAdapter({
     bridge: options.bridge,

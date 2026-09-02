@@ -264,20 +264,16 @@ fn environment_for(
 }
 
 #[tauri::command]
-pub fn desktop_environment(
-    profile_id: String,
-    state: State<'_, AppState>,
-) -> Result<DesktopEnvironment, NativeError> {
-    environment_for(ProfileId::parse(&profile_id)?, &state)
+pub fn desktop_environment(state: State<'_, AppState>) -> Result<DesktopEnvironment, NativeError> {
+    environment_for(state.startup_profile, &state)
 }
 
 #[tauri::command]
 pub fn read_user_store(
-    profile_id: String,
     store_id: String,
     state: State<'_, AppState>,
 ) -> Result<StoreReadResult, NativeError> {
-    let profile = ProfileId::parse(&profile_id)?;
+    let profile = state.startup_profile;
     let store = StoreId::parse(&store_id)?;
     let result = read_store(&state.paths, profile, store);
     match &result {
@@ -292,13 +288,12 @@ pub fn read_user_store(
 
 #[tauri::command]
 pub fn write_user_store(
-    profile_id: String,
     store_id: String,
     value: Value,
     recover_corrupt: bool,
     state: State<'_, AppState>,
 ) -> Result<StoreWriteResult, NativeError> {
-    let profile = ProfileId::parse(&profile_id)?;
+    let profile = state.startup_profile;
     let store = StoreId::parse(&store_id)?;
     let result = write_store(&state.paths, profile, store, value, recover_corrupt);
     match &result {
@@ -313,11 +308,10 @@ pub fn write_user_store(
 
 #[tauri::command]
 pub fn native_flush_status(
-    profile_id: String,
     pending_writes: usize,
-    _state: State<'_, AppState>,
+    state: State<'_, AppState>,
 ) -> Result<FlushStatus, NativeError> {
-    let profile = ProfileId::parse(&profile_id)?;
+    let profile = state.startup_profile;
     if pending_writes != 0 {
         return Err(NativeError::new(
             "flush_pending_writes",
@@ -543,9 +537,14 @@ mod tests {
             paths,
             application_id: "com.nobodyworld.bibleappreader".to_string(),
             application_version: "1.0.0".to_string(),
+            startup_profile: ProfileId::Stable,
         };
-        let stable = environment_for(ProfileId::Stable, &state).unwrap();
-        let lab = environment_for(ProfileId::Lab, &state).unwrap();
+        let stable = environment_for(state.startup_profile, &state).unwrap();
+        let lab_state = AppState {
+            startup_profile: ProfileId::Lab,
+            ..state.clone()
+        };
+        let lab = environment_for(lab_state.startup_profile, &lab_state).unwrap();
         assert_eq!(stable.profile_id, "stable");
         assert_eq!(lab.profile_id, "lab");
         assert_ne!(stable.persistent_data_path, lab.persistent_data_path);

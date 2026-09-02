@@ -28,7 +28,11 @@ existing `data/` corpus becomes `.desktop-resources/data/` and is installed as
 Tauri resources. Physical-pack fixtures/scenarios, repository tests, tools,
 browser profiles, caches, logs, secrets, backups, and build outputs are excluded.
 Both directories are ignored build inputs and are checked byte-for-byte against
-the generated inventory.
+the generated inventory. The npm development entry points finish this staging
+before Tauri starts Cargo so the native build never observes a partially
+replaced resource tree. They also disable Tauri's built-in localhost dev server
+and load the staged internal application origin directly, preserving the same
+navigation policy as the installed release.
 
 ## Prerequisites and commands
 
@@ -50,6 +54,11 @@ npm run desktop:webdriver:prepare
 npm run desktop:test
 npm run desktop:build
 ```
+
+`desktop:dev:lab` compiles the explicit native `lab-profile` feature and loads
+the same internal `index.html` as Stable. Native state owns that profile choice;
+desktop storage commands do not accept a frontend-selected profile ID. Both
+window configurations enable WebView2's genuine page-zoom accelerators.
 
 `desktop:test` installs its pinned `tauri-driver` and matching Microsoft-signed
 EdgeDriver only under ignored `.desktop-tools/` when absent. By default it builds
