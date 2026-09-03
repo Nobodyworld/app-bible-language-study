@@ -4574,9 +4574,10 @@ button.user-data-summary-item {
 @media (max-width: 640px) {
   .app-header {
     grid-template-areas:
-      "brand theme"
-      "controls controls"
-      "status status";
+      "brand compact-status theme"
+      "controls controls controls"
+      "status status status";
+    grid-template-columns: minmax(0, 1fr) auto auto;
     gap: 8px;
     padding: 10px 12px 12px;
   }
@@ -4586,7 +4587,13 @@ button.user-data-summary-item {
   }
 
   .brand {
-    width: max-content;
+    justify-self: stretch;
+    width: auto;
+    max-width: none;
+    min-width: 0;
+  }
+
+  .brand > div {
     min-width: 0;
   }
 
@@ -4616,8 +4623,15 @@ button.user-data-summary-item {
   }
 
   .reader-control-status:not([hidden]) {
-    display: inline;
+    grid-area: compact-status;
+    display: inline-block;
+    align-self: center;
+    justify-self: end;
     overflow: hidden;
+    padding: 4px 7px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--panel-alt);
     color: var(--accent-dark);
     font-size: 10px;
     font-weight: 800;
@@ -4759,6 +4773,67 @@ button.user-data-summary-item {
 
   .verse-body {
     font-size: 17px;
+  }
+}
+
+@media (max-width: 240px) {
+  .app-header {
+    grid-template-areas:
+      "brand brand"
+      "compact-status theme"
+      "controls controls"
+      "status status";
+    grid-template-columns: minmax(0, 1fr) auto;
+    column-gap: 4px;
+    row-gap: 6px;
+  }
+
+  .brand {
+    gap: 8px;
+  }
+
+  .brand-mark {
+    flex: 0 0 40px;
+  }
+
+  .action-group:first-child {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .chapter-content {
+    padding-inline: 8px;
+  }
+
+  .verse-row {
+    grid-template-columns: 32px minmax(0, 1fr) 28px;
+    gap: 4px;
+    padding-inline: 0;
+  }
+
+  .verse-line.indent1,
+  .verse-line.indent1stline,
+  .verse-line.indentred1,
+  .verse-line.indent1stlinered {
+    padding-left: 8px;
+  }
+
+  .verse-line.indent2,
+  .verse-line.indentred2,
+  .verse-line.selah,
+  .verse-line.inscrip {
+    padding-left: 12px;
+  }
+
+  .verse-line.list1,
+  .verse-line.list1stline {
+    padding-left: 10px;
+  }
+
+  .verse-line.list2,
+  .verse-line.tab1,
+  .verse-line.tab1stline,
+  .verse-line.tab1stlinered {
+    padding-left: 16px;
   }
 }
 

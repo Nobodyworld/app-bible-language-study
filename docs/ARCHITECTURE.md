@@ -1,8 +1,8 @@
 # Architecture
 
-Bible App Reader is a static browser application. The shell is served from
-`app/index.html`, `app/app.js`, and `app/styles.css`; runtime behavior is split
-across ES modules in `app/src/`.
+Bible App Reader is one static DOM application with browser and Tauri 2 Windows
+composition roots. The shell comes from `app/index.html`, `app/app.js`, and the
+app stylesheets; runtime behavior is split across ES modules in `app/src/`.
 
 ## Runtime Shape
 
@@ -33,11 +33,13 @@ from Core, ordinary compatibility-only UI, and missing test ownership.
 
 `app/src/feature-profiles.js` deterministically resolves Stable and Lab. Stable
 is the default and exposes Core/Stable features ordinarily while retaining
-frozen/Lab diagnostics as collapsed recovery access. Lab is explicit through
-`?profile=lab`, includes Core and Stable, and exposes the experimental controls
-against isolated state. Unknown profile values fall back to Stable with a
-testable diagnostic. Interpretation polls remain compatibility-only and own no
-ordinary UI.
+frozen/Lab diagnostics as collapsed recovery access. In the browser, Lab is
+explicit through `?profile=lab`. In Tauri, the supported Lab command selects a
+native `lab-profile` build feature and the native environment supplies the only
+desktop profile authority. Lab includes Core and Stable and exposes the
+experimental controls against isolated state. Unknown browser profile values
+fall back to Stable with a testable diagnostic. Interpretation polls remain
+compatibility-only and own no ordinary UI.
 
 ## Platform Composition
 
@@ -47,10 +49,10 @@ Before:
 browser globals consumed directly by stores/views/data/manager
 ```
 
-After:
+Current:
 
 ```text
-app.js creates browser platform and resolves profile
+app.js resolves browser or validated Tauri platform and profile
   -> user storage + scoped notifications
   -> file operations
   -> static data source
@@ -65,6 +67,14 @@ domain and feature logic consume explicit contracts
 do not exist in a browser are `null`; no fake filesystem path, shell/process
 access, or unrestricted network service is exposed.
 
+`app/src/platform/application-platform.js` chooses the browser platform when no
+Tauri global is present and fails closed when an incomplete Tauri global is
+present. Only `tauri-bridge.js` reads that global. `tauri-platform.js` composes
+native environment reporting, profile-scoped JSON storage, native backup
+dialogs, installed-resource data reads, in-process notifications, bundled-only
+physical services, route restoration, external-link policy, and close-time
+flush. Rust commands are allowlisted through one window capability.
+
 `stores.js` retains normalization, conflicts, defaults, user-data version 3,
 merge/replace, recovery semantics, summaries, and application mutations. The
 browser user-storage adapter owns IndexedDB, localStorage fallback, identity,
@@ -74,9 +84,11 @@ File, object-URL, or Clipboard globals. `data-service.js` retains logical
 parsed/pending caches, physical source identity, and structured fallback while
 the browser data adapter performs actual static-asset fetches.
 
-The platform contract is ready for a later desktop composition adapter, but no
-desktop shell, native filesystem pack, SQLite database, or desktop application
-is implemented here.
+The browser remains a first-class static deployment. The Windows shell does not
+add SQLite or a native physical-pack manager. Its complete data corpus is copied
+deterministically to installer-owned resources rather than compiled into the
+Rust object, and a constrained native command reads only normalized `data/`
+paths under the Tauri resource directory. See `docs/DESKTOP.md`.
 
 ## UI Ownership
 

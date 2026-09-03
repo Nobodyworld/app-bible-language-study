@@ -36,15 +36,16 @@ function renderSummaryGrid(rows) {
   return grid;
 }
 
-function renderStudyDataSummary(summary, showStudyMarks) {
+function renderStudyDataSummary(summary, showStudyMarks, platformKind = "browser") {
   const section = document.createElement("section");
   section.className = "my-data-section study-data-section";
   const title = document.createElement("h4");
   title.textContent = "My study data";
   const intro = document.createElement("p");
   intro.className = "study-data-intro";
-  intro.textContent =
-    "This data is stored in this browser, not in an online account. Download backups you care about so you can recover them later.";
+  intro.textContent = platformKind === "tauri-windows"
+    ? "This data is stored by the installed app, not in an online account. Save backups you care about so you can recover them later."
+    : "This data is stored in this browser, not in an online account. Download backups you care about so you can recover them later.";
   section.append(
     title,
     intro,
@@ -232,7 +233,11 @@ export function createUserDataView(ctx, options = {}) {
     const summarySlot = document.createElement("div");
     const currentExportText = () => JSON.stringify(createUserDataExport(ctx.state), null, 2);
     const refreshSummary = () => {
-      summarySlot.replaceChildren(renderStudyDataSummary(getUserDataSummary(ctx.state), options.showStudyMarks));
+      summarySlot.replaceChildren(renderStudyDataSummary(
+        getUserDataSummary(ctx.state),
+        options.showStudyMarks,
+        ctx.platform?.kind,
+      ));
     };
     refreshSummary();
     wrap.append(summarySlot);
@@ -242,11 +247,13 @@ export function createUserDataView(ctx, options = {}) {
     const backupTitle = document.createElement("h4");
     backupTitle.textContent = "Backup and restore";
     const backupIntro = document.createElement("p");
-    backupIntro.textContent = "Download a versioned JSON backup, or merge or replace data from a Bible App backup.";
+    backupIntro.textContent = files?.nativeDialogs
+      ? "Save a versioned JSON backup, or open one to merge or replace Bible App data."
+      : "Download a versioned JSON backup, or merge or replace data from a Bible App backup.";
     const download = document.createElement("button");
     download.type = "button";
     download.className = "mini-button primary-action";
-    download.textContent = "Download backup";
+    download.textContent = files?.nativeDialogs ? "Save backup…" : "Download backup";
     download.addEventListener("click", async () => {
       const result = await files?.saveTextFile({
         text: currentExportText(),
@@ -292,15 +299,18 @@ export function createUserDataView(ctx, options = {}) {
     });
     exportDetails.append(exportSummary, exportArea, copy, copyStatus);
 
-    const fileLabel = document.createElement("label");
-    fileLabel.className = "user-data-file-label";
+    const fileLabel = document.createElement(files?.nativeDialogs ? "button" : "label");
+    fileLabel.className = files?.nativeDialogs ? "mini-button user-data-file-button" : "user-data-file-label";
+    if (files?.nativeDialogs) fileLabel.type = "button";
     const fileLabelText = document.createElement("span");
-    fileLabelText.textContent = "Choose backup file";
-    const fileInput = document.createElement("input");
-    fileInput.className = "user-data-file";
-    fileInput.type = "file";
-    fileInput.accept = "application/json,.json";
-    fileLabel.append(fileLabelText, fileInput);
+    fileLabelText.textContent = files?.nativeDialogs ? "Open backup…" : "Choose backup file";
+    const fileInput = files?.nativeDialogs ? null : document.createElement("input");
+    if (fileInput) {
+      fileInput.className = "user-data-file";
+      fileInput.type = "file";
+      fileInput.accept = "application/json,.json";
+    }
+    fileLabel.append(fileLabelText, ...(fileInput ? [fileInput] : []));
 
     const pasteDetails = document.createElement("details");
     pasteDetails.className = "manual-json-panel paste-json-panel";
@@ -319,6 +329,7 @@ export function createUserDataView(ctx, options = {}) {
     const runImport = (mode) => {
       try {
         const payload = JSON.parse(importArea.value);
+        ctx.platform?.userStorage?.beginRecovery?.();
         const summary = importUserData(ctx.state, payload, mode);
         ctx.renderChapter();
         refreshSummary();
@@ -328,6 +339,7 @@ export function createUserDataView(ctx, options = {}) {
         }
         status.className = "import-status success";
       } catch (error) {
+        ctx.platform?.userStorage?.cancelRecovery?.();
         const message = error instanceof Error ? error.message : "Import failed.";
         status.textContent = error instanceof SyntaxError
           ? "That file is not valid JSON. No local data was changed."
@@ -338,7 +350,7 @@ export function createUserDataView(ctx, options = {}) {
       }
     };
 
-    fileInput.addEventListener("change", async () => {
+    const openBackup = async () => {
       const result = await files?.openTextFile({ input: fileInput, accept: "application/json,.json" });
       if (!result || result.status === "cancelled") return;
       if (result.status === "opened") {
@@ -349,7 +361,8 @@ export function createUserDataView(ctx, options = {}) {
       }
       status.textContent = `${result.message || "Could not read that backup file."} No local data was changed.`;
       status.className = "import-status error";
-    });
+    };
+    (fileInput || fileLabel).addEventListener(fileInput ? "change" : "click", openBackup);
 
     const importActions = document.createElement("div");
     importActions.className = "user-data-actions import-actions";
@@ -441,6 +454,16 @@ export function createUserDataView(ctx, options = {}) {
     diagnosticsIntro.textContent = profile?.isLab
       ? "Lab exposes the complete experimental browser storage, physical-pack, capability, and local-job controls against isolated Lab state."
       : "Inspect browser storage, package capabilities, and technical local job controls for compatibility and recovery.";
+    if (ctx.platform?.kind === "tauri-windows") {
+      diagnosticsIntro.textContent = profile?.isLab
+        ? "Lab exposes isolated native user storage and bundled-data diagnostics. Native physical-pack management is deferred to issue #81."
+        : "Inspect native user storage, bundled-data capabilities, and technical local job controls for compatibility and recovery.";
+    }
+    const projectSource = document.createElement("a");
+    projectSource.href = "https://github.com/Nobodyworld/app-bible-language-study";
+    projectSource.target = "_blank";
+    projectSource.rel = "noopener noreferrer";
+    projectSource.textContent = "Project source and notices";
     const diagnosticsSlot = document.createElement("div");
     const refreshDiagnostics = () => {
       const summary = getUserDataSummary(ctx.state);
@@ -455,7 +478,7 @@ export function createUserDataView(ctx, options = {}) {
     diagnostics.addEventListener("toggle", () => {
       if (diagnostics.open && !diagnosticsSlot.childNodes.length) refreshDiagnostics();
     });
-    diagnostics.append(diagnosticsSummary, diagnosticsIntro, diagnosticsSlot);
+    diagnostics.append(diagnosticsSummary, diagnosticsIntro, projectSource, diagnosticsSlot);
     if (profile?.isLab) {
       diagnostics.open = true;
       refreshDiagnostics();

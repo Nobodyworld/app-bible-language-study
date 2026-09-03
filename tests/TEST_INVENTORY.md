@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-08-28
+Reviewed: 2026-09-01
 
 ## Authority
 
@@ -12,13 +12,17 @@ remove, or reclassify a maintained test.
 
 | Command | Current composition |
 |---|---|
-| `npm run test:static` | Repository integrity, feature registry/profile/platform contracts, data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
+| `npm run test:static` | Repository integrity, feature registry/profile, desktop configuration, browser-and-desktop platform contracts, data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
 | `npm run test:domain` | Job, logical package, physical-pack contract and lifecycle, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
 | `npm run test:browser` | Desktop rendered interaction, Stable/Lab/disabled-profile behavior, Search-match contrast, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks/Meaning, and physical-pack Edge lifecycle flows. |
 | `npm run test:browser:mobile` | The maintained interaction journey in mobile mode. |
 | `npm test` | Static, desktop-browser, and mobile-browser suites. |
 | `npm run audit` | Public package/file audit through `app/tools/publish-audit.mjs`. |
 | `npm run verify` | `npm test` followed by the public package audit. |
+| `npm run desktop:prepare` | Deterministic split staging of the embedded shell and complete installer-owned data resources. |
+| `npm run desktop:check` | Desktop staging verification, Rust format/clippy/tests, and focused Tauri configuration/platform/staging contracts. |
+| `npm run desktop:test` | Official direct `tauri-driver` flow against the debug WRY binary, including exact-token mark/Meaning persistence and route restoration across relaunch. |
+| `npm run desktop:build` | Unsigned Windows x64 NSIS release build; it is intentionally outside ordinary browser verification. |
 
 ## Focused Aliases
 
@@ -48,6 +52,17 @@ composition above:
 | `npm run physical-packs:check` | Deterministic fixture check plus two independent production Search/Commentary inventory builds with byte-for-byte catalog/manifest comparison and digest validation. |
 | `npm run physical-packs:scenarios:check` | Maintained five-scenario file/raw/transfer measurement reconciliation. |
 | `npm run test:ui` | UI, compact panel-context, workspace-width model, and contained-surface source contracts. |
+| `npm run desktop:webdriver:prepare` | Project-local official `tauri-driver` plus Microsoft-signed EdgeDriver matched to installed WebView2. |
+
+## Desktop Tests
+
+| Script or authority | Maintained coverage |
+|---|---|
+| `tests/desktop-config-contracts.mjs` | Shared internal index loading without a localhost dev server, native Lab feature selection, sequential dev staging, Stable/Lab window-property parity, genuine zoom hotkeys, and least-privilege main-window capability scope. |
+| `tests/desktop-platform-contracts.mjs` | Valid/malformed bridge selection, native-owned startup-profile mapping, native storage initialization/isolation/flush/failure/corrupt recovery without frontend-selected profile arguments, sticky per-store write failures, one-shot corrupt-recovery authorization, dialog cancellation, installed-data path rejection, bundled-only physical services, close-time flush, and no runtime Tauri-global access outside the bridge. This pure-JavaScript contract also runs in ordinary `test:static`/hosted verification. |
+| `tests/desktop-staging.mjs` | Full-corpus split inventory, deterministic staged paths, exclusions, CSP transform, symlink rejection evidence, and measured frontend/resource bytes. |
+| `src-tauri/src/*` unit tests | Profile/store IDs, containment, size limits, atomic replacement, interrupted/corrupt preservation, import/export, sanitized errors, installed-resource containment, environment path primitives, and external URL/navigation policy. |
+| `app/tools/run-desktop-e2e.mjs` | Actual debug native binary launch, Proverbs 1:1 Language Study and Strong's, exact source-token Favorite and Meaning writes, native persistence observation, clean relaunch, route restoration, and persisted controls with captured logs/screenshots. Test data roots and injected error capture are debug/E2E-only and absent from release behavior. |
 
 ## Static and Source-Level Tests
 
@@ -62,6 +77,8 @@ order:
 | `tests/feature-registry.mjs` | Complete static feature inventory, lifecycle values, dependencies, ownership, profile closure, test ownership, and actionable invalid-fixture diagnostics. |
 | `tests/feature-profiles.mjs` | Deterministic Stable/Lab resolution, recovery/compatibility access, unknown fallback, disabled-feature closure, unchanged Stable identities, and isolated Lab identities. |
 | `tests/platform-contracts.mjs` | Platform shape, user-storage isolation, profile-scoped notifications, browser file/data operations, digest/source/estimate services, profile-scoped physical registry identity, and explicit byte-store operations. |
+| `tests/desktop-config-contracts.mjs` | Tauri Stable/Lab internal-index, startup-feature, window-parity, genuine-zoom, dev-staging, and capability configuration contracts. |
+| `tests/desktop-platform-contracts.mjs` | Tauri bridge selection, native-selected profile-scoped storage, failure and recovery safety, native dialog contracts, packaged-data restrictions, bundled-only physical services, and close-time persistence without requiring Rust or Windows compilation. |
 | `tests/capabilities.mjs` | Capability declarations and availability behavior. |
 | `tests/analysis.mjs` | Generated analysis data and manifest contracts. |
 | `tests/interlinear.mjs` | Internal interlinear records, token resolution, marked Greek glyphs, and Hebrew analysis behavior. |

@@ -1,0 +1,319 @@
+name: Desktop Verify
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    paths:
+      - ".github/workflows/desktop-verify.yml"
+      - "app/**"
+      - "src-tauri/**"
+      - "tests/desktop-*.mjs"
+      - "package.json"
+      - "package-lock.json"
+  pull_request:
+    paths:
+      - ".github/workflows/desktop-verify.yml"
+      - "app/**"
+      - "src-tauri/**"
+      - "tests/desktop-*.mjs"
+      - "package.json"
+      - "package-lock.json"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: desktop-verify-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  desktop:
+    name: desktop (windows-2022)
+    runs-on: windows-2022
+    timeout-minutes: 90
+    env:
+      DESKTOP_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.DESKTOP_CANDIDATE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact checkout and runner image
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:DESKTOP_CANDIDATE_SHA) {
+            throw "Desktop candidate mismatch: expected $env:DESKTOP_CANDIDATE_SHA, found $actual."
+          }
+          $osBuild = [Environment]::OSVersion.Version.Build
+          if ($osBuild -ne 20348) {
+            throw "Desktop verification requires Windows Server 2022 build 20348; runner supplied OS build $osBuild."
+          }
+          Write-Host "Desktop candidate: $actual"
+          Write-Host "Runner image: $env:ImageOS $env:ImageVersion; OS build: $osBuild"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Verify Windows and Rust toolchain
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node --version
+          npm --version
+          rustc --version
+          cargo --version
+          rustup target add x86_64-pc-windows-msvc
+
+      - name: Prepare deterministic desktop inputs
+        run: npm run desktop:prepare
+
+      - name: Run desktop source and native checks
+        run: npm run desktop:check
+
+      - name: Audit JavaScript dependencies
+        run: npm audit --audit-level=low
+
+      - name: Build unsigned NSIS preview installer
+        run: npm run desktop:build
+
+      - name: Record installer and exact NSIS-payload evidence
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          function Find-BytePattern {
+            param(
+              [Parameter(Mandatory)][byte[]]$Haystack,
+              [Parameter(Mandatory)][byte[]]$Needle
+            )
+            $matches = [System.Collections.Generic.List[int]]::new()
+            for ($offset = 0; $offset -le $Haystack.Length - $Needle.Length; $offset++) {
+              $matched = $true
+              for ($index = 0; $index -lt $Needle.Length; $index++) {
+                if ($Haystack[$offset + $index] -ne $Needle[$index]) {
+                  $matched = $false
+                  break
+                }
+              }
+              if ($matched) {
+                $matches.Add($offset)
+              }
+            }
+            return $matches.ToArray()
+          }
+
+          $bundleRoot = Join-Path $PWD 'src-tauri\target\x86_64-pc-windows-msvc\release\bundle\nsis'
+          $installers = @(Get-ChildItem -LiteralPath $bundleRoot -Filter '*.exe' -File)
+          if ($installers.Count -ne 1) {
+            throw "Expected exactly one NSIS installer under $bundleRoot; found $($installers.Count)."
+          }
+          $installer = $installers[0]
+          $releaseExe = Join-Path $PWD 'src-tauri\target\x86_64-pc-windows-msvc\release\bible-app-reader.exe'
+          if (-not (Test-Path -LiteralPath $releaseExe -PathType Leaf)) {
+            throw "The target-specific release executable is missing: $releaseExe"
+          }
+
+          # Tauri packages an NSIS-marker-patched executable, then restores the
+          # unpatched target/release file. Reconstruct that exact unsigned payload
+          # deterministically so the installed executable can be compared byte for byte.
+          $unknownMarker = [Text.Encoding]::ASCII.GetBytes('__TAURI_BUNDLE_TYPE_VAR_UNK')
+          $nsisMarker = [Text.Encoding]::ASCII.GetBytes('__TAURI_BUNDLE_TYPE_VAR_NSS')
+          if ($unknownMarker.Length -ne $nsisMarker.Length) {
+            throw 'The Tauri bundle markers must have identical byte lengths.'
+          }
+          $payloadBytes = [IO.File]::ReadAllBytes($releaseExe)
+          $markerMatches = @(Find-BytePattern -Haystack $payloadBytes -Needle $unknownMarker)
+          if ($markerMatches.Count -ne 1) {
+            throw "Expected exactly one unpatched Tauri bundle marker; found $($markerMatches.Count)."
+          }
+          [Array]::Copy($nsisMarker, 0, $payloadBytes, $markerMatches[0], $nsisMarker.Length)
+          $expectedPayload = Join-Path $env:RUNNER_TEMP "bible-app-reader-$($env:DESKTOP_CANDIDATE_SHA)-nsis.exe"
+          [IO.File]::WriteAllBytes($expectedPayload, $payloadBytes)
+
+          $installerHash = Get-FileHash -LiteralPath $installer.FullName -Algorithm SHA256
+          $releaseHash = Get-FileHash -LiteralPath $releaseExe -Algorithm SHA256
+          $payloadHash = Get-FileHash -LiteralPath $expectedPayload -Algorithm SHA256
+          "DESKTOP_INSTALLER_PATH=$($installer.FullName)" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_RELEASE_EXE=$releaseExe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_EXPECTED_INSTALLED_EXE=$expectedPayload" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          [pscustomobject]@{
+            installer = $installer.Name
+            installer_bytes = $installer.Length
+            installer_sha256 = $installerHash.Hash
+            restored_release_executable = Split-Path -Leaf $releaseExe
+            restored_release_executable_bytes = (Get-Item -LiteralPath $releaseExe).Length
+            restored_release_executable_sha256 = $releaseHash.Hash
+            expected_nsis_payload_bytes = (Get-Item -LiteralPath $expectedPayload).Length
+            expected_nsis_payload_sha256 = $payloadHash.Hash
+            tauri_bundle_marker = 'NSS'
+            head = $env:DESKTOP_CANDIDATE_SHA
+            image_os = $env:ImageOS
+            image_version = $env:ImageVersion
+          } | ConvertTo-Json -Compress
+
+      - name: Run source-built debug WebDriver acceptance
+        run: npm run desktop:test
+
+      - name: Install exact NSIS artifact and verify installed payload
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $installRoot = Join-Path $env:LOCALAPPDATA 'Bible App Reader'
+          $installedExe = Join-Path $installRoot 'bible-app-reader.exe'
+          $uninstaller = Join-Path $installRoot 'uninstall.exe'
+          if (Test-Path -LiteralPath $installRoot) {
+            throw "Expected a clean runner install location, but $installRoot already exists."
+          }
+          $install = Start-Process -FilePath $env:DESKTOP_INSTALLER_PATH -ArgumentList '/S' -Wait -PassThru
+          if ($install.ExitCode -ne 0) {
+            throw "The NSIS installer exited with code $($install.ExitCode)."
+          }
+          $deadline = (Get-Date).AddSeconds(45)
+          while ((Get-Date) -lt $deadline -and (-not (Test-Path -LiteralPath $installedExe -PathType Leaf) -or -not (Test-Path -LiteralPath $uninstaller -PathType Leaf))) {
+            Start-Sleep -Milliseconds 250
+          }
+          if (-not (Test-Path -LiteralPath $installedExe -PathType Leaf)) {
+            throw "The installed executable was not found at $installedExe."
+          }
+          if (-not (Test-Path -LiteralPath $uninstaller -PathType Leaf)) {
+            throw "The NSIS uninstaller was not found at $uninstaller."
+          }
+
+          # Record cleanup state immediately after a complete installation so the
+          # always() step can remove it even when a later identity assertion fails.
+          "BIBLEAPP_E2E_APPLICATION=$installedExe" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "BIBLEAPP_E2E_SKIP_BUILD=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "BIBLEAPP_E2E_PROFILE=stable" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_INSTALL_ROOT=$installRoot" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_UNINSTALLER_PATH=$uninstaller" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+          "DESKTOP_INSTALL_SUCCEEDED=1" | Out-File -FilePath $env:GITHUB_ENV -Append -Encoding utf8
+
+          $registryEntries = @(
+            Get-ChildItem -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+              ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue } |
+              Where-Object { $_.DisplayName -eq 'Bible App Reader' }
+          )
+          if ($registryEntries.Count -ne 1) {
+            throw "Expected exactly one current-user uninstall record for Bible App Reader; found $($registryEntries.Count)."
+          }
+          $registryInstallLocation = ([string]$registryEntries[0].InstallLocation).Trim('"')
+          if ([IO.Path]::GetFullPath($registryInstallLocation) -ne [IO.Path]::GetFullPath($installRoot)) {
+            throw "Registry install location mismatch: expected $installRoot, found $registryInstallLocation."
+          }
+
+          $payloadHash = Get-FileHash -LiteralPath $env:DESKTOP_EXPECTED_INSTALLED_EXE -Algorithm SHA256
+          $installedHash = Get-FileHash -LiteralPath $installedExe -Algorithm SHA256
+          if ($payloadHash.Hash -ne $installedHash.Hash) {
+            throw "Installed executable SHA-256 does not match the deterministically reconstructed NSIS payload."
+          }
+          $payloadBytes = (Get-Item -LiteralPath $env:DESKTOP_EXPECTED_INSTALLED_EXE).Length
+          $installedBytes = (Get-Item -LiteralPath $installedExe).Length
+          if ($payloadBytes -ne $installedBytes) {
+            throw "Installed executable byte length does not match the deterministically reconstructed NSIS payload."
+          }
+
+          [pscustomobject]@{
+            installed = $true
+            install_mode = 'currentUser'
+            registry_scope = 'HKCU'
+            executable = Split-Path -Leaf $installedExe
+            executable_bytes = $installedBytes
+            executable_sha256 = $installedHash.Hash
+            expected_nsis_payload_match = $true
+            uninstaller_present = $true
+          } | ConvertTo-Json -Compress
+
+      - name: Run installed-release WebDriver acceptance
+        run: node ./app/tools/run-desktop-e2e.mjs
+
+      - name: Observe independent installed launch
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $application = Start-Process -FilePath $env:BIBLEAPP_E2E_APPLICATION -PassThru
+          try {
+            # GitHub's hosted runner has no interactive desktop. WaitForInputIdle
+            # and CloseMainWindow therefore cannot serve as reliable GUI evidence.
+            # The preceding installed-release WebDriver journey exercises the real
+            # installed window. This separate launch proves the installed binary
+            # can also remain alive outside the WebDriver session.
+            Start-Sleep -Seconds 5
+            $application.Refresh()
+            if ($application.HasExited) {
+              throw "The independently launched installed application exited before observation completed."
+            }
+            [pscustomobject]@{
+              installed_launch = 'PASS'
+              observation_seconds = 5
+              process_alive = $true
+              hosted_close_mode = 'forced_cleanup'
+            } | ConvertTo-Json -Compress
+          } finally {
+            $application.Refresh()
+            if (-not $application.HasExited) {
+              Stop-Process -Id $application.Id -Force -ErrorAction SilentlyContinue
+              if (-not $application.WaitForExit(15000)) {
+                throw "The independently launched installed application could not be cleaned up."
+              }
+            }
+          }
+
+      - name: Uninstall installed preview and verify cleanup
+        if: always()
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-Process -Name 'bible-app-reader' -ErrorAction SilentlyContinue |
+            Stop-Process -Force -ErrorAction SilentlyContinue
+
+          if ($env:DESKTOP_INSTALL_SUCCEEDED -ne '1') {
+            Write-Host 'No completed installation was recorded; uninstall cleanup is not required.'
+            exit 0
+          }
+          if (-not (Test-Path -LiteralPath $env:DESKTOP_UNINSTALLER_PATH -PathType Leaf)) {
+            throw "The expected uninstaller is missing: $env:DESKTOP_UNINSTALLER_PATH"
+          }
+          $uninstall = Start-Process -FilePath $env:DESKTOP_UNINSTALLER_PATH -ArgumentList '/S' -Wait -PassThru
+          if ($uninstall.ExitCode -ne 0) {
+            throw "The NSIS uninstaller exited with code $($uninstall.ExitCode)."
+          }
+          $installedExe = Join-Path $env:DESKTOP_INSTALL_ROOT 'bible-app-reader.exe'
+          $deadline = (Get-Date).AddSeconds(45)
+          while ((Get-Date) -lt $deadline -and ((Test-Path -LiteralPath $installedExe) -or (Test-Path -LiteralPath $env:DESKTOP_UNINSTALLER_PATH))) {
+            Start-Sleep -Milliseconds 250
+          }
+          if (Test-Path -LiteralPath $installedExe) {
+            throw "The installed executable remains after uninstall: $installedExe"
+          }
+          if (Test-Path -LiteralPath $env:DESKTOP_UNINSTALLER_PATH) {
+            throw "The uninstaller remains after uninstall: $env:DESKTOP_UNINSTALLER_PATH"
+          }
+          $registryEntries = @(
+            Get-ChildItem -LiteralPath 'HKCU:\Software\Microsoft\Windows\CurrentVersion\Uninstall' -ErrorAction SilentlyContinue |
+              ForEach-Object { Get-ItemProperty -LiteralPath $_.PSPath -ErrorAction SilentlyContinue } |
+              Where-Object { $_.DisplayName -eq 'Bible App Reader' }
+          )
+          if ($registryEntries.Count -ne 0) {
+            throw "The current-user uninstall record remains after uninstall."
+          }
+          $appDataRoot = Join-Path $env:APPDATA 'com.nobodyworld.bibleappreader'
+          [pscustomobject]@{
+            uninstall = 'PASS'
+            installed_executable_removed = $true
+            uninstall_record_removed = $true
+            profile_data_retained = Test-Path -LiteralPath $appDataRoot
+          } | ConvertTo-Json -Compress

@@ -1399,6 +1399,264 @@ async function runQa(page) {
       Math.abs(statusMatrix.restored.headerHeight - readerTopContract.header.height) <= 1,
     `setStatus classification, announcement, containment, and restoration failed: ${JSON.stringify(statusMatrix)}`,
   );
+  if (qaDevice !== "mobile") {
+    const originalViewport = { width: 1280, height: 720 };
+    const originalTheme = await evaluate(page, "document.documentElement.getAttribute('data-theme') || 'light'");
+    const statusGeometryProfiles = [
+      { name: "390 native at 200% zoom", width: 195, height: 410 },
+      { name: "minimum", width: 390, height: 844 },
+      { name: "compact transition - 1", width: 639, height: 900 },
+      { name: "compact transition", width: 640, height: 900 },
+      { name: "compact transition + 1", width: 641, height: 900 },
+      { name: "reader-only maximum", width: 768, height: 900 },
+      { name: "workspace transition", width: 769, height: 900 },
+      { name: "workspace settling", width: 773, height: 900 },
+      { name: "compact desktop", width: 820, height: 900 },
+      { name: "desktop", width: 1024, height: 900 },
+      { name: "wide desktop", width: 1440, height: 900 },
+    ];
+    const statusGeometryCases = [
+      ["loaded", "BSB data loaded"],
+      ["loading", "Loading book data..."],
+      ["warning", "BSB data loaded with warning: optional data unavailable"],
+      ["failed", "Data load failed"],
+      ["message", "Home"],
+    ];
+    const statusGeometryMatrix = [];
+    for (const theme of ["light", "dark"]) {
+      const activeTheme = await evaluate(page, "document.documentElement.getAttribute('data-theme') || 'light'");
+      if (activeTheme !== theme) await click(page, "#themeToggle");
+      for (const profile of statusGeometryProfiles) {
+        await page.setViewportSize({ width: profile.width, height: profile.height });
+        await delay(180);
+        const measurement = await evaluate(
+          page,
+          `(async () => {
+            const domModuleUrl = new URL('./src/dom.js?v=issue92-status-geometry', document.baseURI).href;
+            const { setStatus } = await import(domModuleUrl);
+            const originalText = document.querySelector('#statusText')?.textContent || '';
+            const rect = (selector, includeText = false) => {
+              const node = document.querySelector(selector);
+              if (!node) return null;
+              const bounds = node.getBoundingClientRect();
+              const style = getComputedStyle(node);
+              return {
+                selector,
+                left: bounds.left,
+                top: bounds.top,
+                right: bounds.right,
+                bottom: bounds.bottom,
+                width: bounds.width,
+                height: bounds.height,
+                display: style.display,
+                visibility: style.visibility,
+                clip: style.clip,
+                clipPath: style.clipPath,
+                overflow: style.overflow,
+                overflowWrap: style.overflowWrap,
+                wordBreak: style.wordBreak,
+                transform: style.transform,
+                clientWidth: node.clientWidth,
+                scrollWidth: node.scrollWidth,
+                clientHeight: node.clientHeight,
+                scrollHeight: node.scrollHeight,
+                hidden: Boolean(node.hidden),
+                text: includeText ? node.textContent.trim() : undefined,
+              };
+            };
+            const intersects = (a, b) => Boolean(
+              a && b && a.right > b.left && b.right > a.left && a.bottom > b.top && b.bottom > a.top
+            );
+            const isPresented = (box) => Boolean(
+              box && !box.hidden && box.display !== 'none' && box.visibility !== 'hidden' &&
+              box.width > 1 && box.height > 1 && box.clipPath !== 'inset(50%)'
+            );
+            const targetSelectors = {
+              translationLabel: '.reader-control-label-line > span:first-child',
+              translationControl: '.reader-control-translation',
+              translationSelect: '#translationSelect',
+              bookLabel: '#bookPickerLabel',
+              bookPicker: '#bookPickerButton',
+              chapterLabel: '#chapterPickerLabel',
+              chapterPicker: '#chapterPickerButton',
+              brand: '#homeButton',
+              theme: '#themeToggle',
+            };
+            const results = [];
+            for (const [name, text] of ${JSON.stringify(statusGeometryCases)}) {
+              setStatus(text);
+              await new Promise((resolve) => setTimeout(resolve, 180));
+              await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+              const status = rect('#statusText', true);
+              const compact = rect('#compactStatusText', true);
+              const presented = [status, compact].filter(isPresented);
+              const targets = Object.fromEntries(
+                Object.entries(targetSelectors).map(([key, selector]) => [key, rect(selector)])
+              );
+              const intersections = presented.flatMap((statusBox) =>
+                Object.entries(targets)
+                  .filter(([, target]) => intersects(statusBox, target))
+                  .map(([target]) => ({ status: statusBox.selector, target }))
+              );
+              results.push({
+                name,
+                text,
+                statusState: document.querySelector('#statusText')?.dataset.statusState || '',
+                presented,
+                targets,
+                intersections,
+                liveRegionCount: document.querySelectorAll('[role="status"][aria-live]').length,
+                compactAriaHidden: document.querySelector('#compactStatusText')?.getAttribute('aria-hidden'),
+                compactHidden: Boolean(document.querySelector('#compactStatusText')?.hidden),
+                clientWidth: document.documentElement.clientWidth,
+                scrollWidth: document.documentElement.scrollWidth,
+                bodyScrollWidth: document.body.scrollWidth,
+                header: rect('.app-header'),
+                headerGridColumns: getComputedStyle(document.querySelector('.app-header')).gridTemplateColumns,
+              });
+            }
+            setStatus(originalText);
+            await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+            return {
+              viewport: { innerWidth, innerHeight, outerWidth, outerHeight, devicePixelRatio },
+              clientWidth: document.documentElement.clientWidth,
+              theme: document.documentElement.getAttribute('data-theme'),
+              results,
+            };
+          })()`,
+        );
+        statusGeometryMatrix.push({ profile, measurement });
+      }
+    }
+    await page.setViewportSize(originalViewport);
+    const restoredTheme = await evaluate(page, "document.documentElement.getAttribute('data-theme') || 'light'");
+    if (restoredTheme !== originalTheme) await click(page, "#themeToggle");
+    qaEvidence.statusGeometryMatrix = statusGeometryMatrix.map(({ profile, measurement }) => ({
+      profile,
+      theme: measurement.theme,
+      viewport: measurement.viewport,
+      clientWidth: measurement.clientWidth,
+      results: measurement.results.map((result) => ({
+        name: result.name,
+        statusState: result.statusState,
+        presented: result.presented.map((box) => ({
+          selector: box.selector,
+          text: box.text,
+          left: box.left,
+          top: box.top,
+          right: box.right,
+          bottom: box.bottom,
+        })),
+        intersections: result.intersections,
+        horizontalOverflow: Math.max(result.scrollWidth, result.bodyScrollWidth) - result.clientWidth,
+        headerHeight: result.header?.height || 0,
+      })),
+    }));
+    const geometryFailures = statusGeometryMatrix.flatMap(({ profile, measurement }) =>
+      measurement.results.flatMap((result) => {
+        const presentedStatusIsReadable = result.presented.length === 1 && result.presented.every((box) =>
+          box.clientWidth + 1 >= box.scrollWidth &&
+          box.clientHeight + 1 >= box.scrollHeight &&
+          box.wordBreak !== 'break-all' &&
+          box.overflowWrap !== 'anywhere'
+        );
+        const navigationIsUsable = [
+          result.targets.translationSelect,
+          result.targets.bookPicker,
+          result.targets.chapterPicker,
+        ].every((box) => box && box.width > 0 && box.height >= 36 && box.left >= 0 && box.right <= result.clientWidth + 1);
+        const headerIdentityIsUsable = result.targets.brand && result.targets.brand.width > 0 &&
+          result.targets.brand.height >= 40 && result.targets.brand.left >= 0 &&
+          result.targets.brand.right <= result.clientWidth + 1 &&
+          result.targets.theme && result.targets.theme.width > 0 && result.targets.theme.height >= 44 &&
+          result.targets.theme.left >= 0 && result.targets.theme.right <= result.clientWidth + 1;
+        const compactContract = result.liveRegionCount === 1 && result.compactAriaHidden === 'true' &&
+          result.compactHidden === (result.name !== 'loaded');
+        const contained = result.intersections.length === 0 &&
+          result.scrollWidth <= result.clientWidth + 1 && result.bodyScrollWidth <= result.clientWidth + 1;
+        if (presentedStatusIsReadable && navigationIsUsable && headerIdentityIsUsable && compactContract && contained) return [];
+        return [{ profile: profile.name, width: profile.width, theme: measurement.theme, result }];
+      })
+    );
+    assert(
+      geometryFailures.length === 0,
+      `reader status geometry must remain readable and separate from primary navigation: ${JSON.stringify(geometryFailures)}`,
+    );
+    const minimumZoomDetailHeaderMatrix = [];
+    await page.setViewportSize({ width: 195, height: 410 });
+    for (const theme of ["light", "dark"]) {
+      const activeTheme = await evaluate(page, "document.documentElement.getAttribute('data-theme') || 'light'");
+      if (activeTheme !== theme) await click(page, "#themeToggle");
+      await evaluate(page, "document.querySelector('.strong-token')?.click()");
+      await waitFor(page, "document.querySelector('#detailTitle')?.textContent === \"Strong's\"");
+      await delay(180);
+      minimumZoomDetailHeaderMatrix.push(await evaluate(
+        page,
+        `(() => {
+          const rect = (selector) => {
+            const node = document.querySelector(selector);
+            if (!node) return null;
+            const bounds = node.getBoundingClientRect();
+            const style = getComputedStyle(node);
+            return {
+              selector,
+              left: bounds.left,
+              top: bounds.top,
+              right: bounds.right,
+              bottom: bounds.bottom,
+              width: bounds.width,
+              height: bounds.height,
+              clientWidth: node.clientWidth,
+              scrollWidth: node.scrollWidth,
+              clientHeight: node.clientHeight,
+              scrollHeight: node.scrollHeight,
+              wordBreak: style.wordBreak,
+              overflowWrap: style.overflowWrap
+            };
+          };
+          const intersects = (a, b) => Boolean(
+            a && b && a.right > b.left && b.right > a.left && a.bottom > b.top && b.bottom > a.top
+          );
+          const title = rect('#detailTitle');
+          const clear = rect('#clearDetail');
+          const close = rect('#hideStudyWorkspace');
+          const detail = rect('#detailPane');
+          return {
+            theme: document.documentElement.getAttribute('data-theme'),
+            viewport: { width: innerWidth, height: innerHeight },
+            title,
+            clear,
+            close,
+            detail,
+            titleActionIntersections: [clear, close].filter((action) => intersects(title, action)).map((action) => action.selector),
+            actionIntersection: intersects(clear, close),
+            pageOverflow: Math.max(document.documentElement.scrollWidth, document.body.scrollWidth) - document.documentElement.clientWidth
+          };
+        })()`,
+      ));
+      await click(page, "#hideStudyWorkspace");
+      await waitFor(page, "document.querySelector('#detailPane')?.classList.contains('visible') === false");
+    }
+    await page.setViewportSize(originalViewport);
+    const detailHeaderRestoredTheme = await evaluate(page, "document.documentElement.getAttribute('data-theme') || 'light'");
+    if (detailHeaderRestoredTheme !== originalTheme) await click(page, "#themeToggle");
+    qaEvidence.minimumZoomDetailHeaderMatrix = minimumZoomDetailHeaderMatrix;
+    const detailHeaderFailures = minimumZoomDetailHeaderMatrix.filter((measurement) =>
+      measurement.viewport.width !== 195 || measurement.viewport.height !== 410 ||
+      !measurement.title || measurement.title.width <= 1 || measurement.title.clientWidth + 1 < measurement.title.scrollWidth ||
+      measurement.title.wordBreak === 'break-all' || measurement.title.overflowWrap === 'anywhere' ||
+      !measurement.clear || measurement.clear.height < 43.5 || measurement.clear.left < 0 || measurement.clear.right > measurement.detail.right + 1 ||
+      !measurement.close || measurement.close.height < 43.5 || measurement.close.left < 0 || measurement.close.right > measurement.detail.right + 1 ||
+      measurement.titleActionIntersections.length > 0 || measurement.actionIntersection ||
+      measurement.detail.scrollWidth > measurement.detail.clientWidth + 1 || measurement.pageOverflow > 1
+    );
+    assert(
+      detailHeaderFailures.length === 0,
+      `minimum native-width detail header must keep its title and primary actions readable at 200% zoom: ${JSON.stringify(detailHeaderFailures)}`,
+    );
+    pass("minimum native-width detail header at 200% zoom");
+    pass("reader status geometry across states, themes, and responsive transitions");
+  }
   await page.emulateMedia({ reducedMotion: "reduce", forcedColors: "none" });
   const reducedMotionTopState = await evaluate(
     page,

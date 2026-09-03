@@ -13,18 +13,20 @@
 > redistribution.
 
 Bible App Reader is a local-first Bible study workspace that runs as a static
-browser application. It combines multi-translation reading, hover-first
+browser application and as an unsigned Tauri 2 Windows public-preview build. It combines multi-translation reading, hover-first
 supplemental context, Hebrew and Greek Language Study, commentary,
 cross-references, Strong's lexicons, structured study marks, and portable
 browser-local data without requiring an account, hosted backend, analytics
 service, or remote application API.
 
 The default Stable profile preserves the existing experience and storage
-identities. An explicit local Lab profile (`?profile=lab` before the hash route)
-enables complete experimental diagnostics with isolated personal-data,
-notification, physical-registry, and physical-byte namespaces. Both profiles
-remain static, local-first, offline-capable browser products and use the same
-portable `bibleapp:user-data` version-3 contract.
+identities. In a browser, an explicit local Lab profile uses `?profile=lab`
+before the hash route. The supported desktop Lab command selects the same
+profile through a native build feature so the frontend cannot redirect native
+storage to another profile. Lab enables complete experimental diagnostics with
+isolated personal-data, notification, physical-registry, and physical-byte
+namespaces. Both profiles remain static, local-first, offline-capable products
+and use the same portable `bibleapp:user-data` version-3 contract.
 
 The app keeps the reader primary while deeper material remains close at hand.
 Reader words, references, source-language forms, morphology, transliteration
@@ -200,6 +202,37 @@ http://127.0.0.1:8000/#/read/bsb/psalms/23
 Routes are hash-based, so the app can run from the included Node static server
 without a framework-specific deployment runtime.
 
+## Windows Desktop Public Preview
+
+The Windows vertical slice composes the same DOM application through Tauri 2
+and the installed WebView2 Evergreen Runtime. It is an unsigned development
+preview, not a released or production-ready desktop product. The browser build,
+storage identities, and ordinary `npm run verify` command remain independent of
+Rust and Windows build tools.
+
+Windows desktop contributors need the Rust MSVC toolchain, Visual C++ build
+tools, WebView2, and the prerequisites described in
+[the desktop guide](docs/DESKTOP.md). Maintained commands are:
+
+```powershell
+npm run desktop:prepare
+npm run desktop:prepare:check
+npm run desktop:dev
+npm run desktop:dev:lab
+npm run desktop:check
+npm run desktop:test
+npm run desktop:build
+```
+
+`desktop:build` produces a current-user, unsigned x64 NSIS installer. The app
+ships the complete existing corpus as installer-owned resources; normal use is
+offline after installation when WebView2 is already available. Native user data
+is profile-scoped JSON under Tauri-resolved application directories, and native
+Open/Save dialogs preserve the portable `bibleapp:user-data` version-3 backup
+contract. Stable and Lab explicitly enable WebView2's genuine page-zoom
+accelerators. Native physical-pack management is deferred to issue #81; the
+desktop preview remains bundled-only.
+
 ## Verification
 
 ```powershell
@@ -237,6 +270,7 @@ The application is intentionally deployable as static files:
 Further documentation:
 
 - [Architecture](docs/ARCHITECTURE.md)
+- [Windows desktop preview](docs/DESKTOP.md)
 - [Data model](docs/DATA_MODEL.md)
 - [Security posture](docs/SECURITY_POSTURE.md)
 - [UI functionality contract](app/docs/UI_FUNCTIONALITY_SCHEMA.md)

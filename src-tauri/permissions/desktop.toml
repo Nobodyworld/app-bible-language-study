@@ -1,0 +1,13 @@
+[[permission]]
+identifier = "desktop-vertical-slice"
+description = "Allows only the native environment, profile-scoped user stores, flush status, JSON backup dialogs, and approved external URL command used by the desktop vertical slice."
+commands.allow = [
+  "desktop_environment",
+  "read_user_store",
+  "write_user_store",
+  "native_flush_status",
+  "read_packaged_data",
+  "save_backup",
+  "open_backup",
+  "open_external_url",
+]
