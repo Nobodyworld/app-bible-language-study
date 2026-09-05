@@ -223,9 +223,8 @@ Before #81 is resumed, its first bounded slice must specify:
 - one explicitly bounded deliverable and one final aggregate validation, followed
   by a separately scoped expansion only after review.
 
-Reference: Tauri's path resolver distinguishes roaming `app_data_dir()` from
-machine-local `app_local_data_dir()` on Windows:
-https://docs.rs/tauri/latest/tauri/path/struct.PathResolver.html
+The future machine-local pack-root choice is separate from the existing roaming
+personal-study root. This decision does not authorize a migration of user data.
 
 ## Reliability acceptance boundary
 
