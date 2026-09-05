@@ -35,6 +35,7 @@ jobs:
     timeout-minutes: 90
     env:
       DESKTOP_CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DESKTOP_SCAN_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
 
     steps:
       - name: Check out exact candidate
@@ -67,6 +68,34 @@ jobs:
 
       - name: Install dependencies
         run: npm ci
+
+      - name: Scan exact candidate commit range
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'gitleaks-8.30.1-windows-x64.zip'
+          $tools = Join-Path $env:RUNNER_TEMP 'bibleapp-gitleaks-8.30.1'
+          Invoke-WebRequest -Uri 'https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip' -OutFile $archive
+          $expected = 'D29144DEFF3A68AA93CED33DDDF84B7FDC26070ADD4AA0F4513094C8332AFC4E'
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expected) {
+            throw 'Pinned Gitleaks archive hash mismatch.'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $tools
+          $gitleaks = Join-Path $tools 'gitleaks.exe'
+          & $gitleaks version
+          if ($LASTEXITCODE -ne 0) { throw 'Gitleaks version check failed.' }
+          $base = $env:DESKTOP_SCAN_BASE_SHA
+          if ($base -notmatch '^[0-9a-f]{40}$' -or $base -eq ('0' * 40)) {
+            $base = (git rev-parse 'HEAD^').Trim()
+            if ($LASTEXITCODE -ne 0) { throw 'Could not establish manual-dispatch scan base.' }
+          }
+          $range = "$base..$($env:DESKTOP_CANDIDATE_SHA)"
+          Write-Host "Gitleaks range: $range"
+          & $gitleaks git --no-banner --redact=100 --log-opts=$range .
+          if ($LASTEXITCODE -ne 0) { throw 'Exact-range secret scan failed.' }
+
+      - name: Test uninstall preservation assertions
+        run: node --test ./tests/desktop-uninstall-preservation.test.mjs
 
       - name: Verify Windows and Rust toolchain
         shell: pwsh
@@ -272,6 +301,35 @@ jobs:
             }
           }
 
+      - name: Capture uninstall preservation baseline and owned shortcuts
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          node ./tests/desktop-uninstall-preservation.mjs capture
+          if ($LASTEXITCODE -ne 0) { throw 'Could not capture retained study-data baseline.' }
+          $shell = New-Object -ComObject WScript.Shell
+          $roots = @(
+            [Environment]::GetFolderPath('Desktop'),
+            [Environment]::GetFolderPath('Programs'),
+            [Environment]::GetFolderPath('CommonDesktopDirectory'),
+            [Environment]::GetFolderPath('CommonPrograms')
+          ) | Select-Object -Unique
+          $owned = @(
+            foreach ($root in $roots) {
+              if (Test-Path -LiteralPath $root -PathType Container) {
+                foreach ($link in Get-ChildItem -LiteralPath $root -Filter '*.lnk' -File -Recurse) {
+                  $target = [string]$shell.CreateShortcut($link.FullName).TargetPath
+                  if ($target -and [string]::Equals($target, $env:BIBLEAPP_E2E_APPLICATION, [StringComparison]::OrdinalIgnoreCase)) {
+                    $link.FullName
+                  }
+                }
+              }
+            }
+          ) | Select-Object -Unique
+          if (@($owned).Count -eq 0) { throw 'No shortcut targets the exact installed candidate.' }
+          ConvertTo-Json -InputObject @($owned) | Set-Content -LiteralPath (Join-Path $env:RUNNER_TEMP 'bibleapp-owned-shortcuts.json')
+          Write-Host "Captured $(@($owned).Count) installer-owned shortcuts."
+
       - name: Uninstall installed preview and verify cleanup
         if: always()
         shell: pwsh
@@ -310,10 +368,26 @@ jobs:
           if ($registryEntries.Count -ne 0) {
             throw "The current-user uninstall record remains after uninstall."
           }
-          $appDataRoot = Join-Path $env:APPDATA 'com.nobodyworld.bibleappreader'
+          node ./tests/desktop-uninstall-preservation.mjs verify
+          if ($LASTEXITCODE -ne 0) { throw 'Uninstall did not preserve the exact study/recovery baseline.' }
+          $shortcutFile = Join-Path $env:RUNNER_TEMP 'bibleapp-owned-shortcuts.json'
+          $owned = @(Get-Content -LiteralPath $shortcutFile -Raw | ConvertFrom-Json)
+          if ($owned.Count -eq 0) { throw 'Installer-owned shortcut baseline is empty.' }
+          foreach ($link in $owned) {
+            if (Test-Path -LiteralPath $link) { throw "An installer-owned shortcut remains: $link" }
+          }
+          if (Get-Process -Name 'bible-app-reader' -ErrorAction SilentlyContinue) {
+            throw 'An application process remains after uninstall.'
+          }
+          if (Test-Path -LiteralPath $env:DESKTOP_INSTALL_ROOT -PathType Container) {
+            $remaining = @(Get-ChildItem -LiteralPath $env:DESKTOP_INSTALL_ROOT -File -Recurse -Force)
+            if ($remaining.Count -ne 0) { throw 'Installer-owned payload files remain after uninstall.' }
+          }
           [pscustomobject]@{
             uninstall = 'PASS'
             installed_executable_removed = $true
             uninstall_record_removed = $true
-            profile_data_retained = Test-Path -LiteralPath $appDataRoot
+            profile_data_preserved_exactly = $true
+            recovery_data_preserved_exactly = $true
+            candidate_shortcuts_removed = $true
           } | ConvertTo-Json -Compress
