@@ -100,8 +100,13 @@ checkout credentials disabled, and then runs:
   and native persistence journey against the installed release executable;
 - a separate headless-safe observation that the installed executable launches
   independently and remains alive outside the WebDriver session;
-- silent uninstall plus installed-program and uninstall-registry cleanup checks,
-  with retained profile data classified rather than silently deleted.
+- capture of all existing Stable/Lab files plus disposable workspace/recovery
+  sentinels immediately before uninstall;
+- silent uninstall plus executable, uninstaller, payload, registry, and
+  candidate-owned shortcut removal assertions;
+- exact retained-file path, byte-length, and SHA-256 comparison after uninstall;
+- Gitleaks 8.30.1 from a checksum-pinned upstream release ZIP over the PR base-to-head
+  or push range (the parent-to-head range for manual dispatch).
 
 Tauri temporarily patches the bundle-type marker before creating NSIS and then
 restores the target-specific release executable. The restored release file and
@@ -176,3 +181,73 @@ QA must still use the release installer and executable to observe native dialogs
 strict offline behavior, real Stable/Lab directories, system-browser handoff,
 normal user-driven window close, and the native visual/accessibility matrix.
 Automated installed acceptance does not replace those human-observable gates.
+
+## Desktop baseline and deferred content management
+
+Decision recorded for issue #103: the current desktop product already reads its
+bundled Bible, Search, Commentary, and language data as installed JSON resources.
+A database migration, SQLite, native physical-pack manager, separate downloads,
+or a new storage engine is not required to run the desktop app. The remaining
+work after reliability hardening is feature cleanup/rework, not automatic
+implementation of #81 or multilingual Search.
+
+There are three different authorities:
+
+| Authority | Current behavior |
+|---|---|
+| Bundled reference data | Installed, read-only resources shared with the browser product. |
+| Personal study data | Writable Stable/Lab native stores and portable version-3 backups. |
+| Optional managed packs | An opt-in browser implementation; native implementation remains deferred. |
+
+The previous broad #81 implementation handoff is superseded. Retain its useful
+requirements as backlog, but do not execute it. Copying already bundled packs
+into another location would add storage, not shrink the existing installer.
+Revisit native packs only for a demonstrated need such as independently delivered
+content, very large optional datasets, or measured distribution/performance costs.
+
+Before #81 is resumed, its first bounded slice must specify:
+
+- machine-local reconstructible pack bytes under `app_local_data_dir()` on
+  Windows; do not relocate existing personal study data;
+- a native per-profile writer/locking strategy across processes, generation or
+  operation identities, a durable commit point, and recovery at every
+  filesystem-promotion/registry-replacement interruption boundary;
+- native enforcement of containment, verified-before-activation, and safe
+  deletion even when frontend calls arrive out of order; shared JavaScript still
+  owns presentation and workflow rather than a duplicated study engine;
+- JavaScript/Rust golden vectors for exact ordering, JSON serialization, UTF-8
+  lengths, digests and aggregate framing, plus Windows collision/reserved-name,
+  alternate-stream and reparse-point rejection;
+- tiny fixtures in isolated native tests, with separately identified ordinary
+  production-artifact evidence; fixture bytes must not silently enter production;
+- one explicitly bounded deliverable and one final aggregate validation, followed
+  by a separately scoped expansion only after review.
+
+The future machine-local pack-root choice is separate from the existing roaming
+personal-study root. This decision does not authorize a migration of user data.
+
+## Reliability acceptance boundary
+
+The shared browser pack manager commits activation when its registry write
+succeeds. Errors escaping the subsequent reporting/progress phase return an
+explicit `post_activation_failed` error with `activation_committed: true`; they
+do not remove committed active/rollback bytes. A staging-cleanup failure may be
+recorded in history without failing the completed activation. Cancellation is
+rechecked before commit. Removal persists its intent first, verifies each owned
+store is actually absent, and retains only failed deletion identities for
+explicit or startup retry. Reporting errors after completed removal cannot
+recreate a malformed record.
+
+`npm run test:reliability` exercises those failure paths and the uninstall
+assertions; the ordinary aggregate includes it once through `test:domain`.
+The CI preservation helper refuses owner-machine and self-hosted CLI execution.
+Its sentinels are nested test-only files, not replacements for application stores,
+and it also hashes real study files already produced by the installed journey.
+A retained directory alone is not a passing data-preservation result.
+
+Use the maintained disposable Windows workflow for installer regression tests.
+Do not revive temporary owner-machine v2/v3/final-uninstall helpers. Earlier
+helper failures and retired acceptance repetitions are not successful uninstall
+evidence. New native-dialog or accessibility behavior still needs relevant
+runtime review, but unrelated changes do not require repeating the entire
+personal-machine acceptance matrix.

@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-09-01
+Reviewed: 2026-09-05
 
 ## Authority
 
@@ -13,7 +13,7 @@ remove, or reclassify a maintained test.
 | Command | Current composition |
 |---|---|
 | `npm run test:static` | Repository integrity, feature registry/profile, desktop configuration, browser-and-desktop platform contracts, data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
-| `npm run test:domain` | Job, logical package, physical-pack contract and lifecycle, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`. |
+| `npm run test:domain` | Job, logical package, physical-pack contract and lifecycle, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`, plus the focused reliability suite. |
 | `npm run test:browser` | Desktop rendered interaction, Stable/Lab/disabled-profile behavior, Search-match contrast, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks/Meaning, and physical-pack Edge lifecycle flows. |
 | `npm run test:browser:mobile` | The maintained interaction journey in mobile mode. |
 | `npm test` | Static, desktop-browser, and mobile-browser suites. |
@@ -46,6 +46,7 @@ composition above:
 | `npm run test:word-meaning-focus` | `app/scripts/word-meaning-focus-test.mjs`. |
 | `npm run test:study-workspace` | `app/scripts/study-workspace-interaction-test.mjs`. |
 | `npm run test:reader-data-loading` | `app/scripts/reader-data-loading-interaction-test.mjs`. |
+| `npm run test:reliability` | Pack commit/removal failure injection and uninstall-preservation assertion self-tests; included once through `test:domain`. |
 | `npm run test:search-highlight` | `app/scripts/search-highlight-interaction-test.mjs`. |
 | `npm run test:physical-packs` | Distribution, catalog, compatibility, pack-manifest, path, digest-framing, independent registry, complete lifecycle/recovery, resolver, capabilities, and logical/physical separation. |
 | `npm run test:physical-packs:edge` | Real Edge/IndexedDB/Cache Storage lifecycle, offline resolver, UI, focus, theme, responsive, and browser-health acceptance. |
@@ -160,3 +161,18 @@ The same audit left these obsolete local scripts untracked:
 Build, benchmark, performance-report, publish-cleaning, synchronization, and
 mouse-helper scripts that remain ignored are not release tests. They must not be
 added to maintained commands without an explicit contract.
+
+## Reliability and installed-uninstall evidence
+
+| Script or authority | Maintained coverage |
+|---|---|
+| `tests/physical-pack-failure-boundaries.mjs` | Post-activation history/progress/cleanup failures preserve committed active and rollback data; pre-commit write failure/cancellation; partial/false deletion and explicit/startup retry; registry/history failure; foreign-profile deletion rejection. Uses the actual manager and adapters with tiny synthetic bytes. |
+| `tests/desktop-uninstall-preservation.test.mjs` | Preserved baseline success; missing Stable/Lab workspace/recovery files, same-length corruption, actual pre-existing study-file loss, wrong candidate, empty evidence, and duplicate capture failures; owner/self-hosted CLI rejection. |
+| `tests/desktop-uninstall-preservation.mjs` | CI-only baseline capture/verification. Adds non-overwriting nested sentinels and hashes all existing Stable/Lab files immediately before uninstall, then asserts exact paths, byte lengths, and SHA-256 after uninstall. It does not execute installers or uninstallers. |
+| `.github/workflows/desktop-verify.yml` | Exact installed NSIS lifecycle, required retained-data comparison, removal of shortcuts that pointed to the exact executable, payload/registration removal, and pinned Gitleaks commit-range scan. |
+
+Focused development tests run before the final aggregate `npm run verify`.
+Do not rerun each entire child suite and then repeat the aggregate without a
+changed candidate or a diagnostic reason. A fixture build is not evidence for
+an unchanged production artifact. Owner-machine temporary uninstall helpers are
+not maintained acceptance authorities.

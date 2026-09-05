@@ -456,6 +456,7 @@ export class PhysicalPackManager {
     const previous = await this.registry.getRecord(entry.pack_id);
     let stagingCacheName = null;
     let activeCacheName = null;
+    let activationCommitted = false;
     try {
       this.cancellation.throwIfAborted(signal);
       const { manifest, manifestUrl } = await this.loadManifest(entry, signal);
@@ -607,7 +608,10 @@ export class PhysicalPackManager {
         compatibility: clone(manifest.compatibility),
         last_failure: null,
       };
+      this.cancellation.throwIfAborted(signal);
       await this.registry.putRecord(activeRecord);
+      // From this point the new bytes are durable authority, not disposable staging.
+      activationCommitted = true;
       try {
         await this.byteStore.deleteStore(stagingCacheName);
       } catch (cleanupError) {
@@ -623,6 +627,16 @@ export class PhysicalPackManager {
       this.emitProgress(options, { phase: "active", pack_id: entry.pack_id, completed: verifiedFiles, total: manifest.files.length });
       return activeRecord;
     } catch (error) {
+      if (activationCommitted) {
+        // Reporting/observer failures must never run pre-commit rollback cleanup.
+        // A snapshot is best-effort here; its failure cannot revoke the commit.
+        await this.refreshSnapshot().catch(() => undefined);
+        throw new PhysicalPackError(
+          "post_activation_failed",
+          `${entry.pack_id} was activated, but a follow-up step failed: ${sanitizeMessage(error)}`,
+          { pack_id: entry.pack_id, activation_committed: true },
+        );
+      }
       if (stagingCacheName) await this.byteStore.deleteStore(stagingCacheName).catch(() => false);
       if (activeCacheName) await this.byteStore.deleteStore(activeCacheName).catch(() => false);
       const cancelled = error?.name === "AbortError";
@@ -907,8 +921,11 @@ export class PhysicalPackManager {
     if (options.cascade) {
       for (const dependent of plan.blocked_by) await this.remove(dependent, { cascade: true });
     }
-    const pending = [record.active_cache, record.rollback_cache, record.staging_cache].filter(Boolean);
-    await this.registry.putRecord({
+    const pending = [...new Set([
+      ...(record.pending_deletions || []),
+      record.active_cache, record.rollback_cache, record.staging_cache,
+    ].filter(Boolean))];
+    const removing = {
       ...record,
       state: "removing",
       pending_deletions: pending,
@@ -916,25 +933,59 @@ export class PhysicalPackManager {
       rollback_cache: null,
       staging_cache: null,
       updated_at: isoNow(this.clock),
-    });
-    try {
-      for (const cacheName of pending) await this.byteStore.deleteStore(cacheName);
-      await this.registry.deleteRecord(packId);
-      await this.appendHistory("remove", "completed", { pack_id: packId, caches: pending.length });
-      await this.refreshSnapshot();
-      return true;
-    } catch (error) {
-      const interrupted = await this.registry.getRecord(packId);
-      await this.registry.putRecord({
-        ...interrupted,
-        state: "failed",
-        pending_deletions: pending,
-        last_failure: { code: "cleanup_failed", message: sanitizeMessage(error), at: isoNow(this.clock) },
-      });
-      await this.appendHistory("remove", "failed", { pack_id: packId, message: sanitizeMessage(error) });
-      await this.refreshSnapshot();
-      throw error;
+    };
+    // Commit loss of runtime authority before touching bytes. A failed write leaves
+    // all bytes in place; a crash during deletion leaves an idempotent retry plan.
+    await this.registry.putRecord(removing);
+    const completed = await this.completePendingRemoval(removing, "remove");
+    await this.refreshSnapshot();
+    if (!completed) {
+      throw new PhysicalPackError("cleanup_failed", `${packId} removal is incomplete; remaining bytes are pending retry.`);
     }
+    return true;
+  }
+
+  async completePendingRemoval(record, action) {
+    const pending = [...new Set(record.pending_deletions || [])];
+    const remaining = [];
+    for (const cacheName of pending) {
+      try {
+        if (!isOwnedPhysicalPackCacheName(cacheName, this.cachePrefix)) {
+          throw new PhysicalPackError("source_policy", "Deletion identity is outside this profile's owned stores.");
+        }
+        await this.byteStore.deleteStore(cacheName);
+        // false may mean already absent. Neither true nor false proves absence.
+        if (await this.byteStore.storeExists(cacheName)) {
+          throw new PhysicalPackError("cleanup_failed", "A pending store still exists after deletion.");
+        }
+      } catch {
+        remaining.push(cacheName);
+      }
+    }
+    if (remaining.length) {
+      const message = "Pack removal is incomplete; remaining store identities are preserved for retry.";
+      await this.registry.putRecord({
+        ...record,
+        state: "removing",
+        active_cache: null,
+        rollback_cache: null,
+        staging_cache: null,
+        pending_deletions: remaining,
+        last_failure: { code: "cleanup_failed", message, at: isoNow(this.clock) },
+        updated_at: isoNow(this.clock),
+      });
+      await this.appendHistory(action, "failed", {
+        pack_id: record.pack_id, removal_completed: false, pending_stores: remaining.length, message,
+      });
+      return false;
+    }
+    // A rejected registry deletion leaves the old retry record intact. Once it
+    // succeeds, history failure must not recreate that record or invent payload.
+    await this.registry.deleteRecord(record.pack_id);
+    await this.appendHistory(action, "completed", {
+      pack_id: record.pack_id, removal_completed: true, caches: pending.length,
+    });
+    return true;
   }
 
   async reconcileStartup() {
@@ -964,9 +1015,7 @@ export class PhysicalPackManager {
         continue;
       }
       if (record.state === "removing" || record.pending_deletions?.length && !record.active_cache) {
-        for (const cacheName of record.pending_deletions || []) await this.byteStore.deleteStore(cacheName).catch(() => false);
-        await this.registry.deleteRecord(record.pack_id);
-        await this.appendHistory("startup-reconcile", "completed", { pack_id: record.pack_id, removal_completed: true });
+        await this.completePendingRemoval(record, "startup-reconcile");
         continue;
       }
       if (record.active_cache || record.active_manifest) {
@@ -981,7 +1030,9 @@ export class PhysicalPackManager {
       }
     }
     const referenced = await this.registry.listRecords();
-    const referencedNames = new Set(referenced.flatMap((record) => [record.active_cache, record.rollback_cache, record.staging_cache]).filter(Boolean));
+    const referencedNames = new Set(referenced.flatMap((record) => [
+      record.active_cache, record.rollback_cache, record.staging_cache, ...(record.pending_deletions || []),
+    ]).filter(Boolean));
     for (const name of await this.byteStore.listStoreIdentities()) {
       if (
         isOwnedPhysicalPackCacheName(name, this.cachePrefix, "staging") &&
