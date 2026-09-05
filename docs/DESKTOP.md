@@ -105,7 +105,7 @@ checkout credentials disabled, and then runs:
 - silent uninstall plus executable, uninstaller, payload, registry, and
   candidate-owned shortcut removal assertions;
 - exact retained-file path, byte-length, and SHA-256 comparison after uninstall;
-- Gitleaks 8.30.1 from a checksum-pinned upstream archive over the PR base-to-head
+- Gitleaks 8.30.1 from a checksum-pinned upstream release ZIP over the PR base-to-head
   or push range (the parent-to-head range for manual dispatch).
 
 Tauri temporarily patches the bundle-type marker before creating NSIS and then
@@ -230,12 +230,14 @@ https://docs.rs/tauri/latest/tauri/path/struct.PathResolver.html
 ## Reliability acceptance boundary
 
 The shared browser pack manager commits activation when its registry write
-succeeds. Later history, progress, or cleanup failures return an explicit
-`post_activation_failed` error with `activation_committed: true`; they do not
-remove committed active/rollback bytes. Cancellation is rechecked before commit.
-Removal persists its intent first, verifies each owned store is actually absent,
-and retains only failed deletion identities for explicit or startup retry.
-Reporting errors after completed removal cannot recreate a malformed record.
+succeeds. Errors escaping the subsequent reporting/progress phase return an
+explicit `post_activation_failed` error with `activation_committed: true`; they
+do not remove committed active/rollback bytes. A staging-cleanup failure may be
+recorded in history without failing the completed activation. Cancellation is
+rechecked before commit. Removal persists its intent first, verifies each owned
+store is actually absent, and retains only failed deletion identities for
+explicit or startup retry. Reporting errors after completed removal cannot
+recreate a malformed record.
 
 `npm run test:reliability` exercises those failure paths and the uninstall
 assertions; the ordinary aggregate includes it once through `test:domain`.
