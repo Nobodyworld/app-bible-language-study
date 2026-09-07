@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-07T03:34:32.039Z",
+  "generated_at": "2026-09-07T06:19:20.639Z",
   "distribution": "source-notices-retained",
   "source_manifest": "data/source-manifest.json",
   "note": "Package inventory for the local-first application. Bundled-data rights and provenance are recorded in data/source-manifest.json.",
@@ -40,12 +40,12 @@
         "source-nestle-1904",
         "source-tr94"
       ],
-      "files": 2804,
-      "bytes": 954311427,
+      "files": 2803,
+      "bytes": 954309221,
       "mb": 910.1,
-      "gzip_bytes": 180460689,
+      "gzip_bytes": 180460102,
       "gzip_mb": 172.1,
-      "sha256": "sha256:5407048f224adc0a5c27051882b87ab02c119e13c228bbd047a8b2d31dacf55c",
+      "sha256": "sha256:84df01615458adc81523bd18813e3477e55752edad9ef3d13278c9a84832e2b9",
       "largest_shard": {
         "path": "data/search/commentaries/gill/psalms.json",
         "bytes": 10293768
@@ -619,19 +619,19 @@
     },
     {
       "id": "semantic-seeds",
-      "label": "Semantic definitions and propositions",
-      "description": "Packaged tag definitions, relations, and starter interpretation propositions.",
+      "label": "Semantic tag definitions and relations",
+      "description": "Packaged tag definitions and relations.",
       "dependencies": [],
       "paths": [
         "data/semantic"
       ],
       "license_note": "Application semantic metadata.",
-      "files": 4,
-      "bytes": 7354,
-      "mb": 0.01,
-      "gzip_bytes": 1974,
+      "files": 3,
+      "bytes": 5148,
+      "mb": 0,
+      "gzip_bytes": 1387,
       "gzip_mb": 0,
-      "sha256": "sha256:e76f556a931f10e9f01165960c08aa69c5bc6ad59bff0da67b0a1a4a14ff138b",
+      "sha256": "sha256:3c0f09a71f54fb249dbe6120da6ad27a11280bebf690b5220ba7bf1ea0e421da",
       "largest_shard": {
         "path": "data/semantic/tag-definitions.json",
         "bytes": 3642

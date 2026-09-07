@@ -73,6 +73,11 @@ const DOCUMENT_MODEL = Object.freeze([
     roles: ["current-product", "runtime-facing", "technical", "data-model", "ui-contract"],
   },
   {
+    path: "docs/POLL_COMPATIBILITY.md",
+    classification: "maintained",
+    roles: ["technical", "data-model", "ui-contract"],
+  },
+  {
     path: "docs/UI_CONTRACT.md",
     classification: "maintained",
     roles: ["current-product", "runtime-facing", "technical", "ui-contract"],

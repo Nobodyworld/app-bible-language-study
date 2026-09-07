@@ -1,7 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "poll-response.schema.json",
-  "title": "Bible App local poll response",
+  "title": "Bible App historical poll response compatibility",
+  "description": "Complete historical record shape. Passive readers also retain sparse legacy defaults without requiring a proposition catalog.",
   "type": "object",
   "required": [
     "id",

@@ -22,6 +22,7 @@ assert.ok(paths.includes("data/package-manifest.json"));
 assert.ok(paths.includes("src/platform/tauri-platform.js"));
 assert.equal(paths.some((entry) => entry.includes("physical-pack-fixtures")), false);
 assert.equal(paths.includes("data/physical-pack-scenarios.json"), false);
+assert.equal(paths.some((entry) => /interpretation-propositions|legacy-polls/.test(entry)), false, "Historical poll fixtures must not enter installed resources");
 assert.equal(paths.some((entry) => entry.startsWith("tests/") || entry.startsWith("tools/")), false);
 assert.equal(paths.some((entry) => /(?:^|\/)node_modules(?:\/|$)/.test(entry)), false);
 assert.equal(paths.some((entry) => entry.endsWith(".log")), false);

@@ -63,34 +63,6 @@ function assertUnique(items, getId, label) {
   assert(duplicates.length === 0, `${label} must have unique ids.`, { duplicates });
 }
 
-async function verseExists(target) {
-  const reference = target?.reference || {};
-  if (!reference.book_id || !reference.chapter || !reference.verse_start) return false;
-  const path = join(dataRoot, "verses", target.edition_id || "bsb", `${reference.book_id}.json`);
-  if (!existsSync(path)) return false;
-  const book = JSON.parse(await readFile(path, "utf8"));
-  for (let verse = Number(reference.verse_start); verse <= Number(reference.verse_end || reference.verse_start); verse += 1) {
-    if (!book.chapters?.[String(reference.chapter)]?.[String(verse)]) return false;
-  }
-  return true;
-}
-
-function validateTarget(target, context) {
-  assert(target && typeof target === "object", "Semantic target must be an object.", { context, target });
-  assert(targetTypes.has(target.target_type), "Semantic target has unknown target_type.", { context, target_type: target.target_type });
-  if (["verse", "verse_range", "text_span"].includes(target.target_type)) {
-    assert(target.edition_id, "Textual targets must declare edition_id.", { context, target });
-    assert(target.reference?.book_id, "Textual targets must declare reference.book_id.", { context, target });
-    assert(Number.isInteger(target.reference?.chapter), "Textual targets must declare integer reference.chapter.", { context, target });
-    assert(Number.isInteger(target.reference?.verse_start), "Textual targets must declare integer reference.verse_start.", { context, target });
-    assert(
-      target.reference.verse_end === undefined || Number.isInteger(target.reference.verse_end),
-      "Textual target reference.verse_end must be an integer when present.",
-      { context, target },
-    );
-  }
-}
-
 function validateDefinitions(payload) {
   assert(payload.schema_version === 1, "Tag definitions payload must use schema_version 1.");
   const definitions = payload.definitions || [];
@@ -142,38 +114,11 @@ function validateRelations(payload, definitions) {
   return relations;
 }
 
-async function validatePropositions(payload) {
-  assert(payload.schema_version === 1, "Interpretation propositions payload must use schema_version 1.");
-  const propositions = payload.propositions || [];
-  assert(propositions.length > 0, "Interpretation propositions payload must not be empty.");
-  assertUnique(propositions, (item) => item.id, "Interpretation propositions");
-
-  for (const proposition of propositions) {
-    assert(/^proposition:/.test(proposition.id), "Proposition id must start with proposition:.", { proposition });
-    assert(proposition.schema_version === 1, "Proposition must use schema_version 1.", { proposition });
-    validateTarget(proposition.target, proposition.id);
-    assert(await verseExists(proposition.target), "Proposition target does not resolve to packaged verse text.", {
-      proposition: proposition.id,
-      target: proposition.target,
-    });
-    assert(proposition.prompt && proposition.prompt.endsWith("?"), "Proposition prompt must be phrased as a question.", { proposition });
-    assert(proposition.response_type === "agreement_scale", "Seed propositions must use agreement_scale response type.", { proposition });
-    assert(Array.isArray(proposition.options) && proposition.options.includes("uncertain"), "Propositions must include an uncertain option.", { proposition });
-    assert(["active", "draft", "retired"].includes(proposition.status), "Proposition has invalid status.", { proposition });
-    assert(!("responses" in proposition), "Proposition seed data must not contain poll responses.", { proposition: proposition.id });
-    assert(!("aggregate" in proposition) && !("aggregates" in proposition), "Proposition seed data must not contain aggregates.", {
-      proposition: proposition.id,
-    });
-  }
-  return propositions;
-}
-
 async function main() {
-  const [manifest, definitionsPayload, relationsPayload, propositionsPayload] = await Promise.all([
+  const [manifest, definitionsPayload, relationsPayload] = await Promise.all([
     readJson("semantic/manifest.json"),
     readJson("semantic/tag-definitions.json"),
     readJson("semantic/tag-relations.json"),
-    readJson("semantic/interpretation-propositions.json"),
   ]);
 
   assert(manifest.schema_version === 1, "Semantic manifest must use schema_version 1.");
@@ -183,7 +128,6 @@ async function main() {
 
   const definitions = validateDefinitions(definitionsPayload);
   const relations = validateRelations(relationsPayload, definitions);
-  const propositions = await validatePropositions(propositionsPayload);
 
   assert(manifest.counts?.tag_definitions === definitions.length, "Semantic manifest tag definition count is stale.", {
     manifest: manifest.counts?.tag_definitions,
@@ -193,10 +137,6 @@ async function main() {
     manifest: manifest.counts?.tag_relations,
     actual: relations.length,
   });
-  assert(manifest.counts?.interpretation_propositions === propositions.length, "Semantic manifest proposition count is stale.", {
-    manifest: manifest.counts?.interpretation_propositions,
-    actual: propositions.length,
-  });
 
   console.log(
     JSON.stringify(
@@ -204,12 +144,7 @@ async function main() {
         semanticManifest: manifest.counts,
         tagDefinitions: definitions.map((item) => item.id),
         tagRelations: relations.length,
-        interpretationPropositions: propositions.map((item) => ({
-          id: item.id,
-          target: item.target.reference,
-          status: item.status,
-        })),
-        assertionBoundary: "definitions and propositions only; no user assertions, poll responses, or aggregates are packaged here",
+        assertionBoundary: "tag definitions and relations only; historical user records are never packaged here",
       },
       null,
       2,

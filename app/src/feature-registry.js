@@ -241,7 +241,7 @@ export const FEATURE_REGISTRY = Object.freeze([
   descriptor({
     id: "interpretation-polls",
     label: "Interpretation Polls",
-    description: "Compatibility-only persisted poll responses pending issue #82 retirement.",
+    description: "Passive historical backup records; no polling UI, seeds, or response mutations.",
     lifecycle: "compatibility_only",
     dependencies: ["my-data"],
     providers: ["compatibility:poll-storage"],
