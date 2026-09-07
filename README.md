@@ -284,9 +284,9 @@ The current full-study package contains:
 
 - 10 reader translations;
 - 29 feature packs;
-- 2,804 packaged files;
-- 954,311,427 aggregate bytes;
-- 180,460,689 aggregate gzip bytes.
+- 2,803 packaged files;
+- 954,309,221 aggregate bytes;
+- 180,460,102 aggregate gzip bytes.
 
 The repository is much larger than a typical static web project. Keeping the data
 together allows the preview to run without a hosted data service. On the exact

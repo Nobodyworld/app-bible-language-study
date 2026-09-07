@@ -119,7 +119,7 @@ manifest through `app/tools/refresh-package-inventory.mjs --check`.
 | `app/scripts/physical-pack-lifecycle-test.mjs` | Independent registry; mutation-free plans; quota estimates; fresh and persisted catalog schema/package/version/URL authority; recovery after catalog rejection; persisted active/rollback manifest schema, package, semantic-version, inventory, aggregate, and exact-byte verification; compatible/incompatible active and rollback combinations; bundled and strict incompatible behavior; update state coexisting with rollback through reload, Verify, rollback, and update; interrupted staging/removal; shared Stable/Lab orphan cleanup and startup isolation; and removal fallback. |
 | `app/scripts/poll-response-test.mjs` | Retired mutation API/seed/UI absence; catalog-free historical responses, tombstones, schema and sparse defaults; 605-event preservation, incoming-wins merge, extensions, reload and recovery. |
 | `app/scripts/recovery-scenarios-test.mjs` | IndexedDB fallback/migration, quota visibility, malformed imports, backups, quarantine, and legacy export migration. |
-| `app/scripts/semantic-test.mjs` | Semantic definitions, relations, propositions, and current target types. |
+| `app/scripts/semantic-test.mjs` | Packaged tag definitions, relations, declared target types, and current semantic manifest counts; no active proposition seeds. |
 | `app/scripts/user-data-semantic-test.mjs` | Schema-v2 targets/assertions, migrations, graph projection, revisions, quarantine, version-3 import/export, and sparse legacy compatibility. |
 
 `app/scripts/schema-validation.mjs` is the maintained helper imported by domain
