@@ -25,7 +25,8 @@ files, static-data reads, notifications, and physical bytes.
 
 Stable is the default and does not show a profile badge. Its Advanced
 diagnostics element stays collapsed and retains physical-pack recovery,
-capability, and local-job access without creating another ordinary destination.
+and capability access without creating another ordinary destination. Local Jobs routes, counts,
+execution controls, and the job-backed index-refresh action are absent in both profiles.
 
 In the browser, Lab is selected with `?profile=lab` before the hash route. The
 supported Tauri Lab command selects Lab natively while loading the same shared

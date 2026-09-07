@@ -49,13 +49,6 @@ if (existsSync(graphRoot)) {
 
 const aggregateManifest = {
   schema_version: 1,
-  planned_job_types: [
-    "tag-index-refresh",
-    "inquiry-analysis",
-    "translation-edit-analysis",
-    "personal-glossary-build",
-    "word-map-refresh",
-  ],
   generated_at: new Date().toISOString(),
   generator: "tools/aggregate-analysis-manifest.mjs",
   note: "Aggregated metadata from all chunked analysis runs.",

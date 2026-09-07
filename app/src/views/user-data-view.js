@@ -1,18 +1,13 @@
 import {
-  completeJob,
   createUserDataExport,
   getUserDataSummary,
   importUserData,
-  requestTagIndexRefresh,
   setPackageStore,
-  updateJobStatus,
 } from "../stores.js?v=pr13-live-qa-20260711e";
 import { setDetail } from "../dom.js?v=pr13-live-qa-20260711e";
 import { resolveCapabilities } from "../capabilities.js";
 import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
-import { canRunJob, runJob } from "../job-processor.js?v=pr13-live-qa-20260711e";
 import { setCapabilityDisabled } from "../package-state.js";
-import { renderJobsDiagnostics } from "./jobs-view.js?v=pr13-live-qa-20260711e";
 import { renderPhysicalPackManager } from "./physical-pack-view.js";
 
 function renderSummaryGrid(rows) {
@@ -73,8 +68,6 @@ function renderTechnicalSummary(summary) {
     title,
     health,
     renderSummaryGrid([
-      ["Tag jobs", summary.tag_jobs],
-      ["Workspace jobs", summary.workspace_jobs],
       ["Package ops", summary.package_operations],
       ["Installed packs", summary.installed_feature_packs],
       ["Assertion events", summary.assertion_events],
@@ -400,51 +393,6 @@ export function createUserDataView(ctx, options = {}) {
     settingsSection.append(settingsTitle, settingsText);
     wrap.append(settingsSection);
 
-    const maintenanceSection = document.createElement("section");
-    maintenanceSection.className = "my-data-section maintenance-section";
-    const maintenanceTitle = document.createElement("h4");
-    maintenanceTitle.textContent = "Local maintenance";
-    const maintenanceText = document.createElement("p");
-    maintenanceText.textContent =
-      "Refresh the browser-local index used by Study Marks if results look stale. This rebuilds a derived view, does not change personal study data, and never leaves this browser.";
-    const maintenanceAction = document.createElement("button");
-    maintenanceAction.type = "button";
-    maintenanceAction.className = "mini-button";
-    maintenanceAction.textContent = "Refresh Study Marks index";
-    const maintenanceStatus = document.createElement("p");
-    maintenanceStatus.className = "maintenance-status";
-    maintenanceStatus.setAttribute("role", "status");
-    let maintenanceBusy = false;
-    maintenanceAction.addEventListener("click", async () => {
-      if (maintenanceBusy) return;
-      maintenanceBusy = true;
-      maintenanceAction.disabled = true;
-      maintenanceStatus.className = "maintenance-status";
-      maintenanceStatus.textContent = "Refreshing the local Study Marks index…";
-      const job = requestTagIndexRefresh(ctx.state);
-      if (!job || !canRunJob(job)) {
-        maintenanceStatus.textContent = "Study Marks index refresh is unavailable in this app package.";
-      } else {
-        updateJobStatus(ctx.state, job.store, job.id, "running");
-        try {
-          const result = await runJob(job, ctx.state);
-          completeJob(ctx.state, job.store, job.id, result, "completed");
-          const finding = result.findings?.[0];
-          maintenanceStatus.textContent = `Study Marks index refreshed for ${finding?.reference_count ?? 0} scripture reference(s). Personal study data was not changed.`;
-        } catch (error) {
-          completeJob(ctx.state, job.store, job.id, { message: error?.message || "Refresh failed." }, "failed");
-          maintenanceStatus.textContent = `Could not refresh the Study Marks index: ${error?.message || "unknown error"}. Personal study data was not changed.`;
-          maintenanceStatus.className = "maintenance-status error";
-        }
-      }
-      maintenanceBusy = false;
-      maintenanceAction.disabled = false;
-      refreshSummary();
-      refreshDiagnostics();
-    });
-    maintenanceSection.append(maintenanceTitle, maintenanceText, maintenanceAction, maintenanceStatus);
-    wrap.append(maintenanceSection);
-
     const diagnostics = document.createElement("details");
     diagnostics.className = "advanced-diagnostics";
     diagnostics.dataset.featureId = "advanced-diagnostics";
@@ -452,12 +400,12 @@ export function createUserDataView(ctx, options = {}) {
     diagnosticsSummary.textContent = "Advanced diagnostics";
     const diagnosticsIntro = document.createElement("p");
     diagnosticsIntro.textContent = profile?.isLab
-      ? "Lab exposes the complete experimental browser storage, physical-pack, capability, and local-job controls against isolated Lab state."
-      : "Inspect browser storage, package capabilities, and technical local job controls for compatibility and recovery.";
+      ? "Lab exposes the complete experimental browser storage, physical-pack, and capability controls against isolated Lab state."
+      : "Inspect browser storage and package capabilities for compatibility and recovery.";
     if (ctx.platform?.kind === "tauri-windows") {
       diagnosticsIntro.textContent = profile?.isLab
         ? "Lab exposes isolated native user storage and bundled-data diagnostics. Native physical-pack management is deferred to issue #81."
-        : "Inspect native user storage, bundled-data capabilities, and technical local job controls for compatibility and recovery.";
+        : "Inspect native user storage and bundled-data capabilities for compatibility and recovery.";
     }
     const projectSource = document.createElement("a");
     projectSource.href = "https://github.com/Nobodyworld/app-bible-language-study";
@@ -467,12 +415,9 @@ export function createUserDataView(ctx, options = {}) {
     const diagnosticsSlot = document.createElement("div");
     const refreshDiagnostics = () => {
       const summary = getUserDataSummary(ctx.state);
-      const jobsTitle = document.createElement("h4");
-      jobsTitle.textContent = "Local job console";
       const sections = [renderTechnicalSummary(summary)];
       if (ctx.isFeatureEnabled?.("physical-pack-management") !== false) sections.push(renderPhysicalPackManager(ctx));
       if (ctx.isFeatureEnabled?.("capability-controls") !== false) sections.push(renderCapabilityManager(ctx, refreshDiagnostics));
-      if (ctx.isFeatureEnabled?.("local-jobs") !== false) sections.push(jobsTitle, renderJobsDiagnostics(ctx, refreshDiagnostics));
       diagnosticsSlot.replaceChildren(...sections);
     };
     diagnostics.addEventListener("toggle", () => {

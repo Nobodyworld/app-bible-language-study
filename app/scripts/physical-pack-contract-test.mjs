@@ -46,6 +46,11 @@ const [distribution, packageManifest, distributionSchema, manifestSchema, catalo
 
 assertValidJsonSchema(distribution, distributionSchema, {}, "distribution manifest");
 const normalizedDistribution = validateDistributionManifest(distribution);
+assert.equal(
+  normalizedDistribution.package_manifest.content_sha256,
+  packageManifest.packages.find((item) => item.id === normalizedDistribution.package_manifest.package_id).sha256,
+  "Distribution metadata must reference the current package inventory",
+);
 assert.equal(normalizedDistribution.physical_data_mode, PHYSICAL_DATA_MODES.bundled);
 assert.equal(normalizedDistribution.complete_offline, true);
 assert.equal(normalizedDistribution.bundled_fallback, true);

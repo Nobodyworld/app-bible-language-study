@@ -81,15 +81,6 @@ export const DEFAULT_TAGS = [
     icon: "?",
     category: "user_workflow",
     allowed_target_types: ["book", "chapter", "verse", "verse_range", "text_span", "source_token", "source_token_span"],
-    display_behavior: "queue_analysis",
-    on_apply_job_type: "inquiry-analysis",
+    display_behavior: "quick_toggle",
   },
 ];
-
-export const JOB_TYPES = {
-  tagIndexRefresh: "tag-index-refresh",
-  inquiryAnalysis: "inquiry-analysis",
-  translationEditAnalysis: "translation-edit-analysis",
-  personalGlossaryBuild: "personal-glossary-build",
-  wordMapRefresh: "word-map-refresh",
-};

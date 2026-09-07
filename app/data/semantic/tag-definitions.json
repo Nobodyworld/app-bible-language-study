@@ -84,8 +84,7 @@
       "allowed_target_types": ["book", "chapter", "verse", "verse_range", "text_span", "source_token", "source_token_span"],
       "default_icon": "?",
       "default_color": "#6b4bb3",
-      "display_behavior": "queue_analysis",
-      "on_apply_job_type": "inquiry-analysis",
+      "display_behavior": "quick_toggle",
       "status": "active"
     }
   ]

@@ -1,8 +1,6 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { JOB_TYPES } from "../app/src/config.js";
-import { runJob } from "../app/src/job-processor.js";
 import { projectAssertionsToSemanticGraph } from "../app/src/semantic-graph.js";
 import {
   createBookTarget,
@@ -23,7 +21,6 @@ import {
 } from "../app/src/semantic-targets.js";
 import {
   createUserDataExport,
-  getAllJobEvents,
   getTagTargets,
   getTaggedTargetsForReference,
   getTargetTags,
@@ -163,7 +160,7 @@ const migratedStore = normalizeTagStore({
 });
 assert.equal(migratedStore.version, 4);
 assert.equal(migratedStore.tags.favorite.display_behavior, "quick_toggle");
-assert.equal(migratedStore.tags.inquiry.on_apply_job_type, JOB_TYPES.inquiryAnalysis);
+assert.equal(migratedStore.tags.inquiry.on_apply_job_type, null);
 assert.equal(migratedStore.quarantined_records.length, 1);
 assert.equal(Object.keys(migratedStore.tag_assertions).length, 1);
 
@@ -196,13 +193,8 @@ const inquiry = setTagAssertion(state, token, "inquiry", true, { note: "Why is t
 const duplicate = setTagAssertion(state, token, "inquiry", true, { note: "Why is this rendered because?" });
 assert.equal(duplicate.id, inquiry.id);
 assert.deepEqual(getTargetTags(state, token), ["favorite", "inquiry"]);
-const inquiryJobs = getAllJobEvents(state).filter((job) => job.type === JOB_TYPES.inquiryAnalysis);
-assert.equal(inquiryJobs.length, 1);
-assert.equal(inquiryJobs[0].trigger_key, `tag-behavior:${inquiry.id}:${JOB_TYPES.inquiryAnalysis}:r1`);
-const inquiryResult = await runJob(inquiryJobs[0], state);
-assert.equal(inquiryResult.processor, "inquiry-analysis-v1");
-assert.equal(inquiryResult.source_language_summary.strong_code, "G3754");
-assert.equal(inquiryResult.graph_patch.edges[0].type, "asks_about");
+assert.deepEqual(state.tagStore.job_events, []);
+assert.equal(inquiry.note, "Why is this rendered because?");
 
 setVerseTag(state, "john:4:2", "question", true);
 assert.deepEqual(state.tagStore.verse_tags["john:4:2"], ["question"]);
@@ -216,10 +208,7 @@ assert.equal(exported.version, 3);
 const imported = {};
 const summary = importUserData(imported, exported, "replace");
 assert.equal(getTagTargets(imported, "favorite").length, 6);
-assert.equal(
-  getAllJobEvents(imported).filter((job) => job.type === JOB_TYPES.inquiryAnalysis).length,
-  1,
-);
+assert.deepEqual(imported.tagStore.job_events, []);
 assert(summary.tag_assertions >= 8);
 
 console.log(
@@ -229,7 +218,7 @@ console.log(
       target_types: 7,
       migrated_store_version: migratedStore.version,
       favorite_targets: getTagTargets(imported, "favorite").length,
-      inquiry_jobs: inquiryJobs.length,
+      inquiry_jobs: state.tagStore.job_events.length,
       graph_edges: graph.counts.edges,
       assertions: 49,
     },

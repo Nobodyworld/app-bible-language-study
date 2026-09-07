@@ -1,4 +1,4 @@
-import { DEFAULT_TAGS, JOB_TYPES, STORAGE_KEYS } from "./config.js?v=pr13-live-qa-20260711e";
+import { DEFAULT_TAGS, STORAGE_KEYS } from "./config.js?v=pr13-live-qa-20260711e";
 import {
   createBrowserUserStorageAdapter,
   createMemoryUserStorageAdapter,
@@ -118,7 +118,6 @@ function createDefaultTagStore() {
     quarantined_records: [],
     conflicts: [],
     job_events: [],
-    available_job_types: [JOB_TYPES.tagIndexRefresh, JOB_TYPES.inquiryAnalysis],
   };
 }
 
@@ -130,11 +129,6 @@ function createDefaultWorkspaceStore() {
     red_letter_ranges: {},
     conflicts: [],
     job_events: [],
-    available_job_types: [
-      JOB_TYPES.translationEditAnalysis,
-      JOB_TYPES.personalGlossaryBuild,
-      JOB_TYPES.wordMapRefresh,
-    ],
   };
 }
 
@@ -191,7 +185,7 @@ function normalizeJobEvents(events) {
     .map((event) => {
       const state = JOB_STATES.has(event.state)
         ? event.state
-        : LEGACY_JOB_STATUS_TO_STATE[event.status] || "queued";
+        : JOB_STATES.has(event.status) ? event.status : LEGACY_JOB_STATUS_TO_STATE[event.status] || "queued";
       return {
         ...event,
         schema_version: Number(event.schema_version || 1),
@@ -223,7 +217,7 @@ export function normalizeTagStore(value = {}) {
   store.conflicts = Array.isArray(store.conflicts) ? store.conflicts.slice(-100) : [];
   store.job_events = normalizeJobEvents(store.job_events);
   store.version = fallback.version;
-  store.available_job_types = fallback.available_job_types;
+  // Historical job metadata is passive backup data; no processors are available.
   return store;
 }
 
@@ -237,7 +231,7 @@ function normalizeWorkspaceStore(value = {}) {
   store.conflicts = Array.isArray(store.conflicts) ? store.conflicts.slice(-100) : [];
   store.job_events = normalizeJobEvents(store.job_events);
   store.version = fallback.version;
-  store.available_job_types = fallback.available_job_types;
+  // Historical job metadata is passive backup data; no processors are available.
   return store;
 }
 
@@ -572,191 +566,6 @@ export function ensureStores(state) {
   state.userStorageProfile = storageStatus.profileId;
 }
 
-function hasPendingJob(events, type, payload) {
-  const triggerKey = payload?.trigger_key;
-  if (triggerKey) {
-    return events.some(
-      (event) =>
-        event.type === type &&
-        event.trigger_key === triggerKey &&
-        event.state !== "failed" &&
-        event.state !== "cancelled",
-    );
-  }
-  const payloadKey = JSON.stringify(payload);
-  return events.some((event) => event.state === "queued" && event.type === type && JSON.stringify(event.payload) === payloadKey);
-}
-
-function createJob(prefix, type, payload) {
-  const createdAt = nowIso();
-  return {
-    id: `job:${prefix}:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-    schema_version: 1,
-    job_type: type,
-    type,
-    trigger_key: payload?.trigger_key || null,
-    payload,
-    input_targets: payload?.target ? [payload.target] : [],
-    output_assertion_ids: [],
-    state: "queued",
-    status: "queued",
-    review_status: "pending",
-    created_at: createdAt,
-    updated_at: createdAt,
-  };
-}
-
-function staleReasonForJob(job, type, payload) {
-  if (!job?.result || job.state !== "completed" || job.type !== type) return null;
-  if (payload?.reference_key && job.payload?.reference_key === payload.reference_key) {
-    return "input_reference_changed";
-  }
-  if (payload?.tag_id && job.payload?.tag_id === payload.tag_id) {
-    return "input_tag_definition_changed";
-  }
-  if (payload?.strong_code && job.payload?.strong_code === payload.strong_code) {
-    return "input_source_token_changed";
-  }
-  return null;
-}
-
-function markStaleJobResults(events, type, payload) {
-  const now = nowIso();
-  return (events || []).map((job) => {
-    const staleReason = staleReasonForJob(job, type, payload);
-    if (!staleReason) return job;
-    return {
-      ...job,
-      result: {
-        ...job.result,
-        result_status: "stale",
-        stale_reason: staleReason,
-        superseded_at: now,
-      },
-      updated_at: now,
-    };
-  });
-}
-
-function enqueueTagJob(state, type, payload) {
-  ensureStores(state);
-  state.tagStore.job_events = markStaleJobResults(state.tagStore.job_events, type, payload);
-  if (hasPendingJob(state.tagStore.job_events, type, payload)) return;
-  state.tagStore.job_events.push(createJob("tag-job", type, payload));
-  state.tagStore.job_events = state.tagStore.job_events.slice(-200);
-  saveStorage(STORAGE_KEYS.tags, state.tagStore);
-}
-
-export function requestTagIndexRefresh(state) {
-  const payload = { source: "manual-maintenance" };
-  enqueueTagJob(state, JOB_TYPES.tagIndexRefresh, payload);
-  return getAllJobEvents(state).find(
-    (job) =>
-      job.store === "tags" &&
-      job.type === JOB_TYPES.tagIndexRefresh &&
-      job.state === "queued" &&
-      job.payload?.source === payload.source,
-  ) || null;
-}
-
-function enqueueWorkspaceJob(state, type, payload) {
-  ensureStores(state);
-  state.workspaceStore.job_events = markStaleJobResults(state.workspaceStore.job_events, type, payload);
-  if (hasPendingJob(state.workspaceStore.job_events, type, payload)) return;
-  state.workspaceStore.job_events.push(createJob("workspace-job", type, payload));
-  state.workspaceStore.job_events = state.workspaceStore.job_events.slice(-200);
-  saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
-}
-
-function getLocalJobStore(state, storeName) {
-  ensureStores(state);
-  if (storeName === "tags") {
-    return { store: state.tagStore, storageKey: STORAGE_KEYS.tags };
-  }
-  if (storeName === "workspace") {
-    return { store: state.workspaceStore, storageKey: STORAGE_KEYS.workspace };
-  }
-  return null;
-}
-
-export function updateJobStatus(state, storeName, jobId, status) {
-  const stateName = LEGACY_JOB_STATUS_TO_STATE[status] || status;
-  if (!JOB_STATES.has(stateName)) return null;
-  const target = getLocalJobStore(state, storeName);
-  if (!target) return null;
-
-  const index = (target.store.job_events || []).findIndex((job) => job.id === jobId);
-  if (index < 0) return null;
-
-  const now = nowIso();
-  const current = target.store.job_events[index];
-  const next = { ...current, state: stateName, status: stateName, updated_at: now };
-
-  if (stateName === "queued") {
-    delete next.reviewed_at;
-    delete next.processed_at;
-    delete next.result;
-    next.review_status = "pending";
-  }
-
-  if (stateName === "planned") {
-    next.reviewed_at = now;
-    delete next.processed_at;
-    delete next.result;
-    next.review_status = "reviewed";
-  }
-
-  if (stateName === "simulation_only") {
-    next.reviewed_at = next.reviewed_at || now;
-    next.processed_at = now;
-    next.review_status = "simulation_only";
-    next.result = {
-      processor: "manual-stub",
-      processor_version: "manual-stub",
-      runner: "manual-stub",
-      job_type: next.type,
-      input_target: next.payload?.target || null,
-      input_revision_id: next.payload?.input_revision_id || null,
-      status: "simulation_only",
-      result_status: "simulation_only",
-      started_at: now,
-      completed_at: now,
-      processed_at: now,
-      findings: [],
-      confidence: null,
-      message: "No background analysis was run. This job was marked simulation_only for workflow testing.",
-    };
-  }
-
-  target.store.job_events[index] = next;
-  saveStorage(target.storageKey, target.store);
-  return next;
-}
-
-export function completeJob(state, storeName, jobId, result, stateName = "completed") {
-  if (stateName !== "completed" && stateName !== "failed") return null;
-  const target = getLocalJobStore(state, storeName);
-  if (!target) return null;
-
-  const index = (target.store.job_events || []).findIndex((job) => job.id === jobId);
-  if (index < 0) return null;
-
-  const now = nowIso();
-  const current = target.store.job_events[index];
-  const next = {
-    ...current,
-    state: stateName,
-    status: stateName,
-    updated_at: now,
-    processed_at: now,
-    review_status: stateName === "completed" ? "completed" : "failed",
-    result,
-  };
-  target.store.job_events[index] = next;
-  saveStorage(target.storageKey, target.store);
-  return next;
-}
-
 export function setPackageStore(state, packageStore) {
   ensureStores(state);
   state.packageStore = normalizeLocalPackageStore(packageStore);
@@ -796,7 +605,6 @@ export function createCustomTag(state, fields) {
 
   state.tagStore.tags[id] = tag;
   saveStorage(STORAGE_KEYS.tags, state.tagStore);
-  enqueueTagJob(state, JOB_TYPES.tagIndexRefresh, { tag_id: tagDefinitionId(id), action: "created" });
   return tag;
 }
 
@@ -845,7 +653,6 @@ export function updateCustomTag(state, tagId, fields, options = {}) {
 
   state.tagStore.tags[tagId] = tag;
   saveStorage(STORAGE_KEYS.tags, state.tagStore);
-  enqueueTagJob(state, JOB_TYPES.tagIndexRefresh, { tag_id: tagDefinitionId(tagId), action: "updated" });
   return tag;
 }
 
@@ -870,29 +677,14 @@ export function deleteCustomTag(state, tagId) {
     upsertAssertion(state, assertion, "tag_assertion_superseded");
   });
   state.tagStore.tag_target_index = deriveTagTargetIndex(state.tagStore.tag_assertions);
-  let affectedReferences = 0;
   Object.entries(state.tagStore.verse_tags || {}).forEach(([key, tagIds]) => {
     const next = tagIds.filter((id) => id !== tagId);
-    if (next.length !== tagIds.length) affectedReferences += 1;
     if (next.length) state.tagStore.verse_tags[key] = next;
     else delete state.tagStore.verse_tags[key];
   });
 
   saveStorage(STORAGE_KEYS.tags, state.tagStore);
-  enqueueTagJob(state, JOB_TYPES.tagIndexRefresh, {
-    tag_id: tagDefinitionId(tagId),
-    action: "retired",
-    affected_references: affectedReferences,
-  });
   return true;
-}
-
-export function getAllJobEvents(state) {
-  ensureStores(state);
-  return [
-    ...(state.tagStore.job_events || []).map((event) => ({ ...event, store: "tags" })),
-    ...(state.workspaceStore.job_events || []).map((event) => ({ ...event, store: "workspace" })),
-  ].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)));
 }
 
 function mergeVerseTags(current, incoming) {
@@ -908,7 +700,7 @@ function mergeTagAssertions(current, incoming) {
   return { ...(current || {}), ...(incoming || {}) };
 }
 
-function mergeJobEvents(current, incoming) {
+function mergeHistoryEvents(current, incoming, limit = 200) {
   const byId = new Map();
   [...(current || []), ...(incoming || [])].forEach((event) => {
     if (!event?.id) return;
@@ -916,7 +708,7 @@ function mergeJobEvents(current, incoming) {
   });
   return [...byId.values()]
     .sort((a, b) => String(a.created_at).localeCompare(String(b.created_at)))
-    .slice(-200);
+    .slice(limit === null ? 0 : -limit);
 }
 
 function mergeTokenRenderings(current, incoming) {
@@ -936,7 +728,7 @@ function mergePackageStores(current, incoming) {
     installed_package_ids: [
       ...new Set([...(current?.installed_package_ids || []), ...(incoming?.installed_package_ids || [])]),
     ],
-    operations: mergeJobEvents(current?.operations || [], incoming?.operations || []),
+    operations: mergeHistoryEvents(current?.operations || [], incoming?.operations || []),
     updated_at: incoming?.updated_at || current?.updated_at || null,
   });
 }
@@ -971,6 +763,14 @@ function extractUserDataStores(payload) {
       throw invalidBackupStructure(`${section} must be an object when supplied.`);
     }
   });
+  // Reject malformed histories before recovery snapshots or any store writes.
+  for (const section of ["tags", "workspace"]) {
+    const events = stores[section]?.job_events;
+    if (events !== undefined && (!Array.isArray(events) || events.some((event) =>
+      !isPlainObject(event) || typeof event.id !== "string" || !event.id ||
+      !(typeof event.type === "string" && event.type || typeof event.job_type === "string" && event.job_type)
+    ))) throw invalidBackupStructure(section + ".job_events must contain valid legacy job records.");
+  }
   return {
     tagStore: normalizeTagStore(stores.tags || {}),
     workspaceStore: normalizeWorkspaceStore(stores.workspace || {}),
@@ -1018,8 +818,6 @@ export function getUserDataSummary(state) {
     (total, renderings) => total + Object.keys(renderings || {}).length,
     0,
   );
-  const tagJobs = (state.tagStore.job_events || []).length;
-  const workspaceJobs = (state.workspaceStore.job_events || []).length;
   return {
     custom_tags: customTags,
     tagged_verses: taggedVerses,
@@ -1037,8 +835,6 @@ export function getUserDataSummary(state) {
     verse_drafts: verseDrafts,
     token_rendering_verses: tokenRenderingVerses,
     token_renderings: tokenRenderings,
-    tag_jobs: tagJobs,
-    workspace_jobs: workspaceJobs,
     user_store_backend: state.userStoreBackend || "localStorage",
     user_store_authority: state.userStoreAuthority || resolveUserStorageAdapter().status().authority,
     user_store_migration: state.userStoreMigration || "unknown",
@@ -1066,7 +862,7 @@ export function importUserData(state, payload, mode = "merge") {
       tags: { ...(state.tagStore.tags || {}), ...(incoming.tagStore.tags || {}) },
       verse_tags: mergeVerseTags(state.tagStore.verse_tags, incoming.tagStore.verse_tags),
       tag_assertions: mergeTagAssertions(state.tagStore.tag_assertions, incoming.tagStore.tag_assertions),
-      job_events: mergeJobEvents(state.tagStore.job_events, incoming.tagStore.job_events),
+      job_events: mergeHistoryEvents(state.tagStore.job_events, incoming.tagStore.job_events, null),
     });
     state.workspaceStore = normalizeWorkspaceStore({
       ...state.workspaceStore,
@@ -1079,17 +875,17 @@ export function importUserData(state, payload, mode = "merge") {
         ...(state.workspaceStore.red_letter_ranges || {}),
         ...(incoming.workspaceStore.red_letter_ranges || {}),
       },
-      job_events: mergeJobEvents(state.workspaceStore.job_events, incoming.workspaceStore.job_events),
+      job_events: mergeHistoryEvents(state.workspaceStore.job_events, incoming.workspaceStore.job_events, null),
     });
     state.assertionStore = normalizeAssertionStore({
       ...state.assertionStore,
       assertions: mergeTagAssertions(state.assertionStore.assertions, incoming.assertionStore.assertions),
-      events: mergeJobEvents(state.assertionStore.events, incoming.assertionStore.events),
+      events: mergeHistoryEvents(state.assertionStore.events, incoming.assertionStore.events),
     });
     state.pollStore = normalizePollStore({
       ...state.pollStore,
       responses: mergeTagAssertions(state.pollStore.responses, incoming.pollStore.responses),
-      events: mergeJobEvents(state.pollStore.events, incoming.pollStore.events),
+      events: mergeHistoryEvents(state.pollStore.events, incoming.pollStore.events),
     });
     state.packageStore = mergePackageStores(state.packageStore, incoming.packageStore);
   }
@@ -1116,10 +912,6 @@ function resolveRuntimeTag(state, tagId) {
     Object.values(state.tagStore.tags).find((tag) => tag.tag_definition_id === canonicalId) ||
     null
   );
-}
-
-function tagBehaviorTriggerKey(assertion, jobType) {
-  return `tag-behavior:${assertion.id}:${jobType}:r${Number(assertion.revision || 1)}`;
 }
 
 export function getTagTargets(state, tagId) {
@@ -1203,27 +995,7 @@ export function setTagAssertion(state, targetInput, tagId, enabled, options = {}
     enabled ? "tag_assertion_applied" : "tag_assertion_superseded",
   );
   saveStorage(STORAGE_KEYS.tags, state.tagStore);
-  enqueueTagJob(state, JOB_TYPES.tagIndexRefresh, {
-    reference_key: referenceKeyFromTarget(target),
-    target_id: target.target_id,
-    target,
-    tag_id: canonicalTagId,
-    assertion_id: assertionId,
-    enabled,
-  });
 
-  if (enabled && tag.on_apply_job_type) {
-    enqueueTagJob(state, tag.on_apply_job_type, {
-      trigger_key: tagBehaviorTriggerKey(assertion, tag.on_apply_job_type),
-      assertion_id: assertion.id,
-      assertion_revision: assertion.revision,
-      tag_id: assertion.tag_id,
-      target: assertion.target,
-      reference_key: referenceKeyFromTarget(assertion.target),
-      question_text: assertion.note || "",
-      input_revision_id: `${assertion.id}:r${assertion.revision}`,
-    });
-  }
   return assertion;
 }
 
@@ -1277,25 +1049,6 @@ export function getTokenRendering(state, targetOrKey, token = null) {
     : null;
 }
 
-function queueTokenRenderingJobs(state, target, record) {
-  const referenceKey = referenceKeyFromTarget(target);
-  const tokenIndex = target.token?.token_index;
-  const strongCode = record?.strong_code || target.token?.strong_code || null;
-  const original = record?.original || target.token?.original || "";
-  const payload = {
-    reference_key: referenceKey,
-    token_index: tokenIndex,
-    strong_code: strongCode,
-    target,
-    target_id: target.target_id,
-  };
-  enqueueWorkspaceJob(state, JOB_TYPES.wordMapRefresh, payload);
-  enqueueWorkspaceJob(state, JOB_TYPES.personalGlossaryBuild, {
-    ...payload,
-    original,
-  });
-}
-
 export function getRedLetterRanges(state, key) {
   ensureStores(state);
   return state.workspaceStore.red_letter_ranges[key] || [];
@@ -1318,7 +1071,6 @@ export function addRedLetterRange(state, key, range) {
     .sort((a, b) => a.start - b.start || a.end - b.end)
     .filter((item, index, all) => index === 0 || item.start !== all[index - 1].start || item.end !== all[index - 1].end);
   saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
-  enqueueWorkspaceJob(state, JOB_TYPES.translationEditAnalysis, { reference_key: key, red_letter: true });
   return true;
 }
 
@@ -1348,8 +1100,6 @@ export function setVerseDraft(state, key, draftText, options = {}) {
     updated_at: nowIso(),
   };
   saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
-  enqueueWorkspaceJob(state, JOB_TYPES.translationEditAnalysis, { reference_key: key });
-  enqueueWorkspaceJob(state, JOB_TYPES.wordMapRefresh, { reference_key: key, source: "draft" });
   return state.workspaceStore.verse_drafts[key];
 }
 
@@ -1382,13 +1132,11 @@ export function setTokenRendering(state, targetOrKey, tokenOrRendering, legacyRe
     },
   );
   if (!next) return null;
-  const changed = !existing || existing.rendering !== next.rendering;
   state.workspaceStore.token_renderings[location.referenceKey] = {
     ...(state.workspaceStore.token_renderings[location.referenceKey] || {}),
     [location.tokenIndex]: next,
   };
   saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
-  if (changed) queueTokenRenderingJobs(state, location.target, next);
   return next;
 }
 
@@ -1402,6 +1150,5 @@ export function deleteTokenRendering(state, targetOrKey, token = null) {
   delete renderings[location.tokenIndex];
   if (!Object.keys(renderings).length) delete state.workspaceStore.token_renderings[location.referenceKey];
   saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
-  queueTokenRenderingJobs(state, location.target, existing);
   return true;
 }

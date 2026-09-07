@@ -14,8 +14,10 @@ stable `1.0.0` release or tag is implied or authorized; the repository remains
   Book Outline actions.
 - Target-aware Study Marks, canonical `favorite` assertions, and personal
   Meaning for exact source-token identity.
-- Consolidated My Data with versioned browser-local backup/restore, local
-  maintenance, and collapsed advanced diagnostics.
+- Consolidated My Data with versioned browser-local backup/restore and collapsed
+  advanced diagnostics.
+- Retired Local Jobs in Stable and Lab: no job UI or automatic production;
+  direct Study Mark indexes and passive version-3 legacy job backups are preserved.
 - Static, domain, accessibility, desktop-browser, mobile-browser, inventory,
   and package audit verification through `npm run verify`.
 - Public-preview governance, security policy, dependency monitoring, release

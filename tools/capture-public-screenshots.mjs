@@ -23,7 +23,6 @@ const LANGUAGE_STUDY_VIEWPORT = Object.freeze({ width: 1365, height: 1420 });
 const STUDY_MARKS_VIEWPORT = Object.freeze({ width: 1365, height: 670 });
 const MY_DATA_SUMMARY_VIEWPORT = Object.freeze({ width: 1365, height: 1450 });
 const MY_DATA_BACKUP_VIEWPORT = Object.freeze({ width: 1365, height: 600 });
-const MY_DATA_MAINTENANCE_VIEWPORT = Object.freeze({ width: 1365, height: 480 });
 const MOBILE_VIEWPORT = Object.freeze({ width: 390, height: 844 });
 const STUDY_WORKSPACE_WIDTH_STORAGE_KEY = "bibleapp:study-workspace-width:v1";
 const STANDARD_STUDY_WORKSPACE_WIDTH = "standard";
@@ -210,17 +209,6 @@ export const PUBLIC_SCREENSHOT_MANIFEST = Object.freeze([
     toolKind: "",
     selectedVerse: "1",
     intendedState: "Backup and restore controls",
-  },
-  {
-    filename: "my-data-maintenance.png",
-    route: "/#/read/bsb/john/1/1",
-    viewport: MY_DATA_MAINTENANCE_VIEWPORT,
-    theme: "light",
-    widthMode: STANDARD_STUDY_WORKSPACE_WIDTH,
-    panelTitle: "My Data",
-    toolKind: "",
-    selectedVerse: "1",
-    intendedState: "completed local Study Marks maintenance",
   },
   {
     filename: "mobile.png",
@@ -1369,31 +1357,6 @@ async function main() {
       throw new Error(`Backup and restore controls are incomplete: ${JSON.stringify(backupControls)}`);
     }
     await captureNamed(page, browserHealth, generated, stagingRoot, "my-data-backup-restore.png");
-
-    await setCaptureEnvironment(page, browserHealth, "my-data-maintenance.png");
-    const maintenanceButton = page.locator(".maintenance-section button").filter({
-      hasText: /^Refresh Study Marks index$/,
-    });
-    await scrollSectionIntoView(page, ".maintenance-section");
-    await maintenanceButton.click();
-    await page.waitForFunction(
-      () => {
-        const text = document.querySelector(".maintenance-status")?.textContent || "";
-        const button = [...document.querySelectorAll(".maintenance-section button")].find(
-          (node) => node.textContent.trim() === "Refresh Study Marks index",
-        );
-        return (
-          text === "Study Marks index refreshed for 1 scripture reference(s). Personal study data was not changed." &&
-          !document.querySelector(".maintenance-status.error") &&
-          !button?.disabled
-        );
-      },
-      null,
-      { timeout: 15000 },
-    );
-    await scrollSectionIntoView(page, ".maintenance-section");
-    await verifyMyDataSummary(page);
-    await captureNamed(page, browserHealth, generated, stagingRoot, "my-data-maintenance.png");
 
     await openReader(page, browserHealth, localServer.url, "mobile.png", "Psalms 118");
     await openVerseStudy(page, 4);

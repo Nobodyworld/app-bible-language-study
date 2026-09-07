@@ -71,7 +71,7 @@ assert.match(
 );
 assert.match(
   readmeProse,
-  /My study data[\s\S]*Backup and restore[\s\S]*App settings[\s\S]*Local maintenance[\s\S]*Advanced diagnostics/i,
+  /My study data[\s\S]*Backup and restore[\s\S]*App settings[\s\S]*Advanced diagnostics/i,
   "README must list the accepted My Data sections",
 );
 assert.match(

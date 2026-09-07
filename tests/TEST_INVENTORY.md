@@ -13,7 +13,7 @@ remove, or reclassify a maintained test.
 | Command | Current composition |
 |---|---|
 | `npm run test:static` | Repository integrity, feature registry/profile, desktop configuration, browser-and-desktop platform contracts, data contracts, UI/source regressions, public-preview and public-screenshot policy, domain tests, generated package-inventory check, accessibility-source checks, and documentation consistency. |
-| `npm run test:domain` | Job, logical package, physical-pack contract and lifecycle, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`, plus the focused reliability suite. |
+| `npm run test:domain` | Local Jobs retirement, logical package, physical-pack contract and lifecycle, poll, recovery, semantic-target, and user-data behavior under `app/scripts/`, plus the focused reliability suite. |
 | `npm run test:browser` | Desktop rendered interaction, Stable/Lab/disabled-profile behavior, Search-match contrast, highlight, Language Study, tooltip containment, Strong's preview, flexible workspace widths/scrolling/anchors, compact context, contained Study Marks/Meaning, and physical-pack Edge lifecycle flows. |
 | `npm run test:browser:mobile` | The maintained interaction journey in mobile mode. |
 | `npm test` | Static, desktop-browser, and mobile-browser suites. |
@@ -21,7 +21,7 @@ remove, or reclassify a maintained test.
 | `npm run verify` | `npm test` followed by the public package audit. |
 | `npm run desktop:prepare` | Deterministic split staging of the embedded shell and complete installer-owned data resources. |
 | `npm run desktop:check` | Desktop staging verification, Rust format/clippy/tests, and focused Tauri configuration/platform/staging contracts. |
-| `npm run desktop:test` | Official direct `tauri-driver` flow against the debug WRY binary, including exact-token mark/Meaning persistence and route restoration across relaunch. |
+| `npm run desktop:test` | Official direct `tauri-driver` flow against the debug WRY binary, including exact-token mark/Meaning and direct-index persistence, zero new jobs, retired UI absence, and route restoration across relaunch. |
 | `npm run desktop:build` | Unsigned Windows x64 NSIS release build; it is intentionally outside ordinary browser verification. |
 
 ## Focused Aliases
@@ -102,7 +102,7 @@ order:
 | `tests/public-preview-readiness.mjs` | Public-preview status, rights/provenance, security, and release-authorization boundaries. |
 | `tests/public-screenshot-contract.mjs` | Public capture manifest, Standard-width and contained-tool capture guards, browser-health enforcement, retired-dependency guard, generated inventory, documentation references, and tracked screenshot consistency. |
 | `app/scripts/accessibility-test.mjs` | Static accessibility and retired-control source assertions. |
-| `app/scripts/doc-consistency-test.mjs` | Classified maintained-document, command, manifest, job, schema, and current-product consistency. |
+| `app/scripts/doc-consistency-test.mjs` | Classified maintained-document, command, manifest, retired-job metadata, schema, and current-product consistency. |
 
 `test:static` also runs `npm run test:domain` and
 `npm run inventory:check`. The inventory command checks the generated package
@@ -112,7 +112,7 @@ manifest through `app/tools/refresh-package-inventory.mjs --check`.
 
 | Script | Maintained coverage |
 |---|---|
-| `app/scripts/job-processor-test.mjs` | Declared processors, job execution, persistence, and stale-result handling. |
+| `app/scripts/local-jobs-retirement-test.mjs` | No automatic job production; direct indexes; passive legacy backup preservation and recovery. |
 | `app/scripts/package-planner-test.mjs` | Current package dependencies, install/removal plans, and summaries. |
 | `app/scripts/package-state-test.mjs` | Bundled/managed package modes, capability toggles, operations, and import/export. |
 | `app/scripts/physical-pack-contract-test.mjs` | Default bundled distribution, catalog/manifest schemas, canonical path rejection, deterministic aggregate framing, immutable cache naming, exact Stable/Lab cache-ownership grammar, physical registry activation criteria, distribution-scoped managed authority, and full semantic-version minimum/exclusive-maximum/prerelease ordering. |
@@ -141,7 +141,7 @@ entry.
 | `app/scripts/word-meaning-focus-test.mjs` | Desktop and mobile | Contained Meaning and Study Marks overlay coordination, exact-target save/remove, data-neutral dismissal, lifecycle cleanup, and focus restoration. |
 | `app/scripts/study-workspace-interaction-test.mjs` | Desktop, intermediate, mobile, light/dark, forced colors, and reduced motion | Width switching/persistence/storage failure, semantic reader anchors, independent scroll ownership, contained tools, lifecycle/history/selection preservation, Clear behavior with browser-owned Reader navigation availability, responsive header container bands at 320px and 420px, exact 773px title containment, 280–760px Study-panel sweeps, per-word geometry, focus order/clipping, responsive bounds, and browser-error/overflow checks. |
 | `app/scripts/physical-pack-interaction-test.mjs` | Edge desktop, portrait, narrow, mobile-width, mobile-device, light/dark, and reduced motion | Distribution-aware fallback and strict `incompatible_version`; real persisted incompatible active records; compatible rollback recovery; simultaneous update/rollback state and actions after reload; update and rollback context preservation; storage plans; plan/cancel; install/offline reads; delayed `startup_verifying` live transition; action suppression; mounted-node-only updates; corruption/repair; invalid rollback loss; removal fallback; exact reader/detail context; containment; and zero console/page/request/HTTP errors. |
-| `app/scripts/feature-profile-interaction-test.mjs` | Edge desktop plus deterministic disabled-feature viewport | Stable default/UI/Search/recovery access; Lab identity, expanded diagnostics, separate user/notification/physical namespaces, shared-origin Cache Storage cleanup/startup isolation, version-3 imports, bidirectional isolation across reloads, unknown-profile fallback, disabled-control/data-request ownership, Reader preservation, and browser health. |
+| `app/scripts/feature-profile-interaction-test.mjs` | Edge desktop plus deterministic disabled-feature viewport | Stable default/UI/Search/recovery access; Lab identity, expanded diagnostics, separate user/notification/physical namespaces, shared-origin Cache Storage cleanup/startup isolation, version-3 legacy-job merge/replace preservation and malformed-import neutrality after reload, retired UI absence, bidirectional isolation across reloads, unknown-profile fallback, disabled-control/data-request ownership, Reader preservation, and browser health. |
 
 ## Historical July 1 Promotion and Retirement Record
 

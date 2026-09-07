@@ -9,11 +9,9 @@ import {
 import { createSourceTokenTarget, createVerseTarget } from "../app/src/semantic-targets.js";
 import {
   deleteTokenRendering,
-  getAllJobEvents,
   getTokenRendering,
   normalizeTokenRendering,
   setTokenRendering,
-  updateJobStatus,
 } from "../app/src/stores.js";
 
 function createLocalStorage() {
@@ -146,26 +144,25 @@ assert.deepEqual(
   "tokens with the same Strong's code and display text must remain distinct by exact index",
 );
 
-const jobsAfterChanges = getAllJobEvents(state).filter((job) => job.store === "workspace");
-assert.equal(jobsAfterChanges.length, 4, "each changed rendering must enqueue both dependent workspace jobs");
+const jobsAfterChanges = state.workspaceStore.job_events;
+assert.equal(jobsAfterChanges.length, 0, "changed renderings must not create jobs");
 setTokenRendering(state, firstToken, "  God  ");
 assert.equal(
-  getAllJobEvents(state).filter((job) => job.store === "workspace").length,
+  state.workspaceStore.job_events.length,
   jobsAfterChanges.length,
   "writing an unchanged normalized meaning must not enqueue jobs",
 );
 
-jobsAfterChanges.forEach((job) => updateJobStatus(state, "workspace", job.id, "completed"));
 
 assert.equal(deleteTokenRendering(state, firstToken), true, "existing token meaning must be removable");
 assert.equal(getTokenRendering(state, firstToken), null, "removed token meaning must not resolve as a ghost record");
 assert.equal(getTokenRendering(state, secondToken)?.rendering, "Deity", "removing one token must not remove its same-Strong peer");
 assert.deepEqual(Object.keys(state.workspaceStore.token_renderings["john:3:16"]), ["7"]);
-const jobsAfterRemoval = getAllJobEvents(state).filter((job) => job.store === "workspace").length;
-assert.equal(jobsAfterRemoval, jobsAfterChanges.length + 2, "removing a meaning must enqueue dependent jobs once");
+const jobsAfterRemoval = state.workspaceStore.job_events.length;
+assert.equal(jobsAfterRemoval, 0, "removing a meaning must not create jobs");
 assert.equal(deleteTokenRendering(state, firstToken), false, "removing an absent meaning must be a no-op");
 assert.equal(
-  getAllJobEvents(state).filter((job) => job.store === "workspace").length,
+  state.workspaceStore.job_events.length,
   jobsAfterRemoval,
   "a no-op removal must not enqueue jobs",
 );

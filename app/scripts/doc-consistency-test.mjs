@@ -5,7 +5,6 @@ import { access, readdir, readFile } from "node:fs/promises";
 import { dirname, extname, isAbsolute, join, relative } from "node:path";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { canRunJob } from "../src/job-processor.js";
 
 const execFileAsync = promisify(execFile);
 const appRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -369,7 +368,7 @@ async function checkCurrentDocumentContracts() {
     {
       path: "docs/SHOWCASE_SCREENSHOTS.md",
       required: [
-        /19 tracked PNG files/i,
+        /18 tracked PNG files/i,
         /current, manually reviewed, accepted public-preview evidence/i,
         /generated filename inventory/i,
         /Public descriptions use Language Study/i,
@@ -462,10 +461,9 @@ async function checkPackageManifest() {
   assert(!unknownRefs.length, "Package manifest must not reference unknown feature pack ids.", unknownRefs);
 }
 
-async function checkDeclaredJobs() {
+async function checkRetiredJobs() {
   const manifest = await readJson(join(appRoot, "data", "analysis", "manifest.json"));
-  const missing = (manifest.planned_job_types || []).filter((jobType) => !canRunJob({ type: jobType, job_type: jobType }));
-  assert(!missing.length, "Declared job types must have a processor or explicit simulation_only handling.", missing);
+  assert(!manifest.planned_job_types?.length, "Analysis metadata must not advertise retired job processors.");
 }
 
 async function checkSchemaVersionFields() {
@@ -496,7 +494,7 @@ async function main() {
   await checkTransientPolicyState(entriesWithRole("current-policy"));
   await checkTestInventoryAliases();
   await checkPackageManifest();
-  await checkDeclaredJobs();
+  await checkRetiredJobs();
   await checkSchemaVersionFields();
 
   console.log(
@@ -518,7 +516,7 @@ async function main() {
           "transient_policy_state",
           "test_inventory_package_aliases",
           "manifest_feature_pack_refs",
-          "declared_job_processors",
+          "retired_job_metadata",
           "schema_version_fields",
         ],
       },

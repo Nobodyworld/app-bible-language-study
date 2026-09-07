@@ -1,6 +1,6 @@
 # Showcase Screenshots
 
-These 19 tracked PNG files are the current, manually reviewed, accepted
+These 18 tracked PNG files are the current, manually reviewed, accepted
 public-preview evidence for the reader and personal-study experience. Each was
 reviewed at actual size for correct route, theme, selected context, complete
 content, readable source-language text, clean overlays, unclipped controls, and
@@ -33,6 +33,5 @@ its two PNG filenames retain the internal `interlinear` term.
 | [Contained Meaning](images/meaning.png) | John 1:1 exact-source-token Meaning surface with saved `origin` plus exact-English and lexicon choices. |
 | [My Data summary](images/my-data.png) | My study data counts reflect the seeded Meaning and Study Mark; Advanced diagnostics is collapsed. |
 | [My Data backup and restore](images/my-data-backup-restore.png) | Download, merge, and replace controls are framed without exposing a large raw JSON payload. |
-| [My Data local maintenance](images/my-data-maintenance.png) | Completed Study Marks index refresh confirms personal data was not changed. |
 | [Mobile Verse study](images/mobile.png) | Light 390×844 Psalm 118:4 state with the full-screen Verse study drawer and Cross References controls open. |
 | [Dark mobile My Data](images/mobile-dark.png) | Dark 390×844 John 1:1 full-screen drawer with the populated My Data summary readable. |

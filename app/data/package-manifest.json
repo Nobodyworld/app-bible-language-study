@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-07-10T20:19:10.395Z",
+  "generated_at": "2026-09-07T03:34:32.039Z",
   "distribution": "source-notices-retained",
   "source_manifest": "data/source-manifest.json",
   "note": "Package inventory for the local-first application. Bundled-data rights and provenance are recorded in data/source-manifest.json.",
@@ -41,11 +41,11 @@
         "source-tr94"
       ],
       "files": 2804,
-      "bytes": 954311610,
+      "bytes": 954311427,
       "mb": 910.1,
-      "gzip_bytes": 180460807,
+      "gzip_bytes": 180460689,
       "gzip_mb": 172.1,
-      "sha256": "sha256:910de6211e387d2f2179e917031b4fe578ac078be7a870d471b9b3d422d11451",
+      "sha256": "sha256:5407048f224adc0a5c27051882b87ab02c119e13c228bbd047a8b2d31dacf55c",
       "largest_shard": {
         "path": "data/search/commentaries/gill/psalms.json",
         "bytes": 10293768
@@ -515,8 +515,8 @@
         "bsb-strongs-overlay"
       ],
       "files": 67,
-      "bytes": 4480288,
-      "gzip_bytes": 952383,
+      "bytes": 4480154,
+      "gzip_bytes": 952291,
       "license_note": "Generated from packaged datasets for reproducible local analysis workflows.",
       "paths": [
         "data/analysis/word-map/bsb",
@@ -524,7 +524,7 @@
       ],
       "mb": 4.27,
       "gzip_mb": 0.91,
-      "sha256": "sha256:9f28fd0761a76556a2836d73339bad07219c97e35ab0b10f6666b5c0e1c42fd1",
+      "sha256": "sha256:feac37f0edfff39142f1d0e7507efcd6aa89de59fde372667ecce1fcd42a125d",
       "largest_shard": {
         "path": "data/analysis/word-map/bsb/psalms.json",
         "bytes": 541406
@@ -627,14 +627,14 @@
       ],
       "license_note": "Application semantic metadata.",
       "files": 4,
-      "bytes": 7403,
+      "bytes": 7354,
       "mb": 0.01,
-      "gzip_bytes": 2000,
+      "gzip_bytes": 1974,
       "gzip_mb": 0,
-      "sha256": "sha256:c23adf0c6c3a0be7c3c3f9d38eec7338fcbc4f9dd7017373f3364c7953e5eef2",
+      "sha256": "sha256:e76f556a931f10e9f01165960c08aa69c5bc6ad59bff0da67b0a1a4a14ff138b",
       "largest_shard": {
         "path": "data/semantic/tag-definitions.json",
-        "bytes": 3691
+        "bytes": 3642
       }
     },
     {
