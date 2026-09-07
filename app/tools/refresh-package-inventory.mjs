@@ -76,8 +76,8 @@ function runtimePackDefinitions(appManifest) {
     },
     "semantic-seeds": {
       id: "semantic-seeds",
-      label: "Semantic definitions and propositions",
-      description: "Packaged tag definitions, relations, and starter interpretation propositions.",
+      label: "Semantic tag definitions and relations",
+      description: "Packaged tag definitions and relations.",
       dependencies: [],
       paths: ["data/semantic"],
       license_note: "Application semantic metadata.",

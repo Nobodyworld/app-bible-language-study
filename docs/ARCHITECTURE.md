@@ -39,7 +39,12 @@ native `lab-profile` build feature and the native environment supplies the only
 desktop profile authority. Lab includes Core and Stable and exposes the
 experimental controls against isolated state. Unknown browser profile values
 fall back to Stable with a testable diagnostic. Interpretation polls remain
-compatibility-only and own no ordinary UI.
+compatibility-only with no response mutation/event-generation API or ordinary/diagnostic UI.
+Only passive normalization and local aggregate rebuilding remain in
+`semantic-polls.js` for version-3 backup compatibility. The three retired draft
+seeds live under `tests/fixtures/legacy-polls/`, outside runtime resources;
+semantic/package manifests describe only tag definitions and relations.
+See [the retained reference inventory](POLL_COMPATIBILITY.md).
 
 ## Platform Composition
 

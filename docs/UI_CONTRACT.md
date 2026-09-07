@@ -55,4 +55,4 @@ inside the Tauri composition; visible backup semantics remain version 3.
 - Enabled feature with unavailable capability/data: the existing structured
   unavailable state and retry behavior remain authoritative.
 - Core Reader failure: startup reports the existing bounded error state.
-- Compatibility-only interpretation polls own no ordinary control.
+- Compatibility-only interpretation polls own no ordinary or diagnostic controls, counts, or response mutations in either profile. Historical records remain accessible through the shared version-3 backup path.

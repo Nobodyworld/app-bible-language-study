@@ -1,15 +1,13 @@
 {
   "schema_version": 1,
-  "content_version": "local-packaged-2026-06-29",
-  "description": "Local semantic seed data for definitions and prompts. Assertions, poll responses, and aggregates are not stored here.",
+  "content_version": "local-packaged-2026-09-07",
+  "description": "Packaged tag definitions and relations. User assertions and historical compatibility records are stored separately.",
   "files": {
     "tag_definitions": "semantic/tag-definitions.json",
-    "tag_relations": "semantic/tag-relations.json",
-    "interpretation_propositions": "semantic/interpretation-propositions.json"
+    "tag_relations": "semantic/tag-relations.json"
   },
   "counts": {
     "tag_definitions": 6,
-    "tag_relations": 4,
-    "interpretation_propositions": 3
+    "tag_relations": 4
   }
 }

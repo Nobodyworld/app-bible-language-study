@@ -17,7 +17,7 @@ import {
   tagDefinitionId,
   normalizeTarget,
 } from "./semantic-targets.js?v=pr13-live-qa-20260711e";
-import { aggregatePollResponses, createPollResponse, normalizePollResponse } from "./semantic-polls.js";
+import { aggregatePollResponses, normalizePollResponse } from "./semantic-polls.js";
 import { createDefaultPackageStore, normalizePackageStore } from "./package-state.js";
 
 const USER_DATA_EXPORT_KIND = "bibleapp:user-data";
@@ -405,59 +405,6 @@ export function upsertAssertion(state, assertion, eventType = "assertion_upserte
   return assertion;
 }
 
-function appendPollEvent(state, response, eventType) {
-  if (!state.pollStore || !response?.id) return;
-  state.pollStore.events.push({
-    id: `event:poll-response:${Date.now()}:${Math.random().toString(36).slice(2)}`,
-    schema_version: 1,
-    event_type: eventType,
-    response_id: response.id,
-    proposition_id: response.proposition_id,
-    proposition_version: response.proposition_version,
-    actor: response.actor,
-    created_at: nowIso(),
-  });
-  state.pollStore.events = state.pollStore.events.slice(-500);
-}
-
-export function setPollResponse(state, proposition, responseValue, options = {}) {
-  ensureStores(state);
-  const response = createPollResponse(proposition, responseValue, options);
-  const existing = state.pollStore.responses[response.id];
-  state.pollStore.responses[response.id] = {
-    ...response,
-    previous_response: existing?.response && existing.response !== response.response ? existing.response : existing?.previous_response || null,
-    supersedes: existing && existing.response !== response.response ? existing.id : options.supersedes || existing?.supersedes || null,
-    created_at: existing?.created_at || response.created_at,
-    updated_at: nowIso(),
-  };
-  state.pollStore.aggregates = aggregatePollResponses(state.pollStore.responses);
-  appendPollEvent(state, state.pollStore.responses[response.id], existing ? "poll_response_updated" : "poll_response_created");
-  saveStorage(STORAGE_KEYS.polls, state.pollStore);
-  return state.pollStore.responses[response.id];
-}
-
-export function deletePollResponse(state, proposition, options = {}) {
-  ensureStores(state);
-  const actor = options.actor || undefined;
-  const fallbackResponse = proposition?.options?.[0];
-  if (!fallbackResponse) return null;
-  const responseId = options.id || createPollResponse(proposition, fallbackResponse, { actor }).id;
-  const existing = state.pollStore.responses[responseId];
-  if (!existing) return null;
-  state.pollStore.responses[responseId] = {
-    ...existing,
-    status: "deleted",
-    deleted_at: nowIso(),
-    deletion_policy: "tombstone",
-    updated_at: nowIso(),
-  };
-  state.pollStore.aggregates = aggregatePollResponses(state.pollStore.responses);
-  appendPollEvent(state, state.pollStore.responses[responseId], "poll_response_deleted");
-  saveStorage(STORAGE_KEYS.polls, state.pollStore);
-  return state.pollStore.responses[responseId];
-}
-
 export async function initStores(state, adapter = null) {
   const storage = adapter ? configureUserStorageAdapter(adapter) : resolveUserStorageAdapter();
   const initialized = await storage.initialize([
@@ -806,9 +753,6 @@ export function getUserDataSummary(state) {
   const assertions = Object.values(state.assertionStore.assertions || {}).filter((assertion) => assertion.active !== false).length;
   const assertionEvents = (state.assertionStore.events || []).length;
   const quarantinedAssertionRecords = (state.assertionStore.quarantined_records || []).length;
-  const pollResponses = Object.keys(state.pollStore.responses || {}).length;
-  const pollEvents = (state.pollStore.events || []).length;
-  const pollAggregates = Object.keys(state.pollStore.aggregates || {}).length;
   const installedFeaturePacks = (state.packageStore.installed_feature_pack_ids || []).length;
   const packageOperations = (state.packageStore.operations || []).length;
   const importBackups = loadImportBackupStore().backups.length;
@@ -825,9 +769,6 @@ export function getUserDataSummary(state) {
     assertions,
     assertion_events: assertionEvents,
     quarantined_assertion_records: quarantinedAssertionRecords,
-    poll_responses: pollResponses,
-    poll_events: pollEvents,
-    poll_aggregates: pollAggregates,
     installed_feature_packs: installedFeaturePacks,
     package_operations: packageOperations,
     import_backups: importBackups,
@@ -884,8 +825,10 @@ export function importUserData(state, payload, mode = "merge") {
     });
     state.pollStore = normalizePollStore({
       ...state.pollStore,
+      ...incoming.pollStore,
       responses: mergeTagAssertions(state.pollStore.responses, incoming.pollStore.responses),
-      events: mergeHistoryEvents(state.pollStore.events, incoming.pollStore.events),
+      // Retired histories have no active writer; retain every distinct event.
+      events: mergeHistoryEvents(state.pollStore.events, incoming.pollStore.events, null),
     });
     state.packageStore = mergePackageStores(state.packageStore, incoming.packageStore);
   }

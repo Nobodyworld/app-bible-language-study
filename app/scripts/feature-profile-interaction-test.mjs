@@ -1,5 +1,7 @@
 #!/usr/bin/env node
 
+import assertStrict from "node:assert/strict";
+import { historicalPollStore } from "../../tests/fixtures/legacy-polls.mjs";
 import { existsSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { startStaticAppServer } from "../tools/serve-app.mjs";
@@ -86,6 +88,7 @@ async function exerciseRetirement(browser, url, profile) {
   stores.setTokenRendering(fixtureState, token, "Preserved meaning");
   stores.setVerseDraft(fixtureState, "psalms:23:1", "Preserved legacy draft");
   const fixture = stores.createUserDataExport(fixtureState);
+  fixture.stores.polls = historicalPollStore();
   const history = [{ id: "legacy:queued", type: "inquiry-analysis", state: "queued", payload: { note: "historical" }, result: { findings: ["historical result"] } }];
   fixture.stores.tags.job_events = history;
   fixture.stores.workspace.job_events = history;
@@ -98,6 +101,9 @@ async function exerciseRetirement(browser, url, profile) {
     await waitForReader(page);
     assert((await page.title()).length > 0, "Reader must have a title");
     await openMyData(page);
+    const freshPolls = (await readExport(page)).stores.polls;
+    assertStrict.deepEqual(freshPolls.responses, {}, "Startup must not seed responses");
+    assertStrict.deepEqual(freshPolls.events, [], "Startup must not generate poll events");
     for (const mode of ["merge", "replace"]) {
       if (mode === "merge") await mergePayload(page, fixture);
       else {
@@ -110,6 +116,10 @@ async function exerciseRetirement(browser, url, profile) {
       await waitForReader(page);
       await openMyData(page);
       const backup = await readExport(page);
+      assertStrict.deepEqual(backup.stores.polls.responses, fixture.stores.polls.responses, profile + "/" + mode + ": historical opinions changed");
+      assertStrict.deepEqual(backup.stores.polls.events, fixture.stores.polls.events, profile + "/" + mode + ": history truncated or regenerated");
+      assertStrict.deepEqual(backup.stores.polls.extension, fixture.stores.polls.extension);
+      assert(!backup.stores.polls.aggregates.obsolete, "Historical aggregate cache must be rebuilt");
       for (const section of ["tags", "workspace"]) {
         const jobs = backup.stores[section].job_events;
         assert(jobs.length === 1 && jobs[0].state === "queued", `${profile}/${mode}: history executed or extra jobs created`);
@@ -121,19 +131,27 @@ async function exerciseRetirement(browser, url, profile) {
       await page.evaluate(() => { document.querySelector(".advanced-diagnostics").open = true; });
       await page.waitForSelector(".diagnostic-section");
       assert(await page.evaluate(() => !document.querySelector(".job-action, .job-payload, .maintenance-section") && !/Local job console|Tag jobs|Workspace jobs|Plan Review|Simulate|Requeue|Refresh Study Marks index/.test(document.querySelector("#detailContent").textContent)), `${profile}: retired job UI remains`);
+      assert(await page.evaluate(() => !/\bpolls?\b|interpretation propositions/i.test(document.querySelector("#detailContent").textContent)), profile + ": poll presentation remains");
       // Invalid history must not alter the already persisted data or create a recovery snapshot.
       await page.evaluate(() => { document.querySelector(".import-textarea").value = JSON.stringify({ kind: "bibleapp:user-data", version: 3, stores: { tags: { job_events: {} } } }); });
       await page.getByRole("button", { name: "Merge backup" }).click();
       await page.waitForSelector(".import-status.error");
       assert(JSON.stringify((await readExport(page)).stores) === JSON.stringify(backup.stores), "Malformed UI import changed data");
+      await page.evaluate(() => { document.querySelector(".import-textarea").value = JSON.stringify({ kind: "bibleapp:user-data", version: 3, stores: { polls: [] } }); });
+      await page.getByRole("button", { name: "Merge backup" }).click();
+      await page.waitForSelector(".import-status.error");
+      assertStrict.deepEqual((await readExport(page)).stores, backup.stores, "Malformed poll store changed persisted data");
     }
+    await openMyData(page);
+    await page.evaluate(() => { document.querySelector(".advanced-diagnostics").open = true; });
+    await page.waitForSelector(".diagnostic-section");
     if (process.env.BIBLEAPP_RETIREMENT_SCREENSHOT_DIR) {
       await mkdir(process.env.BIBLEAPP_RETIREMENT_SCREENSHOT_DIR, { recursive: true });
-      await page.locator(".advanced-diagnostics").scrollIntoViewIfNeeded();
+      await page.locator(".diagnostic-section").first().evaluate((node) => node.scrollIntoView({ block: "start" }));
       await page.screenshot({ path: path.join(process.env.BIBLEAPP_RETIREMENT_SCREENSHOT_DIR, `${profile}-retirement.png`) });
     }
     assert(Object.values(health).every((items) => items.length === 0), `${profile}: browser health failed: ${JSON.stringify(health)}`);
-    return `${profile}: retired UI absent; merge/replace history, Inquiry, Meaning and direct indexes preserved after reload`;
+    return `${profile}: retired job/poll UI absent; merge/replace preserves 605 poll events, opinions, Inquiry, Meaning and direct indexes after reload`;
   } finally {
     await context.close();
   }

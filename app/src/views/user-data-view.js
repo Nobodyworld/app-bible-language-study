@@ -72,8 +72,6 @@ function renderTechnicalSummary(summary) {
       ["Installed packs", summary.installed_feature_packs],
       ["Assertion events", summary.assertion_events],
       ["Quarantined assertions", summary.quarantined_assertion_records],
-      ["Poll responses", summary.poll_responses],
-      ["Poll events", summary.poll_events],
       ["Import backups", summary.import_backups],
       ["User store", summary.user_store_backend],
       ["Authority", summary.user_store_authority],

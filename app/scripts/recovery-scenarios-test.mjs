@@ -284,8 +284,8 @@ async function main() {
     );
     const summary = stores.getUserDataSummary(state);
     assert(summary.tagged_verses === 1, "partial export should recover tag store");
-    assert(summary.poll_responses === 0 && state.workspaceStore.job_events.length === 0, "missing stores should normalize to empty defaults");
-    return { tagged_verses: summary.tagged_verses, poll_responses: summary.poll_responses };
+    assert(Object.keys(state.pollStore.responses).length === 0 && state.workspaceStore.job_events.length === 0, "missing stores should normalize to empty defaults");
+    return { tagged_verses: summary.tagged_verses, empty_poll_store: Object.keys(state.pollStore.responses).length === 0 };
   }));
 
   results.push(await scenario("browser_storage_cleared_recovers_from_json_export", async () => {

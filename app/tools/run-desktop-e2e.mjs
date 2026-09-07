@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { historicalPollStore } from "../../tests/fixtures/legacy-polls.mjs";
 import { spawn } from "node:child_process";
 import { promises as fs } from "node:fs";
 import { createServer } from "node:net";
@@ -158,9 +159,9 @@ async function installErrorCapture(client) {
 async function readNativeStores(client) {
   return client.executeAsync(`
     const done = arguments[arguments.length - 1];
-    Promise.all(['tags', 'workspace'].map(storeId =>
+    Promise.all(['tags', 'workspace', 'polls'].map(storeId =>
       window['__TA' + 'URI__'].core.invoke('read_user_store', { storeId })
-    )).then(values => done({ tags: values[0], workspace: values[1] }), error => done({ error: String(error?.message || error) }));
+    )).then(values => done({ tags: values[0], workspace: values[1], polls: values[2] }), error => done({ error: String(error?.message || error) }));
   `);
 }
 
@@ -219,6 +220,9 @@ async function firstLaunch(client, screenshotPath) {
     await delay(150);
   }
   assert.deepEqual(persisted, { favorite: true, meaning: true, route: "#/read/bsb/proverbs/1/1", index: true, jobs: 0 });
+  const initialPolls = (await readNativeStores(client)).polls?.value;
+  assert.deepEqual(initialPolls?.responses || {}, {}, "Study actions must not create polls");
+  assert.deepEqual(initialPolls?.events || [], [], "Study actions must not generate poll events");
   await client.screenshot(screenshotPath);
   assert.deepEqual(await client.execute("return window.__desktopE2eErrors || [];"), []);
   return targetId;
@@ -248,6 +252,40 @@ async function checkRetiredJobUi(client) {
   await client.waitFor("return Boolean(document.querySelector('.diagnostic-section')); ");
   const absent = await client.execute("return !document.querySelector('.job-action, .job-payload, .maintenance-section') && !/Local job console|Tag jobs|Workspace jobs|Plan Review|Simulate|Requeue|Refresh Study Marks index/.test(document.querySelector('#detailContent').textContent);");
   assert.equal(absent, true, "Retired job UI must be absent from native diagnostics");
+  assert.equal(await client.execute("return !/\\bpolls?\\b|interpretation propositions/i.test(document.querySelector('#detailContent').textContent);"), true, "Poll presentation must be absent from native diagnostics");
+}
+
+async function checkHistoricalPolls(client, mode) {
+  const expected = historicalPollStore();
+  const actual = (await readNativeStores(client)).polls?.value;
+  assert.deepEqual(actual?.responses, expected.responses, "Native history responses/tombstones changed");
+  assert.deepEqual(actual?.events, expected.events, "Native history was truncated or regenerated");
+  assert.deepEqual(actual?.extension, { ...expected.extension, import_mode: mode });
+  assert.equal(Boolean(actual?.aggregates?.obsolete), false);
+}
+
+async function importHistoricalPolls(client, mode) {
+  const payload = await client.execute(`
+    const panel = document.querySelector('.manual-json-panel');
+    panel.open = true;
+    panel.dispatchEvent(new Event('toggle'));
+    return JSON.parse(document.querySelector('.export-textarea').value);
+  `);
+  payload.stores.polls = historicalPollStore();
+  payload.stores.polls.extension.import_mode = mode;
+  await client.execute("const input = document.querySelector('.import-textarea'); input.value = JSON.stringify(arguments[0]); input.dispatchEvent(new Event('input', {bubbles:true})); return true;", [payload]);
+  await client.execute("const button = [...document.querySelectorAll('button')].find(node => node.textContent === arguments[0]); if (!button) throw new Error('Import button missing'); button.click(); return true;", [mode === "merge" ? "Merge backup" : "Replace all local data"]);
+  if (mode === "replace") await click(client, ".replace-confirmation button.danger-button");
+  await client.waitFor("return document.querySelector('.import-status')?.textContent.includes(arguments[0]);", [mode === "merge" ? "Backup merged" : "Backup replaced"]);
+  await client.execute("document.querySelector('.manual-json-panel').dispatchEvent(new Event('toggle')); return true;");
+  await client.waitFor("return JSON.parse(document.querySelector('.export-textarea')?.value || '{}').stores?.polls?.events?.length === 605;");
+  // Native writes are queued; observe this import on disk before closing.
+  const deadline = Date.now() + 20_000;
+  while (Date.now() < deadline) {
+    if ((await readNativeStores(client)).polls?.value?.extension?.import_mode === mode) break;
+    await delay(150);
+  }
+  await checkHistoricalPolls(client, mode);
 }
 
 const tooling = await ensureDesktopWebDriverTooling();
@@ -286,10 +324,21 @@ try {
   await client.waitReady();
   await client.createSession(BINARY);
   targetId = await firstLaunch(client, path.join(runRoot, "first-launch.png"));
+  await checkRetiredJobUi(client);
+  await importHistoricalPolls(client, "merge");
   await client.closeSession();
   await client.createSession(BINARY);
   await secondLaunch(client, targetId, path.join(runRoot, "relaunch.png"));
+  await checkHistoricalPolls(client, "merge");
   await checkRetiredJobUi(client);
+  await importHistoricalPolls(client, "replace");
+  await client.closeSession();
+  await client.createSession(BINARY);
+  await secondLaunch(client, targetId, path.join(runRoot, "replace-relaunch.png"));
+  await checkHistoricalPolls(client, "replace");
+  await checkRetiredJobUi(client);
+  await client.execute("document.querySelector('.diagnostic-section').scrollIntoView({block:'start'}); return true;");
+  await client.screenshot(path.join(runRoot, "poll-compatibility.png"));
   await client.closeSession();
 } finally {
   await client.closeSession();
@@ -319,6 +368,9 @@ console.log(JSON.stringify({
   direct_index_persisted: true,
   new_jobs: 0,
   retired_job_ui_absent: true,
+  retired_poll_ui_absent: true,
+  historical_poll_events: 605,
+  poll_merge_replace_relaunch: "PASS",
   logs: path.relative(REPO_ROOT, logsRoot),
-  screenshots: [path.relative(REPO_ROOT, path.join(runRoot, "first-launch.png")), path.relative(REPO_ROOT, path.join(runRoot, "relaunch.png"))],
+  screenshots: ["first-launch.png", "relaunch.png", "replace-relaunch.png", "poll-compatibility.png"].map(name => path.relative(REPO_ROOT, path.join(runRoot, name))),
 }, null, 2));

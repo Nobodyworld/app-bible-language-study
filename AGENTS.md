@@ -25,6 +25,12 @@ ignored/untracked files alone. Remove a task-created workspace only after its
 work is pushed, it is unused and clean, and its ignored contents are understood;
 otherwise retain it and explain why. Routine completion does not require cleanup.
 
+A prior slice may have been squash-merged: its old branch tip is not necessarily
+an ancestor of the new main even when their file trees match. Do not merge or
+rebase that completed branch into the next slice just to make local history
+linear. Reuse the clean checkout and switch to the new branch from main. Preserve
+any unpushed work and stop for an actual divergence instead of resetting it.
+
 ## Product and data safety
 
 Keep browser and Windows desktop study behavior shared. Preserve personal Study
@@ -45,21 +51,32 @@ or a final distribution checkpoint, not each UI edit. Do not revive temporary
 owner-machine uninstall/firewall helpers or bypass blocked automation actions.
 Report failures and unrun checks accurately; source review is not rendered QA.
 
-## Current approved scope: Local Jobs retirement (#105)
+## Current work: interpretation-poll retirement (#82)
 
-This is implementation work, not another review-only pass or a move into Lab.
-Remove the console and job actions/counts from both profiles, stop all automatic
-job production, and remove processors/mutators with no remaining live consumer.
-Remove the misleading job-backed index-refresh action; preserve and test the
-direct Study Mark index derivation already used by saving and normalization.
-Keep passive compatibility for valid legacy job histories/results in version-3
-backups without executing them. Preserve Inquiry marks/notes, Meaning, personal
-study stores, and reference data. Update affected tests, metadata/generators,
-inventory and docs rather than restoring retired behavior to satisfy old tests.
-Native packs (#81), package migration, poll retirement (#82), other feature
-removal, and framework changes are separate work. The first retirement slice
-uses `cleanup/desktop-feature-scope`; the detailed acceptance record is #105.
-Older review-only or native-pack handoffs do not define this implementation.
+The Local Jobs retirement under #105 is complete in merged PR #106. Do not redo
+that implementation. This separate slice uses `cleanup/poll-compatibility` and
+finishes the existing #82 compatibility-only boundary, not a new claims system.
+
+Remove unused poll-response creation/edit/deletion paths, poll diagnostic UI and
+advertising, and the three draft polling seeds from ordinary packaged/runtime
+authority. Retain only the passive readers, normalization, validation and derived
+compatibility data needed for existing backups. Keep storage keys, native store
+IDs and `bibleapp:user-data` version 3 unchanged. Never clear an existing poll
+store, rewrite a historical opinion, or require a retired seed catalog to import
+a valid old response. Preserve valid responses, tombstones, targets, versions,
+actors, timestamps, events and supported extension fields; avoid incidental
+history truncation. Keep current conflict and malformed-import/recovery policies.
+
+Move legacy seed metadata into test-only fixtures when needed to prove old backup
+compatibility. Reconcile semantic/package manifests, maintained generators,
+inventories, feature/UI contracts, documentation and tests as one implementation.
+A schema or aggregate calculator with a real compatibility consumer is not dead
+code. Do not remove canonical semantic targets, Study Marks or scripture data.
+
+Leave packs, capabilities, other diagnostics and future claims/beliefs features
+unchanged. No native pack work, package migration, framework/database rewrite,
+new queue, account, analytics, release or publication is included. The issue #82
+implementation note contains the verified source map and completion conditions.
 
 ## Completion report
 

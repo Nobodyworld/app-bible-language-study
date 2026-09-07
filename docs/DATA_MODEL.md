@@ -156,6 +156,29 @@ Theme (`bibleAppTheme`) and Study workspace width
 they do not contain personal study records. A deliberate version-3 export and
 import is the only supported cross-profile data movement.
 
+### Historical poll compatibility
+
+The `polls` store remains in version-3 exports with its existing browser keys
+and native store ID. There is no poll creation, editing, deletion, or diagnostic
+count UI. Passive import/startup readers preserve historical responses and
+explicit deleted tombstones, IDs, targets, versions, actors, timestamps, events,
+and supported extension fields without consulting a proposition catalog.
+Sparse legacy defaults and record filtering remain unchanged: records missing
+response identity/proposition/answer or event identity/response/type are ignored;
+invalid top-level backup/store shapes are rejected before writes or recovery
+snapshots. Existing unrelated quarantine and storage-recovery policies remain.
+
+Merge keeps distinct response and event IDs; an incoming duplicate ID wins as
+before, irrespective of timestamps. Events are sorted by creation time with no
+history-length cap. Store extensions are shallowly merged, with incoming values
+winning shared keys; nested response/event extensions travel with their record.
+Replace captures the complete prior portable data in a recovery backup. Export
+and relaunch retain the resulting records. Aggregate caches are rebuilt from
+current nondeleted responses per proposition/version with local-private scope;
+these disposable derived values are not historical opinions or community data.
+The full-record schema is retained; sparse records need no invented target.
+See [the reference inventory and policy](POLL_COMPATIBILITY.md).
+
 ### Personal meanings
 
 `workspaceStore.token_renderings` stores optional personal meanings for exact
