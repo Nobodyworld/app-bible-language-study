@@ -114,7 +114,8 @@ order:
 `npm run inventory:check`. The Search command reconstructs the complete indexes
 without writes; external source-corpus reconstruction is an explicit
 `sources:check` invocation with reviewed inputs. The inventory command checks the generated package
-manifest through `app/tools/refresh-package-inventory.mjs --check`.
+manifest and the distribution's package digest through
+`app/tools/refresh-package-inventory.mjs --check`.
 
 ## Domain Tests
 

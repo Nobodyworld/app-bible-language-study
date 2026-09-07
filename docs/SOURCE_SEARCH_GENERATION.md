@@ -162,8 +162,14 @@ the branch. The following map is safe to publish without private archive paths.
 `test:static` includes focused generator and direct Search tests, complete
 `search:check`, and `inventory:check`. It does not require a private source archive.
 After intentional output/provenance changes, regenerate package identities with
-`npm run inventory:refresh`, then reconcile physical-pack scenario measurements
-with `node app/tools/build-physical-packs.mjs --write-scenarios` and check them.
+`npm run inventory:refresh` (including the distribution's package digest), then
+regenerate dependent fixture identities with
+`node app/tools/build-physical-pack-fixtures.mjs` and reconcile scenario
+measurements with `node app/tools/build-physical-packs.mjs --write-scenarios`.
+Check them with `npm run physical-packs:check` and
+`npm run physical-packs:scenarios:check`. Inventory refresh preserves timestamps
+when inventory bytes are unchanged; check mode also rejects a stale distribution
+reference without writing either manifest.
 The packaging path preserves NOTICE and source-manifest references.
 
 At the final checkpoint run `npm run verify`, `npm run desktop:prepare`,
