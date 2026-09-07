@@ -3531,18 +3531,12 @@ async function runQa(page) {
   await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'My Data'");
   pass("My Data repeat activation and Back/Forward history");
 
-  await click(page, ".maintenance-section .mini-button");
-  await waitFor(page, "document.querySelector('.maintenance-status')?.textContent.includes('Personal study data was not changed')");
-  pass("plain-language local maintenance");
-
   await click(page, ".advanced-diagnostics > summary");
-  await waitFor(page, "document.querySelector('.advanced-diagnostics')?.open && document.querySelector('.advanced-diagnostics .job-payload')");
+  await waitFor(page, "document.querySelector('.advanced-diagnostics')?.open");
   state = await getQaState(page);
-  assert(
-    state.detailText.includes("tag-index-refresh") && state.detailText.includes('"action": "retired"'),
-    "Advanced diagnostics did not preserve local job details",
-  );
-  pass("advanced local job diagnostics");
+  assert(!/Local job console|Tag jobs|Workspace jobs|Refresh Study Marks index|Plan Review|Requeue|Simulate/.test(state.detailText), "Retired job UI must be absent from diagnostics");
+  assert(await evaluate(page, "!document.querySelector('.job-action, .job-payload, .maintenance-section')"), "Job controls must not render");
+  pass("Local Jobs UI retirement");
 
   await click(page, ".manual-json-panel > summary");
   await waitFor(page, "Boolean(document.querySelector('.export-textarea')?.value)");
@@ -3568,7 +3562,7 @@ async function runQa(page) {
     userDataExport.summaryText.includes("Custom labels") && userDataExport.summaryText.includes("My study data"),
     "user-data summary missing expected counts",
   );
-  assert(userDataExport.tagJobTypes.includes("tag-index-refresh"), "tag change did not queue tag-index-refresh job");
+  assert(userDataExport.tagJobTypes.length === 0 && userDataExport.workspaceJobTypes.length === 0, "Study actions must not create jobs");
   await evaluate(page, "document.querySelector('.advanced-diagnostics').open = false");
   await click(page, ".paste-json-panel > summary");
   await evaluate(

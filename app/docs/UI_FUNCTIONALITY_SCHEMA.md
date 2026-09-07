@@ -36,7 +36,7 @@ The panel distinguishes direct data ownership from inherited containing context:
 | Verse | Parallel text, references, commentary, verse Language Study, verse Study Marks | When a verse is active |
 | Chapter | Reader-header Language Study entry | When a chapter is active |
 | Book | Reader-header Outline entry | When a book is active |
-| Global/user | My study data, backup/restore, app settings, local maintenance, advanced diagnostics | My Data in the reader header and home |
+| Global/user | My study data, backup/restore, app settings, advanced diagnostics | My Data in the reader header and home |
 
 A selected word retains its containing Verse controls. `Word` is the current self-control only for exact canonical word context; `Verse` is the current self-control for whole-verse context. Parallel, References, Commentary, and Language are actions rather than false current-context claims. Chapter and Book keep their valid scope semantics while remaining attached to their reader-header controls. Word detail must never imply that cross-references or commentary belong to the lexical entry itself.
 
@@ -44,15 +44,15 @@ A selected word retains its containing Verse controls. `Word` is the current sel
 
 ## My Data
 
-My Data is one stable global detail-history entry and follows this order: My study data, Backup and restore, App settings, Local maintenance, and Advanced diagnostics. Reopening the current My Data view does not add a duplicate history entry. Global activation clears transient word/verse study context and retains the reader route. The existing Study panel launcher keeps the view reachable on mobile.
+My Data is one stable global detail-history entry and follows this order: My study data, Backup and restore, App settings, and Advanced diagnostics. Reopening the current My Data view does not add a duplicate history entry. Global activation clears transient word/verse study context and retains the reader route. The existing Study panel launcher keeps the view reachable on mobile.
 
 The summary prioritizes user-owned records: custom labels, tagged verses, Study Mark assertions, active Study Marks, personal meanings, and preserved legacy verse drafts. It states that storage belongs to the current browser, is not an online account, and requires user-downloaded backups for portability.
 
 Backup download and merge/replace import preserve `bibleapp:user-data` version 3. Raw export and paste textareas are optional disclosures. Replace uses an accessible explicit confirmation, creates the existing pre-replace recovery backup, and supports Cancel/Escape without mutation. Validation happens before store mutation; malformed, foreign, or future-version data reports an error.
 
-App settings intentionally contains no package capability toggles. Theme remains in the global header. Technical capability controls, storage details, package operations, job states, raw payloads/results, simulations, run/requeue controls, and other internal records remain usable only inside Advanced diagnostics, which is collapsed by default and renders raw values as text.
+App settings intentionally contains no package capability toggles. Theme remains in the global header. Technical capability controls, storage details, package operations, and other internal records remain usable only inside Advanced diagnostics, which is collapsed by default and renders raw values as text.
 
-Local maintenance exposes `Refresh Study Marks index` as a repeat-safe recovery action. It rebuilds a derived browser-local projection, reports success/failure/unavailability in plain language, and does not alter canonical personal study data. It is not external synchronization; the app has no account, cloud backup, cross-device sync, remote update check, or new network call.
+Local Jobs is retired in both Stable and Lab. No console, route, job counts, Run, Plan Review, Simulate, Requeue, or job-backed index refresh is exposed. Study Mark indexes derive directly on save and normalization. Valid historical jobs remain passive version-3 backup data, including payloads/results; saving marks, Inquiry notes, Meaning, and legacy drafts/red-letter ranges never queues or executes jobs.
 
 ## Responsive panel placement
 

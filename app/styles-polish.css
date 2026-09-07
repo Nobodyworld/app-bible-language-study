@@ -87,7 +87,6 @@
 }
 
 .study-mark-intro,
-.local-processing-intro,
 .study-data-intro {
   margin: 0 0 12px;
   color: var(--muted);
@@ -96,16 +95,14 @@
 }
 
 .study-mark-section,
-.study-data-section,
-.local-processing-section {
+.study-data-section {
   display: grid;
   gap: 8px;
   margin: 14px 0;
 }
 
 .study-mark-section > h4,
-.study-data-section > h4,
-.local-processing-section > h4 {
+.study-data-section > h4 {
   margin: 0;
 }
 
@@ -150,29 +147,6 @@
   cursor: pointer;
   color: var(--accent-dark);
   font-weight: 900;
-}
-
-.local-processing-group {
-  display: grid;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.job-entry-friendly {
-  display: grid;
-  gap: 7px;
-}
-
-.job-friendly-summary {
-  margin: 0;
-  color: var(--text);
-  font-size: 13px;
-  line-height: 1.4;
-}
-
-.job-payload {
-  max-width: 100%;
-  overflow: auto;
 }
 
 .language-breakdown.hebrew .mark-list {

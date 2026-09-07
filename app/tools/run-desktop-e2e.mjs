@@ -171,6 +171,8 @@ function persistedState(stores, targetId) {
     favorite: Object.values(tags).some((record) => record?.active && record?.target_id === targetId && String(record?.tag_id || record?.legacy_tag_id).replace(/^tag:/, "") === "favorite"),
     meaning: renderings.some((record) => record?.target_id === targetId && record?.rendering === MEANING),
     route: stores?.workspace?.value?.last_reader_route || null,
+    index: stores?.tags?.value?.tag_target_index?.["tag:favorite"]?.includes(targetId) || false,
+    jobs: (stores?.tags?.value?.job_events?.length || 0) + (stores?.workspace?.value?.job_events?.length || 0),
   };
 }
 
@@ -213,10 +215,10 @@ async function firstLaunch(client, screenshotPath) {
     const stores = await readNativeStores(client);
     if (stores.error) throw new Error(stores.error);
     persisted = persistedState(stores, targetId);
-    if (persisted.favorite && persisted.meaning && persisted.route === "#/read/bsb/proverbs/1/1") break;
+    if (persisted.favorite && persisted.meaning && persisted.index && persisted.route === "#/read/bsb/proverbs/1/1") break;
     await delay(150);
   }
-  assert.deepEqual(persisted, { favorite: true, meaning: true, route: "#/read/bsb/proverbs/1/1" });
+  assert.deepEqual(persisted, { favorite: true, meaning: true, route: "#/read/bsb/proverbs/1/1", index: true, jobs: 0 });
   await client.screenshot(screenshotPath);
   assert.deepEqual(await client.execute("return window.__desktopE2eErrors || [];"), []);
   return targetId;
@@ -234,8 +236,18 @@ async function secondLaunch(client, targetId, screenshotPath) {
   const openedMarks = await client.execute(`const control = [...document.querySelectorAll('#detailContent .word-meaning-control')].find(node => node.dataset.targetId === ${escaped}); const button = control?.closest('.interlinear-token')?.querySelector('.study-marks-trigger'); if (!button) return false; button.click(); return true;`);
   assert.equal(openedMarks, true);
   await client.waitFor("return document.querySelector(\"#detailToolContent .tag-picker-option[aria-label='Remove Favorite tag']\")?.getAttribute('aria-pressed') === 'true';");
+  assert.deepEqual(persistedState(await readNativeStores(client), targetId), { favorite: true, meaning: true, route: "#/read/bsb/proverbs/1/1", index: true, jobs: 0 });
   await client.screenshot(screenshotPath);
   assert.deepEqual(await client.execute("return window.__desktopE2eErrors || [];"), []);
+}
+
+async function checkRetiredJobUi(client) {
+  await click(client, "#showMyData");
+  await client.waitFor("return document.querySelector('#detailTitle')?.textContent === 'My Data';");
+  await client.execute("document.querySelector('.advanced-diagnostics').open = true; return true;");
+  await client.waitFor("return Boolean(document.querySelector('.diagnostic-section')); ");
+  const absent = await client.execute("return !document.querySelector('.job-action, .job-payload, .maintenance-section') && !/Local job console|Tag jobs|Workspace jobs|Plan Review|Simulate|Requeue|Refresh Study Marks index/.test(document.querySelector('#detailContent').textContent);");
+  assert.equal(absent, true, "Retired job UI must be absent from native diagnostics");
 }
 
 const tooling = await ensureDesktopWebDriverTooling();
@@ -277,6 +289,7 @@ try {
   await client.closeSession();
   await client.createSession(BINARY);
   await secondLaunch(client, targetId, path.join(runRoot, "relaunch.png"));
+  await checkRetiredJobUi(client);
   await client.closeSession();
 } finally {
   await client.closeSession();
@@ -303,6 +316,9 @@ console.log(JSON.stringify({
   route_restored: "#/read/bsb/proverbs/1/1",
   marker_persisted: true,
   meaning_persisted: true,
+  direct_index_persisted: true,
+  new_jobs: 0,
+  retired_job_ui_absent: true,
   logs: path.relative(REPO_ROOT, logsRoot),
   screenshots: [path.relative(REPO_ROOT, path.join(runRoot, "first-launch.png")), path.relative(REPO_ROOT, path.join(runRoot, "relaunch.png"))],
 }, null, 2));

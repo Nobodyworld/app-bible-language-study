@@ -106,10 +106,11 @@ Meaning is separate from Study Marks and is stored only for exact canonical
 source-token identity.
 
 My Data is the single ordinary entry for My study data, Backup and restore, App
-settings, Local maintenance, and collapsed, lazy Advanced diagnostics. Job
-history, package state, raw storage records, capability controls, and similar
+settings and collapsed, lazy Advanced diagnostics. Package state, raw storage records, capability controls, and similar
 implementation surfaces remain diagnostic details rather than separate
-Processing or Study Data product areas.
+Processing or Study Data product areas. Local Jobs is retired in both profiles;
+legacy job history remains passive portable backup data. Study Mark indexes
+are derived directly on save and normalization.
 
 ## Data Loading
 

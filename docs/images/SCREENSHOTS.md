@@ -16,6 +16,5 @@
 - meaning.png
 - my-data.png
 - my-data-backup-restore.png
-- my-data-maintenance.png
 - mobile.png
 - mobile-dark.png

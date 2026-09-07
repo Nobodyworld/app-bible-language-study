@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { resolveReferencePreviewPlacement } from "../app/src/reference-preview-placement.js";
 
-const [index, css, portraitCss, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, jobsView, languageStudyTooltipTest, readerNavigation] = await Promise.all([
+const [index, css, portraitCss, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, languageStudyTooltipTest, readerNavigation] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
   readFile(new URL("../app/styles.css", import.meta.url), "utf8"),
   readFile(new URL("../app/styles-portrait.css", import.meta.url), "utf8"),
@@ -19,7 +19,6 @@ const [index, css, portraitCss, contextCss, stylesPolish, app, dom, pickerFlow, 
   readFile(new URL("../app/src/views/interlinear-translation-view.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/views/user-data-view.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/detail-views.js", import.meta.url), "utf8"),
-  readFile(new URL("../app/src/views/jobs-view.js", import.meta.url), "utf8"),
   readFile(new URL("../app/scripts/language-study-tooltip-interaction-test.mjs", import.meta.url), "utf8"),
   readFile(new URL("../app/src/reader-navigation.js", import.meta.url), "utf8"),
 ]);
@@ -64,15 +63,12 @@ assert(
 assert(
   /diagnostics\.className = "advanced-diagnostics"/.test(userDataView) &&
     /if \(profile\?\.isLab\) \{[\s\S]*?diagnostics\.open\s*=\s*true/.test(userDataView) &&
-    /renderJobsDiagnostics/.test(userDataView) &&
-    /payload\.textContent = JSON\.stringify/.test(jobsView),
-  "Technical job controls must be text-only, collapsed by default in Stable, and expanded only in Lab.",
+    !/renderJobsDiagnostics|Local job console/.test(userDataView),
+  "Diagnostics must retain profile behavior without Local Jobs.",
 );
 assert(
-  /Refresh Study Marks index/.test(userDataView) &&
-    !/\bSync\b/.test(userDataView) &&
-    /does not change personal study data/.test(userDataView),
-  "Local maintenance must use plain-language Refresh wording and explain data impact.",
+  !/Refresh Study Marks index|requestTagIndexRefresh/.test(userDataView),
+  "The retired job-backed maintenance action must be absent.",
 );
 
 assert(/html\s*{\s*overflow-x:\s*clip;/.test(css), "The document must not create a sticky-breaking horizontal overflow container.");

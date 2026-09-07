@@ -13,7 +13,7 @@ import { FEATURE_PROFILES } from "../app/src/feature-profiles.js";
 const requiredIds = [
   "reader", "translations", "language-study", "strongs", "study-marks", "meaning", "my-data",
   "search", "commentary", "cross-references", "parallel-translations", "outlines",
-  "physical-pack-management", "local-jobs", "capability-controls", "advanced-diagnostics",
+  "physical-pack-management", "capability-controls", "advanced-diagnostics",
   "interpretation-polls",
 ];
 

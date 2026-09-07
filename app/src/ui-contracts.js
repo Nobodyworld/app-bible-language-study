@@ -14,7 +14,6 @@ export const DETAIL_VIEW_IDS = Object.freeze({
   favorites: "favorites",
   footnote: "footnote",
   languageStudy: "language-study",
-  localProcessing: "local-processing",
   meaning: "meaning",
   myData: "my-data",
   outline: "outline",

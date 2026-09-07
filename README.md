@@ -94,11 +94,11 @@ defects were resolved under issues #39, #40, and #42.
 - Personal Meaning is separate from Study Marks and applies only to exact
   canonical source-token identity.
 - One My Data surface organized as My study data, Backup and restore, App
-  settings, Local maintenance, and Advanced diagnostics. Advanced diagnostics
+  settings and Advanced diagnostics. Advanced diagnostics
   is collapsed and lazy by default.
 
 Study Marks and personal Meaning remain separate user tools. My Data keeps raw
-job, package, storage, and capability controls out of the ordinary reader path.
+package, storage, and capability controls out of the ordinary reader path.
 Portable exports retain kind `bibleapp:user-data` and version `3`, including
 sparse legacy compatibility, recovery backups before replacement, and
 all-or-nothing rejection of malformed imports. Browser-local data is not an
@@ -172,7 +172,6 @@ technical, while the product surface they show is Language Study.
 
 - [My study data summary](docs/images/my-data.png)
 - [Backup and restore controls](docs/images/my-data-backup-restore.png)
-- [Completed local maintenance](docs/images/my-data-maintenance.png)
 
 ## Run Locally
 

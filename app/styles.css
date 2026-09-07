@@ -4022,78 +4022,6 @@ button.target-tag-badge:focus-visible {
   color: #8f3030;
 }
 
-.job-summary {
-  color: var(--muted);
-  font-size: 13px;
-}
-
-.job-entry {
-  display: grid;
-  gap: 6px;
-}
-
-.job-entry-top {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-}
-
-.job-type {
-  color: var(--accent-dark);
-  font-size: 13px;
-  font-weight: 800;
-}
-
-.job-status {
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  padding: 2px 7px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  text-transform: uppercase;
-}
-
-.job-status.planned {
-  border-color: #8c7a3e;
-  color: #735f1e;
-}
-
-.job-status.queued {
-  border-color: #7397a0;
-  color: #315c66;
-}
-
-.job-status.simulation_only {
-  border-color: var(--accent);
-  color: var(--accent-dark);
-}
-
-.job-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  justify-content: flex-end;
-}
-
-.job-payload {
-  max-height: 110px;
-  margin: 0;
-  overflow: auto;
-  color: var(--text);
-  font-family: "Cascadia Mono", "Consolas", monospace;
-  font-size: 12px;
-  line-height: 1.45;
-  white-space: pre-wrap;
-  overflow-wrap: anywhere;
-}
-
-.job-result {
-  border-left: 3px solid var(--accent);
-  padding-left: 8px;
-}
-
 .user-data-panel {
   display: grid;
   gap: 16px;
@@ -4254,7 +4182,6 @@ button.user-data-summary-item {
 }
 
 .inline-status,
-.maintenance-status,
 .import-status {
   min-height: 1.3em;
   margin: 0;
@@ -4263,7 +4190,6 @@ button.user-data-summary-item {
   line-height: 1.4;
 }
 
-.maintenance-status.error,
 .import-status.error {
   color: #8f3030;
 }
@@ -4272,7 +4198,6 @@ button.user-data-summary-item {
   color: var(--accent-dark);
 }
 
-:root[data-theme="dark"] .maintenance-status.error,
 :root[data-theme="dark"] .import-status.error {
   color: #ffaaaa;
 }

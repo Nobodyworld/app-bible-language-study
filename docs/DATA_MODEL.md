@@ -122,7 +122,7 @@ maintained scenario source is `app/data/physical-pack-scenarios.json`.
 
 User-created study state is separate from bundled canonical data. Favorites,
 tags, assertions, poll responses, package operations, legacy verse drafts,
-personal token renderings, and local job events live in the selected platform's
+personal token renderings, and passive legacy job events live in the selected platform's
 profile storage and can be exported as portable JSON.
 
 ### Profile storage authority
@@ -176,7 +176,7 @@ counted, importable, exportable, merge/replace-compatible, and separate from
 personal meanings. Existing `bibleapp:user-data` exports remain compatible,
 including exports with legacy token-rendering records or verse drafts.
 
-### My Data backup and maintenance contract
+### My Data backup and compatibility contract
 
 The My Data surface reports user-owned records before implementation history:
 custom labels, tagged verses, Study Mark assertions, active Study Marks,
@@ -191,9 +191,6 @@ overwriting current stores. Import normalization and compatibility checks occur
 before mutation; malformed, foreign, or unsupported future-version payloads do
 not partially change current stores.
 
-`tag-index-refresh` rebuilds a disposable Study Marks projection from canonical
-local assertions. The ordinary maintenance action does not edit assertions or
-other personal study data. Job history, package state, raw payloads/results,
-storage authority and migrations, quarantined records, and capability controls
-remain diagnostics. No part of this contract adds cloud backup, accounts,
-cross-device synchronization, remote package checks, or network calls.
+Study Mark saves and normalization derive `verse_tags` and `tag_target_index` directly from canonical assertions. Local Jobs and the job-backed index-refresh action are retired in Stable and Lab. No Study Mark, custom-label, Inquiry, Meaning, legacy draft, or red-letter save creates or executes jobs.
+
+Version-3 backups retain valid legacy job histories, payloads, results, and historical metadata passively in the tag and workspace stores. Merge deduplicates by ID (incoming wins) without truncating history; replace preserves the incoming history and creates a recovery backup. Saving study data does not mutate historical results. Package state, storage authority, quarantined records, and capability controls remain diagnostics.

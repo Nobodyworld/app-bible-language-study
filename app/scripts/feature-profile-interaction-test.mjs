@@ -3,6 +3,11 @@
 import { existsSync } from "node:fs";
 import { chromium } from "playwright-core";
 import { startStaticAppServer } from "../tools/serve-app.mjs";
+import { mkdir } from "node:fs/promises";
+import path from "node:path";
+import * as stores from "../src/stores.js";
+import { createMemoryUserStorageAdapter } from "../src/platform/browser-user-storage.js";
+import { createSourceTokenTarget, createVerseTarget } from "../src/semantic-targets.js";
 
 const edgePath = "C:\\Program Files (x86)\\Microsoft\\Edge\\Application\\msedge.exe";
 if (!existsSync(edgePath)) throw new Error(`Microsoft Edge was not found at ${edgePath}`);
@@ -70,6 +75,68 @@ function captureHealth(page, bucket) {
   page.on("response", (response) => {
     if (response.status() >= 400 && response.url().includes("/app/")) bucket.httpErrors.push(`${response.status()} ${response.url()}`);
   });
+}
+
+async function exerciseRetirement(browser, url, profile) {
+  stores.configureUserStorageAdapter(createMemoryUserStorageAdapter());
+  const fixtureState = {};
+  const token = createSourceTokenTarget("psalms:23:1", { token_index: 1, strong_code: "H3068", original: "יהוה" });
+  stores.setTagAssertion(fixtureState, createVerseTarget("psalms:23:1"), "favorite", true);
+  stores.setTagAssertion(fixtureState, token, "inquiry", true, { note: "Preserved inquiry" });
+  stores.setTokenRendering(fixtureState, token, "Preserved meaning");
+  stores.setVerseDraft(fixtureState, "psalms:23:1", "Preserved legacy draft");
+  const fixture = stores.createUserDataExport(fixtureState);
+  const history = [{ id: "legacy:queued", type: "inquiry-analysis", state: "queued", payload: { note: "historical" }, result: { findings: ["historical result"] } }];
+  fixture.stores.tags.job_events = history;
+  fixture.stores.workspace.job_events = history;
+  const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
+  const page = await context.newPage();
+  const health = { consoleErrors: [], pageErrors: [], failedRequests: [], httpErrors: [] };
+  captureHealth(page, health);
+  try {
+    await page.goto(`${url}/${profile === "lab" ? "?profile=lab" : ""}#/read/bsb/psalms/23`, { waitUntil: "load" });
+    await waitForReader(page);
+    assert((await page.title()).length > 0, "Reader must have a title");
+    await openMyData(page);
+    for (const mode of ["merge", "replace"]) {
+      if (mode === "merge") await mergePayload(page, fixture);
+      else {
+        await page.evaluate((value) => { document.querySelector(".import-textarea").value = JSON.stringify(value); }, fixture);
+        await page.getByRole("button", { name: "Replace all local data", exact: true }).click();
+        await page.locator(".replace-confirmation button.danger-button").click();
+        await page.waitForFunction(() => document.querySelector(".import-status")?.textContent.includes("Backup replaced"));
+      }
+      await page.reload({ waitUntil: "load" });
+      await waitForReader(page);
+      await openMyData(page);
+      const backup = await readExport(page);
+      for (const section of ["tags", "workspace"]) {
+        const jobs = backup.stores[section].job_events;
+        assert(jobs.length === 1 && jobs[0].state === "queued", `${profile}/${mode}: history executed or extra jobs created`);
+        assert(JSON.stringify(jobs[0].payload) === JSON.stringify(history[0].payload) && JSON.stringify(jobs[0].result) === JSON.stringify(history[0].result), `${profile}/${mode}: historical payload/result changed`);
+      }
+      assert(backup.stores.tags.tag_target_index["tag:inquiry"].includes(token.target_id), "Direct index must survive reload");
+      assert(Object.values(backup.stores.tags.tag_assertions).some((record) => record.note === "Preserved inquiry"), "Inquiry note must survive reload");
+      assert(backup.stores.workspace.token_renderings["psalms:23:1"][1].rendering === "Preserved meaning", "Meaning must survive reload");
+      await page.evaluate(() => { document.querySelector(".advanced-diagnostics").open = true; });
+      await page.waitForSelector(".diagnostic-section");
+      assert(await page.evaluate(() => !document.querySelector(".job-action, .job-payload, .maintenance-section") && !/Local job console|Tag jobs|Workspace jobs|Plan Review|Simulate|Requeue|Refresh Study Marks index/.test(document.querySelector("#detailContent").textContent)), `${profile}: retired job UI remains`);
+      // Invalid history must not alter the already persisted data or create a recovery snapshot.
+      await page.evaluate(() => { document.querySelector(".import-textarea").value = JSON.stringify({ kind: "bibleapp:user-data", version: 3, stores: { tags: { job_events: {} } } }); });
+      await page.getByRole("button", { name: "Merge backup" }).click();
+      await page.waitForSelector(".import-status.error");
+      assert(JSON.stringify((await readExport(page)).stores) === JSON.stringify(backup.stores), "Malformed UI import changed data");
+    }
+    if (process.env.BIBLEAPP_RETIREMENT_SCREENSHOT_DIR) {
+      await mkdir(process.env.BIBLEAPP_RETIREMENT_SCREENSHOT_DIR, { recursive: true });
+      await page.locator(".advanced-diagnostics").scrollIntoViewIfNeeded();
+      await page.screenshot({ path: path.join(process.env.BIBLEAPP_RETIREMENT_SCREENSHOT_DIR, `${profile}-retirement.png`) });
+    }
+    assert(Object.values(health).every((items) => items.length === 0), `${profile}: browser health failed: ${JSON.stringify(health)}`);
+    return `${profile}: retired UI absent; merge/replace history, Inquiry, Meaning and direct indexes preserved after reload`;
+  } finally {
+    await context.close();
+  }
 }
 
 async function exercisePhysicalCacheIsolation(page) {
@@ -210,6 +277,7 @@ const browser = await chromium.launch({
 });
 
 try {
+  for (const profile of ["stable", "lab"]) pass(await exerciseRetirement(browser, url, profile));
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 } });
   const page = await context.newPage();
   const health = { consoleErrors: [], pageErrors: [], failedRequests: [], httpErrors: [] };
