@@ -15,10 +15,11 @@ const appRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const fixtureRoot = join(appRoot, "data", "physical-pack-fixtures");
 const check = process.argv.includes("--check");
 const candidateSha = "afdd22a57d8c8cca874947b97ac021e588867e68";
+const packageManifest = JSON.parse(await readFile(join(appRoot, "data", "package-manifest.json"), "utf8"));
 const packageIdentity = {
   schema_version: 1,
   package_id: "reader-texts",
-  content_sha256: "sha256:910de6211e387d2f2179e917031b4fe578ac078be7a870d471b9b3d422d11451",
+  content_sha256: packageManifest.packages.find((item) => item.id === "reader-texts").sha256,
 };
 const compatibility = {
   minimum_app_version: "1.0.0",
