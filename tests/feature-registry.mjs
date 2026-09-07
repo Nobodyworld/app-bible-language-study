@@ -21,6 +21,16 @@ assert.deepEqual([...new Set(FEATURE_REGISTRY.map((feature) => feature.id))].sor
 assert.deepEqual(FEATURE_LIFECYCLES, ["core", "stable", "lab", "frozen", "compatibility_only"]);
 assert.deepEqual(validateFeatureRegistry(FEATURE_REGISTRY, FEATURE_PROFILES), []);
 assert.equal(assertValidFeatureRegistry(FEATURE_REGISTRY, FEATURE_PROFILES), FEATURE_REGISTRY);
+const capabilityControls = FEATURE_REGISTRY.find(({ id }) => id === "capability-controls");
+assert.deepEqual(capabilityControls.defaultProfiles, ["lab"], "Capability controls belong only to Lab");
+assert.equal(capabilityControls.unavailableBehavior, "hide");
+assert.deepEqual(capabilityControls.storageNamespaces, ["packages"], "Existing package state remains owned and portable");
+assert.equal(capabilityControls.portableUserData, true);
+assert.deepEqual(
+  FEATURE_REGISTRY.find(({ id }) => id === "advanced-diagnostics").dependencies,
+  ["my-data"],
+  "Recovery information must remain available independently of optional technical managers",
+);
 
 const fixture = (values = {}) => ({
   id: "fixture",

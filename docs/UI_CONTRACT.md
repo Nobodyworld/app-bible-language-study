@@ -24,15 +24,20 @@ files, static-data reads, notifications, and physical bytes.
 ## Stable and Lab
 
 Stable is the default and does not show a profile badge. Its Advanced
-diagnostics element stays collapsed and retains physical-pack recovery,
-and capability access without creating another ordinary destination. Local Jobs routes, counts,
+diagnostics element stays collapsed and renders lazily. It retains storage
+authority, migration and failure messages, quarantine and recovery-backup
+counts, and physical-pack recovery. Capability Disable/Restore controls,
+package-operation and logical installed-pack counts, assertion-event counts,
+and duplicate storage summary tiles are absent. Local Jobs routes, counts,
 execution controls, and the job-backed index-refresh action are absent in both profiles.
 
 In the browser, Lab is selected with `?profile=lab` before the hash route. The
 supported Tauri Lab command selects Lab natively while loading the same shared
 frontend. It shows a compact `Lab · isolated local data` badge and a My Data
-isolation warning. Advanced diagnostics is expanded so the complete
-experimental controls are available against Lab-only state. Controls are not
+isolation warning. Advanced diagnostics is expanded so the complete technical
+summary and capability Disable/Restore controls are available against Lab-only
+state. Capability resolution and historical disabled preferences remain shared
+contracts; opening Stable diagnostics never resets those preferences. Controls are not
 duplicated between profiles.
 
 Unknown profile values resolve to Stable, set the testable

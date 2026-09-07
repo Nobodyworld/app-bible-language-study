@@ -33,11 +33,15 @@ from Core, ordinary compatibility-only UI, and missing test ownership.
 
 `app/src/feature-profiles.js` deterministically resolves Stable and Lab. Stable
 is the default and exposes Core/Stable features ordinarily while retaining
-frozen/Lab diagnostics as collapsed recovery access. In the browser, Lab is
+collapsed recovery diagnostics. Stable does not render the capability manager
+or implementation-only summary counts. The `capability-controls` feature is
+hidden in Stable, and `advanced-diagnostics` depends on My Data independently
+of that technical feature. In the browser, Lab is
 explicit through `?profile=lab`. In Tauri, the supported Lab command selects a
 native `lab-profile` build feature and the native environment supplies the only
 desktop profile authority. Lab includes Core and Stable and exposes the
-experimental controls against isolated state. Unknown browser profile values
+complete technical summary and capability Disable/Restore controls against
+isolated state, with Advanced diagnostics open by default. Unknown browser profile values
 fall back to Stable with a testable diagnostic. Interpretation polls remain
 compatibility-only with no response mutation/event-generation API or ordinary/diagnostic UI.
 Only passive normalization and local aggregate rebuilding remain in
@@ -111,9 +115,13 @@ Meaning is separate from Study Marks and is stored only for exact canonical
 source-token identity.
 
 My Data is the single ordinary entry for My study data, Backup and restore, App
-settings and collapsed, lazy Advanced diagnostics. Package state, raw storage records, capability controls, and similar
-implementation surfaces remain diagnostic details rather than separate
-Processing or Study Data product areas. Local Jobs is retired in both profiles;
+settings and Advanced diagnostics. Stable diagnostics stays collapsed and lazy,
+retaining storage authority, migration and failure messages, quarantined-record
+and recovery-backup counts, and physical-pack recovery. Lab additionally renders
+the complete technical summary and capability manager. This is a presentation
+boundary: capability resolution, structured unavailable states, package state,
+and historical `disabled_capability_ids` retain their existing behavior and
+version-3 backup compatibility. Local Jobs is retired in both profiles;
 legacy job history remains passive portable backup data. Study Mark indexes
 are derived directly on save and normalization.
 

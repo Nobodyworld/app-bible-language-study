@@ -3,6 +3,7 @@
 import { readFile } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import assertStrict from "node:assert/strict";
 import {
   applyFeaturePackRemoval,
   applyPackageInstall,
@@ -12,7 +13,8 @@ import {
   setCapabilityDisabled,
 } from "../src/package-state.js";
 import { CAPABILITY_STATES, resolveCapability } from "../src/capabilities.js";
-import { createUserDataExport, ensureStores, importUserData, setPackageStore } from "../src/stores.js";
+import { configureUserStorageAdapter, createUserDataExport, ensureStores, importUserData, setPackageStore } from "../src/stores.js";
+import { createMemoryUserStorageAdapter } from "../src/platform/browser-user-storage.js";
 
 const appRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 const dataRoot = join(appRoot, "data");
@@ -26,6 +28,7 @@ async function readJson(relativePath) {
 }
 
 async function main() {
+  configureUserStorageAdapter(createMemoryUserStorageAdapter());
   const manifest = await readJson("package-manifest.json");
 
   let packageStore = createDefaultPackageStore();
@@ -101,6 +104,42 @@ async function main() {
   assert(importedSummary.package_operations === 4, "package operations missing after import");
   assert(importedSummary.installed_feature_packs === 0, "replace import should preserve cascade-removed package state");
 
+  const historicalState = {};
+  ensureStores(historicalState);
+  const historicalPackages = {
+    ...disabledCommentary.store,
+    disabled_capability_ids: ["commentary", "historical-unknown-capability"],
+    extension: { source: "historical-backup" },
+  };
+  setPackageStore(historicalState, historicalPackages);
+  const historicalExport = createUserDataExport(historicalState);
+  assert(historicalExport.version === 3, "Capability state must remain in version-3 backups");
+  assertStrict.deepEqual(historicalExport.stores.packages, historicalPackages, "Export must preserve historical disabled IDs, package state and extensions");
+
+  configureUserStorageAdapter(createMemoryUserStorageAdapter());
+  const replacedHistorical = {};
+  const historicalSummary = importUserData(replacedHistorical, historicalExport, "replace");
+  assert(historicalSummary.last_import_backup?.reason === "before-replace-import", "Historical package replacement must retain recovery backup behavior");
+  assertStrict.deepEqual(createUserDataExport(replacedHistorical).stores.packages, historicalPackages);
+  const reloadedHistorical = {};
+  ensureStores(reloadedHistorical);
+  assertStrict.deepEqual(reloadedHistorical.packageStore, historicalPackages, "Historical disabled IDs and package state must survive storage reload");
+  assert(resolveCapability(manifest, reloadedHistorical.packageStore, "commentary").state === CAPABILITY_STATES.disabled, "Preserved IDs must still affect capability resolution");
+
+  const mergePayload = structuredClone(historicalExport);
+  mergePayload.stores.packages.disabled_capability_ids = ["search"];
+  importUserData(reloadedHistorical, mergePayload, "merge");
+  assertStrict.deepEqual(reloadedHistorical.packageStore.disabled_capability_ids, historicalPackages.disabled_capability_ids, "Merge must retain existing local capability preferences rather than adopt incoming preferences");
+  assertStrict.deepEqual(createUserDataExport({}).stores.packages, historicalPackages, "Merge/export/reload must preserve package state and historical disabled IDs");
+
+  const beforeRestore = createUserDataExport(reloadedHistorical);
+  const restoredHistorical = setCapabilityDisabled(manifest, reloadedHistorical.packageStore, "commentary", false);
+  assertStrict.deepEqual(restoredHistorical.store.disabled_capability_ids, ["historical-unknown-capability"], "Restoring one known capability must not discard unknown historical IDs");
+  assertStrict.deepEqual(restoredHistorical.store.installed_feature_pack_ids, historicalPackages.installed_feature_pack_ids);
+  setPackageStore(reloadedHistorical, restoredHistorical.store);
+  const afterRestore = createUserDataExport(reloadedHistorical);
+  for (const name of ["tags", "workspace", "assertions", "polls"]) assertStrict.deepEqual(afterRestore.stores[name], beforeRestore.stores[name], `Capability restoration must preserve ${name}`);
+
   console.log(
     JSON.stringify(
       {
@@ -110,6 +149,7 @@ async function main() {
         cascadeRemoved: cascadeRemoval.plan.removed_feature_pack_ids,
         fullStudyInstalledPacks: summary.installed_feature_packs,
         exportedPackageOperations: exported.stores.packages.operations.length,
+        historicalCapabilityPreferences: "replace/merge/export/reload and selective restoration preserved",
         importedSummary,
       },
       null,

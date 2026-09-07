@@ -44,8 +44,12 @@ complete and does not authorize a release or tag.
 - [x] Meaning is separate from Study Marks and applies only to exact canonical
   source-token identity.
 - [x] Separate Processing and Study Data user-facing surfaces are retired.
-- [x] My Data contains My study data, Backup and restore, App settings, Local
-  maintenance, and collapsed, lazy Advanced diagnostics.
+- [x] My Data contains My study data, Backup and restore, App settings, and
+  Advanced diagnostics. Stable diagnostics is collapsed and lazy, preserves
+  storage/backup/quarantine and physical-pack recovery information, and omits
+  capability Disable/Restore controls and implementation-only summary counts.
+  Lab retains the complete technical summary and capability manager, open by
+  default against isolated state.
 - [x] Browser-local operation, sparse legacy compatibility, recovery backups,
   malformed-import atomicity, and the no-network boundary remain intact.
 

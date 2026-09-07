@@ -50,7 +50,9 @@ The summary prioritizes user-owned records: custom labels, tagged verses, Study 
 
 Backup download and merge/replace import preserve `bibleapp:user-data` version 3. Raw export and paste textareas are optional disclosures. Replace uses an accessible explicit confirmation, creates the existing pre-replace recovery backup, and supports Cancel/Escape without mutation. Validation happens before store mutation; malformed, foreign, or future-version data reports an error.
 
-App settings intentionally contains no package capability toggles. Theme remains in the global header. Technical capability controls, storage details, package operations, and other internal records remain usable only inside Advanced diagnostics, which is collapsed by default and renders raw values as text.
+App settings intentionally contains no package capability toggles. Theme remains in the global header. Stable Advanced diagnostics is collapsed and lazy by default. It retains storage authority, migration and failure messages, quarantined-record and recovery-backup counts, and physical-pack recovery, but does not render capability Disable/Restore controls or the technical summary's package-operation, logical installed-pack, assertion-event, and duplicate storage tiles. Raw values remain text.
+
+Lab opens Advanced diagnostics by default with the complete technical summary and capability manager, using isolated profile state. Capability resolution, structured unavailable states, historical `disabled_capability_ids`, package state, physical-pack behavior, and version-3 backups are unchanged by this presentation boundary.
 
 Local Jobs is retired in both Stable and Lab. No console, route, job counts, Run, Plan Review, Simulate, Requeue, or job-backed index refresh is exposed. Study Mark indexes derive directly on save and normalization. Valid historical jobs remain passive version-3 backup data, including payloads/results; saving marks, Inquiry notes, Meaning, and legacy drafts/red-letter ranges never queues or executes jobs.
 

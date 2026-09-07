@@ -6,6 +6,9 @@ export const FEATURE_PROFILE_IDS = Object.freeze({
 });
 
 const allFeatureIds = FEATURE_REGISTRY.map((feature) => feature.id);
+const stableFeatureIds = FEATURE_REGISTRY
+  .filter((feature) => feature.defaultProfiles.includes(FEATURE_PROFILE_IDS.stable))
+  .map((feature) => feature.id);
 const ordinaryFeatureIds = FEATURE_REGISTRY
   .filter((feature) => ["core", "stable"].includes(feature.lifecycle))
   .map((feature) => feature.id);
@@ -21,9 +24,9 @@ export const FEATURE_PROFILES = Object.freeze([
     id: FEATURE_PROFILE_IDS.stable,
     label: "Stable",
     description: "The default local-first reader and study experience.",
-    featureIds: Object.freeze([...allFeatureIds]),
+    featureIds: Object.freeze([...stableFeatureIds]),
     ordinaryFeatureIds: Object.freeze([...ordinaryFeatureIds]),
-    recoveryFeatureIds: Object.freeze([...experimentalFeatureIds]),
+    recoveryFeatureIds: Object.freeze(experimentalFeatureIds.filter((id) => stableFeatureIds.includes(id))),
     compatibilityFeatureIds: Object.freeze([...compatibilityFeatureIds]),
   }),
   Object.freeze({

@@ -2,7 +2,7 @@
 
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { CAPABILITY_REGISTRY } from "../app/src/capabilities.js";
+import { CAPABILITY_REGISTRY, CAPABILITY_STATES, capabilityMessage } from "../app/src/capabilities.js";
 import {
   chapterSwipeDirection,
   CONTROL_STATES,
@@ -27,6 +27,10 @@ assert.equal(
   resolveControlState({ capabilityAvailable: true, dataAvailable: false }).state,
   CONTROL_STATES.dataUnavailable,
 );
+const disabledMessage = capabilityMessage({ label: "Commentary", state: CAPABILITY_STATES.disabled });
+assert.match(disabledMessage, /Commentary is disabled/, "Saved disabled state must remain understandable");
+assert.match(disabledMessage, /Ordinary scripture reading remains available/);
+assert.doesNotMatch(disabledMessage, /Enable it under|My Data.*Advanced diagnostics|[Rr]estore.*[Cc]ontrol/, "Shared unavailable copy must not direct Stable to removed capability controls");
 
 assert.equal(transitionPanelMode(PANEL_MODES.follow, PANEL_EVENTS.hover), PANEL_MODES.follow);
 assert.equal(transitionPanelMode(PANEL_MODES.follow, PANEL_EVENTS.activate), PANEL_MODES.locked);
@@ -91,7 +95,7 @@ console.log(
     {
       status: "ok",
       controls_checked: Object.keys(STUDY_CONTROL_SCHEMA).length,
-      assertions: 27,
+      assertions: 30,
     },
     null,
     2,

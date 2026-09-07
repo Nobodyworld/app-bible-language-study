@@ -56,18 +56,18 @@ function renderStudyDataSummary(summary, showStudyMarks, platformKind = "browser
   return section;
 }
 
-function renderTechnicalSummary(summary) {
+function renderTechnicalSummary(summary, isLab = false) {
   const section = document.createElement("section");
   section.className = "diagnostic-section";
   const title = document.createElement("h4");
-  title.textContent = "Storage and data records";
+  title.textContent = isLab ? "Storage and data records" : "Storage and recovery";
   const health = document.createElement("p");
   health.className = "storage-health-status";
   health.textContent = `Storage authority: ${summary.user_store_authority || summary.user_store_backend}; migration: ${summary.user_store_migration}${summary.user_store_failure ? `; fallback reason: ${summary.user_store_failure}` : ""}.`;
   section.append(
     title,
     health,
-    renderSummaryGrid([
+    renderSummaryGrid(isLab ? [
       ["Package ops", summary.package_operations],
       ["Installed packs", summary.installed_feature_packs],
       ["Assertion events", summary.assertion_events],
@@ -76,6 +76,9 @@ function renderTechnicalSummary(summary) {
       ["User store", summary.user_store_backend],
       ["Authority", summary.user_store_authority],
       ["Migration", summary.user_store_migration],
+    ] : [
+      ["Quarantined assertions", summary.quarantined_assertion_records],
+      ["Import backups", summary.import_backups],
     ]),
   );
   return section;
@@ -84,6 +87,7 @@ function renderTechnicalSummary(summary) {
 function renderCapabilityManager(ctx, refresh) {
   const section = document.createElement("section");
   section.className = "diagnostic-section";
+  section.dataset.featureId = "capability-controls";
   const heading = document.createElement("h4");
   heading.textContent = "Diagnostic capability controls";
   const warning = document.createElement("p");
@@ -109,6 +113,7 @@ function renderCapabilityManager(ctx, refresh) {
   Object.values(capabilities).forEach((capability) => {
     const row = document.createElement("div");
     row.className = "tag-manager-item";
+    row.dataset.capabilityId = capability.capability_id;
     const label = document.createElement("span");
     label.textContent = `${capability.label || capability.capability_id}: ${capability.state}`;
     const action = document.createElement("button");
@@ -387,7 +392,9 @@ export function createUserDataView(ctx, options = {}) {
     const settingsTitle = document.createElement("h4");
     settingsTitle.textContent = "App settings";
     const settingsText = document.createElement("p");
-    settingsText.textContent = "Theme remains available in the global header. Technical feature controls are under Advanced diagnostics.";
+    settingsText.textContent = profile?.isLab
+      ? "Theme remains available in the global header. Technical feature controls are under Advanced diagnostics."
+      : "Theme remains available in the global header. Storage status and recovery information are under Advanced diagnostics.";
     settingsSection.append(settingsTitle, settingsText);
     wrap.append(settingsSection);
 
@@ -399,11 +406,11 @@ export function createUserDataView(ctx, options = {}) {
     const diagnosticsIntro = document.createElement("p");
     diagnosticsIntro.textContent = profile?.isLab
       ? "Lab exposes the complete experimental browser storage, physical-pack, and capability controls against isolated Lab state."
-      : "Inspect browser storage and package capabilities for compatibility and recovery.";
+      : "Check browser storage status, recovery records, and physical data packs.";
     if (ctx.platform?.kind === "tauri-windows") {
       diagnosticsIntro.textContent = profile?.isLab
-        ? "Lab exposes isolated native user storage and bundled-data diagnostics. Native physical-pack management is deferred to issue #81."
-        : "Inspect native user storage and bundled-data capabilities for compatibility and recovery.";
+        ? "Lab exposes isolated native user storage, bundled-data diagnostics, and capability controls. Native physical-pack management is deferred to issue #81."
+        : "Check installed-app storage status, recovery records, and bundled data.";
     }
     const projectSource = document.createElement("a");
     projectSource.href = "https://github.com/Nobodyworld/app-bible-language-study";
@@ -413,9 +420,9 @@ export function createUserDataView(ctx, options = {}) {
     const diagnosticsSlot = document.createElement("div");
     const refreshDiagnostics = () => {
       const summary = getUserDataSummary(ctx.state);
-      const sections = [renderTechnicalSummary(summary)];
+      const sections = [renderTechnicalSummary(summary, profile?.isLab)];
       if (ctx.isFeatureEnabled?.("physical-pack-management") !== false) sections.push(renderPhysicalPackManager(ctx));
-      if (ctx.isFeatureEnabled?.("capability-controls") !== false) sections.push(renderCapabilityManager(ctx, refreshDiagnostics));
+      if (profile?.isLab && ctx.isFeatureEnabled?.("capability-controls") !== false) sections.push(renderCapabilityManager(ctx, refreshDiagnostics));
       diagnosticsSlot.replaceChildren(...sections);
     };
     diagnostics.addEventListener("toggle", () => {
