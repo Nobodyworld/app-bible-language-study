@@ -23,8 +23,9 @@ The default Stable profile preserves the existing experience and storage
 identities. In a browser, an explicit local Lab profile uses `?profile=lab`
 before the hash route. The supported desktop Lab command selects the same
 profile through a native build feature so the frontend cannot redirect native
-storage to another profile. Lab enables complete experimental diagnostics with
-isolated personal-data, notification, physical-registry, and physical-byte
+storage to another profile. Lab opens complete technical diagnostics, including
+capability Disable/Restore controls, by default with isolated personal-data,
+notification, physical-registry, and physical-byte
 namespaces. Both profiles remain static, local-first, offline-capable products
 and use the same portable `bibleapp:user-data` version-3 contract.
 
@@ -94,11 +95,12 @@ defects were resolved under issues #39, #40, and #42.
 - Personal Meaning is separate from Study Marks and applies only to exact
   canonical source-token identity.
 - One My Data surface organized as My study data, Backup and restore, App
-  settings and Advanced diagnostics. Advanced diagnostics
-  is collapsed and lazy by default.
+  settings and Advanced diagnostics. Stable diagnostics is collapsed and lazy
+  by default, with storage status, recovery information, and physical-pack recovery.
 
-Study Marks and personal Meaning remain separate user tools. My Data keeps raw
-package, storage, and capability controls out of the ordinary reader path.
+Study Marks and personal Meaning remain separate user tools. Stable My Data
+does not expose capability Disable/Restore controls or technical summary counts.
+The complete capability manager and technical summary remain available in Lab.
 Portable exports retain kind `bibleapp:user-data` and version `3`, including
 sparse legacy compatibility, recovery backups before replacement, and
 all-or-nothing rejection of malformed imports. Browser-local data is not an

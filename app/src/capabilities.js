@@ -254,7 +254,7 @@ export function capabilityMessage(capability) {
   const label = capability?.label || capability?.capability_id || "This feature";
   const pack = capability?.missing_packs?.[0];
   const readerSafe = " Ordinary scripture reading remains available.";
-  if (capability?.state === CAPABILITY_STATES.disabled) return `${label} is disabled. Enable it under My Data → Advanced diagnostics.${readerSafe}`;
+  if (capability?.state === CAPABILITY_STATES.disabled) return `${label} is disabled in this profile's saved package state.${readerSafe}`;
   if (capability?.state === CAPABILITY_STATES.notInstalled) return `${label} requires the ${pack || "managed"} pack. Install it or return to bundled data.${readerSafe}`;
   if (capability?.state === CAPABILITY_STATES.dependencyMissing) {
     return `${label} is unavailable because required dependency packs are missing or disabled. Install or enable the dependency.${readerSafe}`;

@@ -216,4 +216,11 @@ not partially change current stores.
 
 Study Mark saves and normalization derive `verse_tags` and `tag_target_index` directly from canonical assertions. Local Jobs and the job-backed index-refresh action are retired in Stable and Lab. No Study Mark, custom-label, Inquiry, Meaning, legacy draft, or red-letter save creates or executes jobs.
 
-Version-3 backups retain valid legacy job histories, payloads, results, and historical metadata passively in the tag and workspace stores. Merge deduplicates by ID (incoming wins) without truncating history; replace preserves the incoming history and creates a recovery backup. Saving study data does not mutate historical results. Package state, storage authority, quarantined records, and capability controls remain diagnostics.
+Version-3 backups retain valid legacy job histories, payloads, results, and historical metadata passively in the tag and workspace stores. Merge deduplicates by ID (incoming wins) without truncating history; replace preserves the incoming history and creates a recovery backup. Saving study data does not mutate historical results.
+
+Stable diagnostics retains storage authority, migration/failure information,
+quarantined-record and recovery-backup counts, and physical-pack recovery.
+Capability controls and the complete technical summary are confined to Lab.
+This UI boundary does not change package state or historical
+`disabled_capability_ids`: both profiles preserve these records through the
+existing version-3 normalization, import/export, and recovery paths.

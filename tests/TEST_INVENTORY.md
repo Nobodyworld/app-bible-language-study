@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-09-05
+Reviewed: 2026-09-07
 
 ## Authority
 
@@ -75,8 +75,8 @@ order:
 | `tests/integrity.mjs` | Tracked package, manifest, path, and bundled-data integrity. |
 | `tests/serve-app.mjs` | Static server behavior and application delivery boundaries. |
 | `tests/run.mjs` | Core runtime-data and application-source contracts. |
-| `tests/feature-registry.mjs` | Complete static feature inventory, lifecycle values, dependencies, ownership, profile closure, test ownership, and actionable invalid-fixture diagnostics. |
-| `tests/feature-profiles.mjs` | Deterministic Stable/Lab resolution, recovery/compatibility access, unknown fallback, disabled-feature closure, unchanged Stable identities, and isolated Lab identities. |
+| `tests/feature-registry.mjs` | Complete static feature inventory, lifecycle values, dependencies, ownership, profile closure, Lab-only capability controls independent from recovery diagnostics, test ownership, and actionable invalid-fixture diagnostics. |
+| `tests/feature-profiles.mjs` | Deterministic Stable/Lab resolution, hidden Stable and unknown-profile capability controls, retained independent recovery/compatibility access, disabled-feature closure, unchanged Stable identities, and isolated Lab identities. |
 | `tests/platform-contracts.mjs` | Platform shape, user-storage isolation, profile-scoped notifications, browser file/data operations, digest/source/estimate services, profile-scoped physical registry identity, and explicit byte-store operations. |
 | `tests/desktop-config-contracts.mjs` | Tauri Stable/Lab internal-index, startup-feature, window-parity, genuine-zoom, dev-staging, and capability configuration contracts. |
 | `tests/desktop-platform-contracts.mjs` | Tauri bridge selection, native-selected profile-scoped storage, failure and recovery safety, native dialog contracts, packaged-data restrictions, bundled-only physical services, and close-time persistence without requiring Rust or Windows compilation. |
@@ -84,7 +84,7 @@ order:
 | `tests/analysis.mjs` | Generated analysis data and manifest contracts. |
 | `tests/interlinear.mjs` | Internal interlinear records, token resolution, marked Greek glyphs, and Hebrew analysis behavior. |
 | `tests/strong-reference-control.mjs` | Structured Strong's reference resolution and plain-text fallback. |
-| `tests/ui-contracts.mjs` | Control schema, availability, scopes, and panel transitions. |
+| `tests/ui-contracts.mjs` | Control schema, availability, scopes, panel transitions, and shared unavailable copy that does not direct Stable to retired capability controls. |
 | `tests/panel-context-model.mjs` | Compact `Word → Verse` ordering, tool ownership, labels, and responsive contracts. |
 | `tests/study-workspace-width.mjs` | Exact width modes/default, normalization, malformed and throwing storage, isolated preference key, follow/locked separation, and pressed-state synchronization. |
 | `tests/study-workspace-contracts.mjs` | Width-control DOM, responsive clamps, independent scrolling, semantic anchoring, contained tool surface, explicit Study Marks/Meaning presentations, lifecycle cleanup, and reduced motion. |
@@ -114,7 +114,7 @@ manifest through `app/tools/refresh-package-inventory.mjs --check`.
 |---|---|
 | `app/scripts/local-jobs-retirement-test.mjs` | No automatic job production; direct indexes; passive legacy backup preservation and recovery. |
 | `app/scripts/package-planner-test.mjs` | Current package dependencies, install/removal plans, and summaries. |
-| `app/scripts/package-state-test.mjs` | Bundled/managed package modes, capability toggles, operations, and import/export. |
+| `app/scripts/package-state-test.mjs` | Bundled/managed package modes, capability toggles, operations, import/export, and preservation of historical disabled capability preferences. |
 | `app/scripts/physical-pack-contract-test.mjs` | Default bundled distribution, catalog/manifest schemas, canonical path rejection, deterministic aggregate framing, immutable cache naming, exact Stable/Lab cache-ownership grammar, physical registry activation criteria, distribution-scoped managed authority, and full semantic-version minimum/exclusive-maximum/prerelease ordering. |
 | `app/scripts/physical-pack-lifecycle-test.mjs` | Independent registry; mutation-free plans; quota estimates; fresh and persisted catalog schema/package/version/URL authority; recovery after catalog rejection; persisted active/rollback manifest schema, package, semantic-version, inventory, aggregate, and exact-byte verification; compatible/incompatible active and rollback combinations; bundled and strict incompatible behavior; update state coexisting with rollback through reload, Verify, rollback, and update; interrupted staging/removal; shared Stable/Lab orphan cleanup and startup isolation; and removal fallback. |
 | `app/scripts/poll-response-test.mjs` | Retired mutation API/seed/UI absence; catalog-free historical responses, tombstones, schema and sparse defaults; 605-event preservation, incoming-wins merge, extensions, reload and recovery. |
@@ -141,7 +141,7 @@ entry.
 | `app/scripts/word-meaning-focus-test.mjs` | Desktop and mobile | Contained Meaning and Study Marks overlay coordination, exact-target save/remove, data-neutral dismissal, lifecycle cleanup, and focus restoration. |
 | `app/scripts/study-workspace-interaction-test.mjs` | Desktop, intermediate, mobile, light/dark, forced colors, and reduced motion | Width switching/persistence/storage failure, semantic reader anchors, independent scroll ownership, contained tools, lifecycle/history/selection preservation, Clear behavior with browser-owned Reader navigation availability, responsive header container bands at 320px and 420px, exact 773px title containment, 280–760px Study-panel sweeps, per-word geometry, focus order/clipping, responsive bounds, and browser-error/overflow checks. |
 | `app/scripts/physical-pack-interaction-test.mjs` | Edge desktop, portrait, narrow, mobile-width, mobile-device, light/dark, and reduced motion | Distribution-aware fallback and strict `incompatible_version`; real persisted incompatible active records; compatible rollback recovery; simultaneous update/rollback state and actions after reload; update and rollback context preservation; storage plans; plan/cancel; install/offline reads; delayed `startup_verifying` live transition; action suppression; mounted-node-only updates; corruption/repair; invalid rollback loss; removal fallback; exact reader/detail context; containment; and zero console/page/request/HTTP errors. |
-| `app/scripts/feature-profile-interaction-test.mjs` | Edge desktop plus deterministic disabled-feature viewport | Stable default/UI/Search/recovery access; Lab identity, expanded diagnostics, separate user/notification/physical namespaces, shared-origin Cache Storage cleanup/startup isolation, version-3 legacy-job and 605-event poll merge/replace preservation and malformed-import neutrality after reload, retired UI absence, bidirectional isolation across reloads, unknown-profile fallback, disabled-control/data-request ownership, Reader preservation, and browser health. |
+| `app/scripts/feature-profile-interaction-test.mjs` | Edge desktop plus deterministic disabled-feature viewport | Stable default/UI/Search/recovery access and expanded diagnostics without capability mutation controls or technical summary clutter; data-neutral diagnostics; historical known/unknown disabled capability preference preservation through version-3 import/export/reload; Lab full summary and usable persisted Disable/Restore controls, open by default with study stores and installed-pack IDs preserved; separate user/notification/physical namespaces, shared-origin Cache Storage cleanup/startup isolation, version-3 legacy-job and 605-event poll merge/replace preservation and malformed-import neutrality after reload, retired UI absence, bidirectional isolation across reloads, unknown-profile fallback, disabled-control/data-request ownership, Reader preservation, and browser health. |
 
 ## Historical July 1 Promotion and Retirement Record
 

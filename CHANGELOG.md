@@ -15,7 +15,9 @@ stable `1.0.0` release or tag is implied or authorized; the repository remains
 - Target-aware Study Marks, canonical `favorite` assertions, and personal
   Meaning for exact source-token identity.
 - Consolidated My Data with versioned browser-local backup/restore and collapsed
-  advanced diagnostics.
+  Stable recovery diagnostics. Capability Disable/Restore controls and the full
+  technical summary remain in isolated Lab, open by default; stored capability
+  preferences and physical-pack recovery are preserved.
 - Retired Local Jobs in Stable and Lab: no job UI or automatic production;
   direct Study Mark indexes and passive version-3 legacy job backups are preserved.
 - Static, domain, accessibility, desktop-browser, mobile-browser, inventory,

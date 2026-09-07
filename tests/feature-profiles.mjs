@@ -25,9 +25,20 @@ for (const feature of FEATURE_REGISTRY.filter(({ lifecycle }) => ["core", "stabl
   assert.equal(featureAccess(lab, feature.id), "ordinary");
 }
 for (const feature of FEATURE_REGISTRY.filter(({ lifecycle }) => ["lab", "frozen"].includes(lifecycle))) {
-  assert.equal(featureAccess(stable, feature.id), "recovery", `${feature.id} must stay collapsed/recovery-only in Stable`);
+  const stableAccess = feature.defaultProfiles.includes("stable") ? "recovery" : "disabled";
+  assert.equal(featureAccess(stable, feature.id), stableAccess, `${feature.id} must respect Stable presentation access`);
   assert.equal(featureAccess(lab, feature.id), "ordinary", `${feature.id} must be complete in Lab`);
 }
+assert.equal(featureEnabled(stable, "capability-controls"), false, "Stable must not enable capability mutations");
+assert.equal(featureEnabled(lab, "capability-controls"), true, "Lab must retain capability mutations");
+assert.equal(stable.recoveryFeatureIds.includes("capability-controls"), false);
+for (const id of ["my-data", "physical-pack-management", "advanced-diagnostics"]) {
+  assert.equal(featureEnabled(stable, id), true, `${id} must survive removal of Stable capability controls`);
+}
+const labWithoutControls = resolveTestFeatureProfile("lab", ["capability-controls"]);
+assert.equal(featureEnabled(labWithoutControls, "capability-controls"), false);
+assert.equal(featureEnabled(labWithoutControls, "advanced-diagnostics"), true, "Recovery diagnostics must not depend on capability mutations");
+assert.equal(featureEnabled(labWithoutControls, "physical-pack-management"), true);
 assert.equal(featureAccess(stable, "interpretation-polls"), "compatibility");
 assert.equal(featureAccess(lab, "interpretation-polls"), "compatibility");
 
@@ -35,6 +46,7 @@ const unknown = resolveFeatureProfile("future-experiment");
 assert.equal(unknown.id, "stable");
 assert.equal(unknown.diagnostics[0].code, "unknown_profile");
 assert.equal(unknown.diagnostics[0].requested_profile, "future-experiment");
+assert.equal(featureEnabled(unknown, "capability-controls"), false, "Unknown profiles must not expose Lab mutations");
 
 const disabled = resolveTestFeatureProfile("stable", ["search", "commentary", "cross-references", "outlines"]);
 for (const id of ["search", "commentary", "cross-references", "outlines"]) assert.equal(featureEnabled(disabled, id), false);
