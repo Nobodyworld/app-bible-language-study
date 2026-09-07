@@ -38,7 +38,10 @@
       "archive_path": "wlc",
       "output_path": "data/verses/wlc",
       "coverage": "39 Old Testament books; 929 chapters; 23,144 nonempty verse records",
-      "transformation": "Source-script verse text extracted from archived XHTML and normalized to Unicode NFC; no transliteration or English text is substituted."
+      "transformation": "Source-script verse text extracted from archived XHTML and normalized to Unicode NFC; no transliteration or English text is substituted.",
+      "witness_id": "openbible:wlc",
+      "versification": "openbible:wlc:source-references",
+      "authority": "text"
     },
     {
       "id": "wlco",
@@ -46,7 +49,10 @@
       "archive_path": "wlco",
       "output_path": "data/verses/wlco",
       "coverage": "39 Old Testament books; 929 chapters; 23,144 nonempty verse records",
-      "transformation": "Consonants-only source-script verse text extracted from archived XHTML and normalized to Unicode NFC; no transliteration or English text is substituted."
+      "transformation": "Consonants-only source-script verse text extracted from archived XHTML and normalized to Unicode NFC; no transliteration or English text is substituted.",
+      "witness_id": "openbible:wlco",
+      "versification": "openbible:wlco:source-references",
+      "authority": "text"
     },
     {
       "id": "nestle",
@@ -54,7 +60,10 @@
       "archive_path": "nestle",
       "output_path": "data/verses/nestle",
       "coverage": "27 New Testament books; 260 chapters; 7,938 nonempty verse records",
-      "transformation": "Greek source-script verse text extracted from archived XHTML and normalized to Unicode NFC; empty and non-applicable placeholders are omitted."
+      "transformation": "Greek source-script verse text extracted from archived XHTML and normalized to Unicode NFC; empty and non-applicable placeholders are omitted.",
+      "witness_id": "openbible:nestle-1904",
+      "versification": "openbible:nestle-1904:source-references",
+      "authority": "text"
     },
     {
       "id": "tr94",
@@ -62,7 +71,50 @@
       "archive_path": "tr94",
       "output_path": "data/verses/tr94",
       "coverage": "27 New Testament books; 260 chapters; 7,957 nonempty verse records",
-      "transformation": "Greek source-script verse text extracted from archived XHTML and normalized to Unicode NFC; empty and non-applicable placeholders are omitted."
+      "transformation": "Greek source-script verse text extracted from archived XHTML and normalized to Unicode NFC; empty and non-applicable placeholders are omitted.",
+      "witness_id": "openbible:tr-1894",
+      "versification": "openbible:tr-1894:source-references",
+      "authority": "text"
     }
-  ]
+  ],
+  "generation_authorities": {
+    "original_language": {
+      "tool": "app/tools/import-original-language-sources.mjs",
+      "check_command": "sources:check",
+      "inputs": [
+        "reviewed external source XHTML",
+        "reviewed external Strong's verse-word and lexicon JSONL"
+      ],
+      "outputs": [
+        "data/verses/wlc",
+        "data/verses/wlco",
+        "data/verses/nestle",
+        "data/verses/tr94",
+        "data/interlinear/books",
+        "data/lexicon"
+      ],
+      "identity": "Deterministic source/output hashes and counts; archive package linkage is a provenance declaration, not proof that an extracted directory matches the ZIP.",
+      "source_revision_requirement": "Only matching reviewed inputs may reproduce current packaged records; preserved historical Strong's JSONL is an older extraction revision."
+    },
+    "search": {
+      "tool": "app/tools/generate-search-indexes.mjs",
+      "check_command": "search:check",
+      "inputs": [
+        "data/manifest.json",
+        "data/source-manifest.json",
+        "data/text-editions.json",
+        "data/verses/<translation>",
+        "data/lexicon/<language>",
+        "data/outlines/books",
+        "data/commentaries/metadata.json",
+        "data/commentaries/source/<source>"
+      ],
+      "outputs": [
+        "data/search"
+      ],
+      "identity": "data/search/manifest.json",
+      "contract": "exact-search-occurrence-postings-v1"
+    }
+  },
+  "generation_documentation": "docs/SOURCE_SEARCH_GENERATION.md"
 }

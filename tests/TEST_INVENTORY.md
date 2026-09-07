@@ -48,6 +48,10 @@ composition above:
 | `npm run test:reader-data-loading` | `app/scripts/reader-data-loading-interaction-test.mjs`. |
 | `npm run test:reliability` | Pack commit/removal failure injection and uninstall-preservation assertion self-tests; included once through `test:domain`. |
 | `npm run test:search-highlight` | `app/scripts/search-highlight-interaction-test.mjs`. |
+| `npm run test:source-generators` | Original-language extraction, Strong's transformation, deterministic identity, namespace and no-write checks. |
+| `npm run test:search-generator` | Current Search generation, input/output identity, reproducibility and actionable mismatch checks. |
+| `npm run test:search-contract` | Direct production Search normalization, posting multiplicity, ordering, scopes, canonical resolution and missing-data contracts using storage adapters. |
+| `npm run search:check` | No-write reconstruction of all four current Search collections and their manifest from tracked canonical inputs. |
 | `npm run test:physical-packs` | Distribution, catalog, compatibility, pack-manifest, path, digest-framing, independent registry, complete lifecycle/recovery, resolver, capabilities, and logical/physical separation. |
 | `npm run test:physical-packs:edge` | Real Edge/IndexedDB/Cache Storage lifecycle, offline resolver, UI, focus, theme, responsive, and browser-health acceptance. |
 | `npm run physical-packs:check` | Deterministic fixture check plus two independent production Search/Commentary inventory builds with byte-for-byte catalog/manifest comparison and digest validation. |
@@ -90,7 +94,9 @@ order:
 | `tests/study-workspace-contracts.mjs` | Width-control DOM, responsive clamps, independent scrolling, semantic anchoring, contained tool surface, explicit Study Marks/Meaning presentations, lifecycle cleanup, and reduced motion. |
 | `tests/strong-section-lifecycle.mjs` | Strong's section loading, presence, absence, and rerender lifecycle. |
 | `tests/reader-ui-regressions.mjs` | Reader layout and source-level UI regressions, including deterministic picker handoff, bounded indexed Reader snapshots, browser-owned route history, exact phrase preservation, informational alignment groups, contained Strong's scrolling, and retired header controls. |
-| `tests/original-language-source-importer.mjs` | Reproducible original-language source transformation. |
+| `tests/original-language-source-importer.mjs` | Reproducible original-language extraction, Strong's transformations, source-qualified identity, namespace safety and no-write verification. |
+| `tests/search-generator.mjs` | Deterministic Search generation and source/provenance/count/digest validation, including stale, missing and invalid input/output rejection. |
+| `tests/search-contract.mjs` | Storage-engine-neutral direct production Search behavior; no copied lookup algorithm or rendered-QA claim. |
 | `tests/original-language-source-data.mjs` | Packaged Hebrew and Greek source coverage and identity. |
 | `tests/original-language-study.mjs` | Language Study entry, source-backed cards, and related-reference behavior. |
 | `tests/morphology.mjs` | Original-language morphology parsing and display contracts. |
@@ -104,8 +110,10 @@ order:
 | `app/scripts/accessibility-test.mjs` | Static accessibility and retired-control source assertions. |
 | `app/scripts/doc-consistency-test.mjs` | Classified maintained-document, command, manifest, retired-job metadata, schema, and current-product consistency. |
 
-`test:static` also runs `npm run test:domain` and
-`npm run inventory:check`. The inventory command checks the generated package
+`test:static` also runs `npm run test:domain`, `npm run search:check`, and
+`npm run inventory:check`. The Search command reconstructs the complete indexes
+without writes; external source-corpus reconstruction is an explicit
+`sources:check` invocation with reviewed inputs. The inventory command checks the generated package
 manifest through `app/tools/refresh-package-inventory.mjs --check`.
 
 ## Domain Tests
@@ -154,13 +162,16 @@ The same audit left these obsolete local scripts untracked:
 | Script | Historical disposition | Replacement or reason |
 |---|---|---|
 | `contract-test.mjs` | Retired | Assumed removed text-edition/package metadata; current integrity, capability, analysis, semantic, documentation, and publish audits cover maintained contracts. |
-| `search-test.mjs` | Retired | Targeted an obsolete generated search manifest and modular search packs; runtime search is covered by integrity and rendered interaction tests. |
+| `search-test.mjs` | Reconstructed in #83 | Historical file remains external; `tests/search-contract.mjs` now exercises production Search directly, alongside generator and rendered interaction coverage. |
 | `performance-test.mjs` | Retired | Targeted obsolete lexicon paths and unenforced thresholds; performance classification remains issue #6 work. |
 | `smoke-test.mjs` | Replaced | Assumed an externally running server; `interaction-test.mjs` starts its own server and covers the broader journey. |
 
 Build, benchmark, performance-report, publish-cleaning, synchronization, and
 mouse-helper scripts that remain ignored are not release tests. They must not be
 added to maintained commands without an explicit contract.
+
+The #83 reconciliation and current generation commands are documented in
+[`docs/SOURCE_SEARCH_GENERATION.md`](../docs/SOURCE_SEARCH_GENERATION.md).
 
 ## Reliability and installed-uninstall evidence
 

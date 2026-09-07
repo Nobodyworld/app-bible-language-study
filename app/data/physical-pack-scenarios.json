@@ -1,14 +1,14 @@
 {
   "kind": "bibleapp:physical-pack-scenario-report",
   "schema_version": 1,
-  "measured_from_package_sha256": "sha256:84df01615458adc81523bd18813e3477e55752edad9ef3d13278c9a84832e2b9",
-  "generated_at": "2026-09-07T06:19:20.639Z",
+  "measured_from_package_sha256": "sha256:39251af9b9c32df662923f615fbdcb55063d24dafcf06ae838b057822a2cefd4",
+  "generated_at": "2026-09-07T22:51:13.113Z",
   "scenarios": [
     {
       "id": "complete-bundled-app",
       "files": 2803,
-      "bytes": 954309221,
-      "transfer_bytes": 180460102,
+      "bytes": 954598320,
+      "transfer_bytes": 180561124,
       "build_install_update": "Ship and open the existing complete static app; no managed-pack mutation is required.",
       "first_use": "Bundled network/file read; hardware timing is recorded by the maintained Edge suite, not frozen into source.",
       "warm_use": "Parsed-data cache and browser HTTP cache; hardware timing is recorded by the maintained Edge suite.",
@@ -33,8 +33,8 @@
     {
       "id": "base-plus-search",
       "files": 2472,
-      "bytes": 740945520,
-      "transfer_bytes": 124058443,
+      "bytes": 741234619,
+      "transfer_bytes": 124159465,
       "build_install_update": "Install the immutable Search manifest and loose files into staging, verify, then activate atomically.",
       "first_use": "First managed Search read resolves from the verified active Cache Storage version.",
       "warm_use": "Parsed JSON is keyed by physical pack version and reused until activation invalidates it.",
@@ -59,8 +59,8 @@
     {
       "id": "reconstructed-complete-offline-bundle",
       "files": 2803,
-      "bytes": 954309221,
-      "transfer_bytes": 180460102,
+      "bytes": 954598320,
+      "transfer_bytes": 180561124,
       "build_install_update": "Run physical-packs:build -- --assemble-offline to overlay verified Search and Commentary artifacts onto the unchanged base tree.",
       "first_use": "Equivalent data boundary to the complete bundled app; Edge fixture timing validates resolver activation separately.",
       "warm_use": "Equivalent data boundary to the complete bundled app with version-keyed parsed caches.",

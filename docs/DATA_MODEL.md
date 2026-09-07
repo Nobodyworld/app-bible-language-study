@@ -1,5 +1,8 @@
 # Data Model
 
+Maintained source extraction, deterministic Search generation, provenance and
+no-write checks are documented in [Source and Search generation](SOURCE_SEARCH_GENERATION.md).
+
 The runtime data model is file-backed JSON. The app does not require a server
 database for normal study sessions.
 

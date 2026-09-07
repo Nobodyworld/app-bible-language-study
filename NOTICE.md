@@ -45,6 +45,18 @@ Westminster Leningrad Codex, WLC Consonants Only, Nestle Greek New Testament
 1904, and Scrivener's Textus Receptus 1894; no additional rights conclusion is
 asserted beyond the archive terms preserved above.
 
+The maintained transformation authority is
+`app/tools/import-original-language-sources.mjs`, including the current-schema
+Strong's verse-word and lexicon JSONL transformations reconciled from historical
+tooling. Historical extracts are not interchangeable with the current packaged
+corpus: matching reviewed source revisions are required for regeneration.
+`app/tools/generate-search-indexes.mjs` derives current exact Search postings
+from the packaged canonical records and records deterministic input/output
+digests and counts in the Search manifest. These derived indexes do not replace
+source rights or text/lemma/morphology/alignment authority. Reproduction commands,
+no-write checks and limitations are documented in
+[`docs/SOURCE_SEARCH_GENERATION.md`](docs/SOURCE_SEARCH_GENERATION.md).
+
 Public repository visibility does not relicense bundled third-party data. This
 notice records source provenance, retained terms, and transformations rather
 than asserting one blanket license for the complete data package. Anyone
