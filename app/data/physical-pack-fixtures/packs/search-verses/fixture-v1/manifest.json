@@ -8,7 +8,7 @@
   "package_identity": {
     "schema_version": 1,
     "package_id": "reader-texts",
-    "content_sha256": "sha256:5407048f224adc0a5c27051882b87ab02c119e13c228bbd047a8b2d31dacf55c"
+    "content_sha256": "sha256:84df01615458adc81523bd18813e3477e55752edad9ef3d13278c9a84832e2b9"
   },
   "compatibility": {
     "minimum_app_version": "1.0.0",

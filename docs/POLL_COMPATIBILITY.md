@@ -18,6 +18,8 @@ claims, beliefs, consensus, or aggregate interpretation analytics.
 | `app/data/semantic/manifest.json` | Removes the retired file/count. Tag definitions and relations remain production data. |
 | Former `app/data/semantic/interpretation-propositions.json` | Exact three draft seeds moved to `tests/fixtures/legacy-polls/interpretation-propositions.json`; `tests/fixtures/legacy-polls.mjs` supplies historical test records only. |
 | `app/tools/refresh-package-inventory.mjs`, `app/data/package-manifest.json` | Describe semantic tag definitions/relations and recompute file counts, bytes and hashes. Pack IDs, capabilities and other data membership are unchanged. |
+| `app/data/distribution-manifest.json`, `app/data/physical-pack-scenarios.json`, `app/data/physical-pack-fixtures/` | Reconcile dependent package-identity hashes and measured totals. Fixture payloads and pack behavior remain unchanged. |
+| `app/tools/build-physical-pack-fixtures.mjs`, `app/tools/build-physical-packs.mjs` | Regenerate deterministic fixture identity/catalog digests and scenario measurements from the current package inventory; their check modes verify the results. |
 | `app/tools/prepare-desktop-frontend.mjs`, `tests/desktop-staging.mjs` | Existing tracked-runtime allowlist excludes `tests/`; staging regression rejects retired seeds and fixtures in installed resources. |
 | `app/scripts/semantic-test.mjs` | Validates current semantic data; removes active prompt expectations. Canonical semantic target types remain. |
 | `app/scripts/poll-response-test.mjs` | Replaces creation/update/deletion tests with passive compatibility, schema, retirement, long-history, conflict, extension, sparse-record and recovery tests. |
@@ -52,3 +54,9 @@ quarantine and malformed native-storage recovery rules remain unchanged.
 
 The maintained domain, browser and isolated desktop tests cover this boundary;
 installer/uninstaller and firewall acceptance are outside this slice.
+
+After an inventory change, align the distribution manifest's package hash, run
+`node app/tools/build-physical-pack-fixtures.mjs` and
+`node app/tools/build-physical-packs.mjs --write-scenarios`. Validate with the
+corresponding `--check` and `--check-scenarios` modes as well as
+`npm run inventory:check`.
