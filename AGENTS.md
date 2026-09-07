@@ -51,32 +51,33 @@ or a final distribution checkpoint, not each UI edit. Do not revive temporary
 owner-machine uninstall/firewall helpers or bypass blocked automation actions.
 Report failures and unrun checks accurately; source review is not rendered QA.
 
-## Current work: interpretation-poll retirement (#82)
+## Current work: diagnostics/capability presentation cleanup (#109)
 
-The Local Jobs retirement under #105 is complete in merged PR #106. Do not redo
-that implementation. This separate slice uses `cleanup/poll-compatibility` and
-finishes the existing #82 compatibility-only boundary, not a new claims system.
+Local Jobs retirement (#106) and interpretation-poll retirement (#107/#82) are
+complete. Do not redo those slices. Work on `cleanup/diagnostics-capability-ui`
+from accepted main `cc9f999d526bd7b71bfc763133ab478be191abb2`.
 
-Remove unused poll-response creation/edit/deletion paths, poll diagnostic UI and
-advertising, and the three draft polling seeds from ordinary packaged/runtime
-authority. Retain only the passive readers, normalization, validation and derived
-compatibility data needed for existing backups. Keep storage keys, native store
-IDs and `bibleapp:user-data` version 3 unchanged. Never clear an existing poll
-store, rewrite a historical opinion, or require a retired seed catalog to import
-a valid old response. Preserve valid responses, tombstones, targets, versions,
-actors, timestamps, events and supported extension fields; avoid incidental
-history truncation. Keep current conflict and malformed-import/recovery policies.
+Simplify My Data → Advanced Diagnostics without deleting capability or pack
+infrastructure. Stable must no longer expose interactive capability Disable/
+Restore controls. Keep Stable recovery-relevant storage authority, migration,
+failure, backup/quarantine, and physical-pack recovery information; remove or
+hide implementation-only counts where they do not help recovery. Update Stable
+copy so it does not advertise technical feature controls.
 
-Move legacy seed metadata into test-only fixtures when needed to prove old backup
-compatibility. Reconcile semantic/package manifests, maintained generators,
-inventories, feature/UI contracts, documentation and tests as one implementation.
-A schema or aggregate calculator with a real compatibility consumer is not dead
-code. Do not remove canonical semantic targets, Study Marks or scripture data.
+Lab remains the isolated technical profile: keep its capability toggles, full
+technical diagnostics, and current open-by-default behavior unless a concrete
+regression requires adjustment. Preserve `resolveCapabilities`, structured
+unavailable states, historical `disabled_capability_ids`, package manifests and
+state, physical-pack behavior, recovery backups, and `bibleapp:user-data` v3.
+Keep `setCapabilityDisabled` only while it has a real Lab/test consumer.
 
-Leave packs, capabilities, other diagnostics and future claims/beliefs features
-unchanged. No native pack work, package migration, framework/database rewrite,
-new queue, account, analytics, release or publication is included. The issue #82
-implementation note contains the verified source map and completion conditions.
+Reconcile affected feature/UI contracts, tests, README/architecture/public
+preview documentation, and test inventory. Stable tests must prove capability
+mutation controls are absent; Lab tests must prove they remain usable and
+isolated. Do not implement native physical-pack management (#81), generator
+reconciliation (#83), multilingual Search (#78), package migration, framework or
+database work, release/tag/publication, settings changes, or personal-data
+operations. Issue #109 is the detailed acceptance record.
 
 ## Completion report
 
