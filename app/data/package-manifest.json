@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-07T22:51:13.113Z",
+  "generated_at": "2026-09-08T00:46:07.875Z",
   "distribution": "source-notices-retained",
   "source_manifest": "data/source-manifest.json",
   "note": "Package inventory for the local-first application. Bundled-data rights and provenance are recorded in data/source-manifest.json.",
@@ -43,9 +43,9 @@
       "files": 2803,
       "bytes": 954598320,
       "mb": 910.38,
-      "gzip_bytes": 180561124,
+      "gzip_bytes": 180561119,
       "gzip_mb": 172.2,
-      "sha256": "sha256:39251af9b9c32df662923f615fbdcb55063d24dafcf06ae838b057822a2cefd4",
+      "sha256": "sha256:597d66f4d51bec8244423c05ea56c8f3a08dfaebcdeb64db866eea1a0529dde9",
       "largest_shard": {
         "path": "data/search/commentaries/gill/psalms.json",
         "bytes": 10293768
@@ -382,14 +382,14 @@
       "dependencies": [],
       "files": 993,
       "bytes": 357958805,
-      "gzip_bytes": 43882590,
+      "gzip_bytes": 43882585,
       "license_note": "Generated local index data retained for app functionality.",
       "paths": [
         "data/search"
       ],
       "mb": 341.38,
       "gzip_mb": 41.85,
-      "sha256": "sha256:5e8c2a548f7a117e71826a7c5a590f0bb5694d1ae2e15c16edceb4f480072ffd",
+      "sha256": "sha256:4590cd971d4a2897c831f0faa652c3bb8320ba14ec08ef730cf817c5e4528043",
       "largest_shard": {
         "path": "data/search/commentaries/gill/psalms.json",
         "bytes": 10293768

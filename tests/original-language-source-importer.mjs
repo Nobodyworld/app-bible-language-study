@@ -57,8 +57,16 @@ assert.equal(SOURCE_AUTHORITY_CONTRACT.missing_alignment, null);
 assert.deepEqual(SOURCE_AUTHORITY_CONTRACT.authority_kinds, ["text", "lemma", "morphology", "alignment"]);
 assert.match(SOURCE_AUTHORITY_CONTRACT.unaligned_records, /retain-with-source-reference/);
 assert.match(SOURCE_AUTHORITY_CONTRACT.additional_witness_outputs, /<witness-namespace>/);
-assert.equal(new Set(Object.values(SOURCE_DEFINITIONS).map((source) => source.witness_id)).size, 4);
-assert.equal(new Set(Object.values(SOURCE_DEFINITIONS).map((source) => source.versification)).size, 4);
+assert.equal(new Set(Object.values(SOURCE_DEFINITIONS).map((source) => source.witness_id)).size, 3);
+assert.equal(new Set(Object.values(SOURCE_DEFINITIONS).map((source) => source.versification)).size, 3);
+assert.equal(SOURCE_DEFINITIONS.wlc.witness_id, "openbible:wlc");
+assert.equal(SOURCE_DEFINITIONS.wlco.witness_id, SOURCE_DEFINITIONS.wlc.witness_id);
+assert.equal(SOURCE_DEFINITIONS.wlco.source_token_namespace, SOURCE_DEFINITIONS.wlc.source_token_namespace);
+assert.equal(SOURCE_DEFINITIONS.wlco.versification, SOURCE_DEFINITIONS.wlc.versification);
+assert.deepEqual([SOURCE_DEFINITIONS.wlc.representation.id, SOURCE_DEFINITIONS.wlco.representation.id], ["pointed", "consonants-only"]);
+assert.equal(SOURCE_AUTHORITY_CONTRACT.witness_vote_key, "witness_id");
+assert.deepEqual(SOURCE_AUTHORITY_CONTRACT.source_token_identity_fields, ["witness_id", "versification", "source_reference", "token_index"]);
+assert.match(SOURCE_AUTHORITY_CONTRACT.representation_identity, /do not create witnesses or source-token identities/);
 assert.deepEqual(sanitizeSourceProvenance({ source_path: "C:/private/archive/secret.htm", child: [{ source_path: "strongs/hebrew/1.htm", keep: true }, { source_path: "strongs/../../private.htm" }] }),
   { child: [{ keep: true, source_path: "strongs/hebrew/1.htm" }, {}] });
 
@@ -172,16 +180,42 @@ try {
 
   const archiveRoot = join(temporaryRoot, "archive");
   await mkdir(join(archiveRoot, "wlc/genesis"), { recursive: true });
+  await mkdir(join(archiveRoot, "wlco/genesis"), { recursive: true });
   await writeFile(join(archiveRoot, "wlc/genesis/1.htm"), '<p class="hebrew"><span class="reftext"><b>1</b></span>אָב</p>');
-  const corpusOptions = { archiveRoot, manifestPath, outputRoot: join(temporaryRoot, "verses"), sourceDefinitions: { wlc: SOURCE_DEFINITIONS.wlc } };
+  await writeFile(join(archiveRoot, "wlco/genesis/1.htm"), '<p class="hebrew"><span class="reftext"><b>1</b></span>אב</p>');
+  const corpusOptions = { archiveRoot, manifestPath, outputRoot: join(temporaryRoot, "verses"), sourceDefinitions: { wlc: SOURCE_DEFINITIONS.wlc, wlco: SOURCE_DEFINITIONS.wlco } };
   const corpusMissing = await generateSourceCorpus({ ...corpusOptions, check: true });
-  assert.equal(corpusMissing.mismatches, 1);
+  assert.equal(corpusMissing.mismatches, 2);
   await assert.rejects(readdir(corpusOptions.outputRoot), { code: "ENOENT" });
   const corpus = await generateSourceCorpus(corpusOptions);
   assert.equal((await generateSourceCorpus({ ...corpusOptions, check: true })).mismatches, 0);
   assert.equal(corpus.identity.sources[0].alignment_authority, null);
   assert.equal(corpus.identity.sources[0].witness_id, "openbible:wlc");
   assert.equal(corpus.sources[0].verses_generated, 1);
+  const hebrewSources = corpus.identity.sources;
+  assert.deepEqual(hebrewSources.map((source) => source.namespace), ["verses/wlc", "verses/wlco"]);
+  assert.deepEqual(hebrewSources.map((source) => source.representation.id), ["pointed", "consonants-only"]);
+  assert(hebrewSources.every((source) => source.representation.unicode_normalization === "NFC"));
+  assert.equal(new Set(hebrewSources.map((source) => source[SOURCE_AUTHORITY_CONTRACT.witness_vote_key])).size, 1,
+    "Pointed/consonantal outputs must contribute only one canonical Hebrew witness vote.");
+  const tokenIdentity = (source) => SOURCE_AUTHORITY_CONTRACT.source_token_identity_fields.map((field) =>
+    ({ ...source, source_reference: "genesis 1:1", token_index: 1 })[field]);
+  assert.deepEqual(tokenIdentity(hebrewSources[0]), tokenIdentity(hebrewSources[1]),
+    "Display representation and output namespace must not split canonical source-token identity.");
+  for (const [id, text] of [["wlc", "אָב"], ["wlco", "אב"]]) {
+    assert.equal(await readFile(join(corpusOptions.outputRoot, id, "genesis.json"), "utf8"),
+      stableBookJson({ book, chapters: { 1: { 1: text } }, translation: { id, code: SOURCE_DEFINITIONS[id].code, name: SOURCE_DEFINITIONS[id].name } }),
+      "Identity correction must preserve separate source bytes and runtime wrappers.");
+  }
+  await writeFile(invalidProvenancePath, JSON.stringify({ ...provenance, original_language_sources: provenance.original_language_sources.map((source) =>
+    source.id === "wlco" ? { ...source, witness_id: "openbible:wlco" } : source) }));
+  await assert.rejects(generateSourceCorpus({ ...corpusOptions, provenancePath: invalidProvenancePath }), /witness\/versification authority disagrees/);
+  await writeFile(invalidProvenancePath, JSON.stringify({ ...provenance, original_language_sources: provenance.original_language_sources.map((source) =>
+    source.id === "wlco" ? { ...source, source_token_namespace: "openbible:wlco" } : source) }));
+  await assert.rejects(generateSourceCorpus({ ...corpusOptions, provenancePath: invalidProvenancePath }), /source-token\/representation metadata disagrees/);
+  await writeFile(invalidProvenancePath, JSON.stringify({ ...provenance, original_language_sources: provenance.original_language_sources.map((source) =>
+    source.id === "wlco" ? { ...source, representation: SOURCE_DEFINITIONS.wlc.representation } : source) }));
+  await assert.rejects(generateSourceCorpus({ ...corpusOptions, provenancePath: invalidProvenancePath }), /source-token\/representation metadata disagrees/);
   await writeFile(invalidProvenancePath, JSON.stringify({ ...provenance, original_language_sources: provenance.original_language_sources.map((source) => ({ ...source, versification: "unreviewed-remapping" })) }));
   await assert.rejects(generateSourceCorpus({ ...corpusOptions, provenancePath: invalidProvenancePath }), /witness\/versification authority disagrees/);
   await writeFile(join(archiveRoot, "wlc/genesis/01.htm"), '<p class="hebrew"><span class="reftext"><b>1</b></span>בֵּן</p>');

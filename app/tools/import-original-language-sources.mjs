@@ -19,15 +19,19 @@ export const SOURCE_DEFINITIONS = Object.freeze({
     language: "hebrew",
     testament: "old",
     witness_id: "openbible:wlc",
+    source_token_namespace: "openbible:wlc",
     versification: "openbible:wlc:source-references",
+    representation: { id: "pointed", unicode_normalization: "NFC", display: "Pointed Hebrew" },
   },
   wlco: {
     code: "WLCO",
     name: "WLC — Consonants Only",
     language: "hebrew",
     testament: "old",
-    witness_id: "openbible:wlco",
-    versification: "openbible:wlco:source-references",
+    witness_id: "openbible:wlc",
+    source_token_namespace: "openbible:wlc",
+    versification: "openbible:wlc:source-references",
+    representation: { id: "consonants-only", unicode_normalization: "NFC", display: "Consonants-only Hebrew" },
   },
   nestle: {
     code: "Nestle 1904",
@@ -58,6 +62,9 @@ export const SOURCE_AUTHORITY_CONTRACT = Object.freeze({
   schema_version: 1,
   authority_kinds: ["text", "lemma", "morphology", "alignment"],
   identity_fields: ["witness_id", "versification", "source_reference"],
+  source_token_identity_fields: ["witness_id", "versification", "source_reference", "token_index"],
+  witness_vote_key: "witness_id",
+  representation_identity: "Display/normalization metadata and output paths do not create witnesses or source-token identities; WLC/WLCO share one canonical Hebrew base.",
   missing_alignment: null,
   unaligned_records: "retain-with-source-reference; never infer a canonical alignment",
   additional_witness_outputs: "sources/<witness-namespace>/<authority-kind>",
@@ -134,6 +141,10 @@ async function readReviewedProvenance(provenancePath, sourceDefinitions = {}) {
     if (!entry) throw new Error(`Source ${id} is absent from reviewed provenance; no outputs written.`);
     if (entry.witness_id !== definition.witness_id || entry.versification !== definition.versification || entry.authority !== "text") {
       throw new Error(`Source ${id} witness/versification authority disagrees with reviewed provenance; no outputs written.`);
+    }
+    if (entry.source_token_namespace !== definition.source_token_namespace
+      || JSON.stringify(stableObject(entry.representation)) !== JSON.stringify(stableObject(definition.representation))) {
+      throw new Error(`Source ${id} source-token/representation metadata disagrees with reviewed provenance; no outputs written.`);
     }
   }
   return {
@@ -446,6 +457,8 @@ export async function generateSourceCorpus({ archiveRoot, outputRoot = join(APP_
   const identity = generationIdentity("original-language-text", inputs, outputs,
     Object.entries(sourceDefinitions).sort(([a], [b]) => compare(a, b)).map(([id, definition]) => ({
       id, witness_id: definition.witness_id, versification: definition.versification,
+      ...(definition.source_token_namespace ? { source_token_namespace: definition.source_token_namespace } : {}),
+      ...(definition.representation ? { representation: definition.representation } : {}),
       authority: "text", namespace: `verses/${id}`, alignment_authority: null,
     })), summaries);
   return { ...await reconcileOutputs({ outputRoot, outputs, identity, identityPath, check, inputRoots: [archiveRoot], inputFiles: [manifestPath, provenancePath] }), provenance: provenance.declaration, sources: summaries };

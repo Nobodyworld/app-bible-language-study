@@ -41,7 +41,13 @@
       "transformation": "Source-script verse text extracted from archived XHTML and normalized to Unicode NFC; no transliteration or English text is substituted.",
       "witness_id": "openbible:wlc",
       "versification": "openbible:wlc:source-references",
-      "authority": "text"
+      "authority": "text",
+      "source_token_namespace": "openbible:wlc",
+      "representation": {
+        "id": "pointed",
+        "unicode_normalization": "NFC",
+        "display": "Pointed Hebrew"
+      }
     },
     {
       "id": "wlco",
@@ -50,9 +56,15 @@
       "output_path": "data/verses/wlco",
       "coverage": "39 Old Testament books; 929 chapters; 23,144 nonempty verse records",
       "transformation": "Consonants-only source-script verse text extracted from archived XHTML and normalized to Unicode NFC; no transliteration or English text is substituted.",
-      "witness_id": "openbible:wlco",
-      "versification": "openbible:wlco:source-references",
-      "authority": "text"
+      "witness_id": "openbible:wlc",
+      "versification": "openbible:wlc:source-references",
+      "authority": "text",
+      "source_token_namespace": "openbible:wlc",
+      "representation": {
+        "id": "consonants-only",
+        "unicode_normalization": "NFC",
+        "display": "Consonants-only Hebrew"
+      }
     },
     {
       "id": "nestle",

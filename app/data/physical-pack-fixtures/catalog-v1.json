@@ -6,7 +6,7 @@
   "package_identity": {
     "schema_version": 1,
     "package_id": "reader-texts",
-    "content_sha256": "sha256:39251af9b9c32df662923f615fbdcb55063d24dafcf06ae838b057822a2cefd4"
+    "content_sha256": "sha256:597d66f4d51bec8244423c05ea56c8f3a08dfaebcdeb64db866eea1a0529dde9"
   },
   "compatibility": {
     "minimum_app_version": "1.0.0",
@@ -17,7 +17,7 @@
       "pack_id": "search-verses",
       "pack_version": "fixture-v1",
       "manifest_path": "packs/search-verses/fixture-v1/manifest.json",
-      "manifest_sha256": "sha256:32fff6a4a8986f5ac9f04d6b5eb0cf942365a2bce599481b32fbc71a5d558cc7",
+      "manifest_sha256": "sha256:a39e3119c147bcb02e4321e0d6d47b9d0346ae9d5b1187108b869e08e420a805",
       "dependencies": [],
       "provided_capabilities": [
         "search"
@@ -36,7 +36,7 @@
       "pack_id": "commentary-verse-index",
       "pack_version": "fixture-v1",
       "manifest_path": "packs/commentary-verse-index/fixture-v1/manifest.json",
-      "manifest_sha256": "sha256:7865e6a165e3f05816f860f094520a330d2ca7788cabd12c6d3635d819b48db7",
+      "manifest_sha256": "sha256:e6d0bbc97e7d0a099e372f06c9df2124edb923cd1555e7a791d7f7fd03811e4c",
       "dependencies": [
         "search-verses"
       ],

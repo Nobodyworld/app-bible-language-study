@@ -34,11 +34,31 @@ extract and do not prove that the directory reconstructs the original ZIP.
 The XHTML transformation strips navigation and markup, requires nonempty source
 script, and normalizes to NFC. It preserves source chapter/verse references,
 including gaps and non-applicable pages, rather than imposing English verse
-counts. Source identity includes the witness and its versification authority.
+counts. Source identity includes the witness, versification authority and source
+reference. Token identity uses that canonical witness identity plus token index;
+the shared source-token namespace also identifies the Hebrew base. Representation
+and output namespace do not create a new token identity or witness.
 Strong's grouping preserves the current token tuple and chunk layout; it does
 not derive a source witness from a Strong's number or silently substitute a
 historical spelling/morphology revision. Safe relative source provenance is
 retained; private machine paths are not publication metadata.
+
+`wlc` and `wlco` are two representations of the same Westminster Leningrad Codex
+Hebrew base. Both use `witness_id: openbible:wlc`,
+`source_token_namespace: openbible:wlc`, and
+`versification: openbible:wlc:source-references`. Their registration IDs and
+output paths remain distinct so the existing source text bytes and display
+choices are preserved:
+
+| Registration | Representation ID | Unicode normalization | Display | Output path |
+|---|---|---|---|---|
+| `wlc` | `pointed` | `NFC` | Pointed Hebrew | `data/verses/wlc` |
+| `wlco` | `consonants-only` | `NFC` | Consonants-only Hebrew | `data/verses/wlco` |
+
+Representation metadata describes the stored text; it does not authorize
+rewriting the consonantal corpus from pointed text. Future alignment or voting
+code must group evidence by canonical `witness_id`: these registrations provide
+one Hebrew witness vote, never two independent witness votes.
 
 The preserved Python input is an older extraction revision. For example, its
 Genesis 1:1 first-token original and morphology differ from the currently
@@ -118,8 +138,12 @@ they change when provenance or canonical inputs change.
 
 ## Future witness and alignment contracts
 
-The source identity is witness-qualified, with a source-specific versification
-identifier and source reference. Text, lemma, morphology, alignment and
+The source identity is witness-qualified, with a canonical source-token namespace,
+source-specific versification identifier and source reference. Representation,
+normalization, display metadata and output paths are separate from that identity.
+In particular, #96 must deduplicate WLC/WLCO evidence by `witness_id` before
+counting witness votes; differing pointed/consonantal representation IDs or paths
+cannot establish independent witnesses. Text, lemma, morphology, alignment and
 provenance are distinct authorities: identical Strong's codes do not prove
 identical tokens or aligned verses across witnesses. A future witness must use
 its own output namespace, never a WLC/GNT compatibility path. Source-only or
@@ -161,7 +185,10 @@ the branch. The following map is safe to publish without private archive paths.
 
 `test:static` includes focused generator and direct Search tests, complete
 `search:check`, and `inventory:check`. It does not require a private source archive.
-After intentional output/provenance changes, regenerate package identities with
+After intentional output/provenance changes, run `npm run search:generate` and
+`npm run search:check` first: `source-manifest.json` is a Search-generation metadata
+input, so a provenance-only change updates the Search manifest identity even when
+all posting shard bytes remain unchanged. Then regenerate package identities with
 `npm run inventory:refresh` (including the distribution's package digest), then
 regenerate dependent fixture identities with
 `node app/tools/build-physical-pack-fixtures.mjs` and reconcile scenario

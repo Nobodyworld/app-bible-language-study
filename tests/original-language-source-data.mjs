@@ -4,6 +4,7 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 
 const manifest = JSON.parse(await readFile(new URL("../app/data/manifest.json", import.meta.url), "utf8"));
+const sourceManifest = JSON.parse(await readFile(new URL("../app/data/source-manifest.json", import.meta.url), "utf8"));
 const packageManifest = JSON.parse(await readFile(new URL("../app/data/package-manifest.json", import.meta.url), "utf8"));
 const dataServiceSource = await readFile(new URL("../app/src/data-service.js", import.meta.url), "utf8");
 const appSource = await readFile(new URL("../app/app.js", import.meta.url), "utf8");
@@ -22,6 +23,27 @@ assert.equal(sourceById.get("wlco").variant, "consonants-only");
 assert.equal(sourceById.get("nestle").testament_scope, "new");
 assert.equal(sourceById.get("tr94").testament_scope, "new");
 assert.equal(manifest.translations.length, 10, "Original-language sources must not become reader translations.");
+
+const provenanceById = new Map(sourceManifest.original_language_sources.map((source) => [source.id, source]));
+const hebrewRepresentations = [
+  { id: "wlc", representation: { id: "pointed", unicode_normalization: "NFC", display: "Pointed Hebrew" } },
+  { id: "wlco", representation: { id: "consonants-only", unicode_normalization: "NFC", display: "Consonants-only Hebrew" } },
+];
+for (const { id, representation } of hebrewRepresentations) {
+  const provenance = provenanceById.get(id);
+  assert.equal(provenance?.witness_id, "openbible:wlc", `${id} must retain the one canonical WLC witness identity.`);
+  assert.equal(provenance.source_token_namespace, "openbible:wlc", `${id} must share the canonical WLC source-token namespace.`);
+  assert.equal(provenance.versification, "openbible:wlc:source-references");
+  assert.equal(provenance.authority, "text");
+  assert.deepEqual(provenance.representation, representation, `${id} representation metadata must remain separate from witness identity.`);
+  assert.equal(sourceById.get(id).variant, representation.id, `${id} runtime display variant must match reviewed provenance.`);
+  assert.equal(provenance.output_path, `data/verses/${id}`, `${id} must preserve its distinct corpus path.`);
+}
+assert.equal(
+  new Set(hebrewRepresentations.map(({ id }) => provenanceById.get(id).witness_id)).size,
+  1,
+  "WLC and WLCO representations must provide only one canonical Hebrew witness vote.",
+);
 
 const expectedSourcePacks = new Map([
   ["source-wlc", { path: "data/verses/wlc", files: 39 }],
@@ -76,4 +98,4 @@ assert.equal(greek[0].label, "Nestle Greek New Testament 1904");
 assert.equal(greek[1].label, "Scrivener’s Textus Receptus 1894");
 assert.deepEqual(absentGreek, []);
 
-console.log(JSON.stringify({ status: "ok", assertions: 37 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 52 }, null, 2));
