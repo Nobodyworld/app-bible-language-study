@@ -63,6 +63,11 @@ const DOCUMENT_MODEL = Object.freeze([
     roles: ["technical", "data-model", "test-inventory"],
   },
   {
+    path: "docs/decisions/SEPTUAGINT_SOURCE_STACK.md",
+    classification: "maintained",
+    roles: ["technical", "source-decision", "rights"],
+  },
+  {
     path: "docs/DESKTOP.md",
     classification: "maintained",
     roles: ["current-product", "runtime-facing", "technical", "security", "test-inventory"],
