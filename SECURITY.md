@@ -55,24 +55,37 @@ The required public-repository security baseline is:
 
 - private vulnerability reporting;
 - Secret Protection and push protection;
-- branch protection requiring `verify (20)` and `verify (24)`;
+- branch protection requiring `deterministic (20)`, `deterministic (24)`,
+  `browser (20)`, and `desktop/security gate`;
 - Dependabot alerts and security updates;
-- the Windows Node 20 and Node 24 `Verify` workflow matrix.
+- deterministic static/domain/data and publication checks on Node 20 and Node 24;
+- complete desktop and mobile Edge interaction acceptance once on Node 20;
+- an always-present exact-candidate security/desktop gate on every pull request.
 
-Desktop-affecting changes also trigger the path-scoped `Desktop Verify` workflow.
+The `Required Gates` workflow checks out the exact candidate with persisted
+credentials disabled, classifies desktop relevance, and runs the checksum-pinned
+Gitleaks 8.30.1 base-to-head scan on every pull request. Its required
+`desktop/security gate` succeeds after that security preflight for non-desktop
+changes. For desktop-relevant changes it additionally requires the exact
+candidate's path-scoped `desktop (windows-2022)` lifecycle to complete
+successfully.
+
+Desktop-affecting changes trigger the path-scoped `Desktop Verify` workflow.
 That workflow checks out and asserts the exact candidate SHA, disables persisted
 checkout credentials, runs Rust and JavaScript desktop contracts, drives the
 native debug application through its relaunch/persistence journey, audits npm
-dependencies, and builds and hashes the unsigned NSIS preview without publishing
-it. It is supporting desktop evidence rather than a replacement for installed
-manual security, accessibility, offline, dialog, system-browser, or uninstall
-review.
+dependencies, builds and verifies the unsigned NSIS preview, exercises the
+installed release through WebDriver and independent launch, and verifies
+uninstall cleanup and retained user data. It remains the native/package evidence
+authority while `desktop/security gate` makes that evidence merge-blocking when
+relevant.
 
 CodeQL Default Setup is intentionally disabled for the current public preview by
 owner decision. Local and hosted static verification, dependency auditing,
-complete-history secret scanning, pinned Actions, and manual security review
-remain active controls. Reassess CodeQL if the architecture, threat model, or
-release posture materially changes; do not describe CodeQL as enabled.
+always-run exact-range pull-request secret scanning, release-grade history
+scanning when required, pinned Actions, and manual security review remain active
+controls. Reassess CodeQL if the architecture, threat model, or release posture
+materially changes; do not describe CodeQL as enabled.
 
 Activation and verification evidence is tracked in issue #5. A control must not
 be described as verified merely because it is available for public repositories.
