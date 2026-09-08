@@ -51,43 +51,52 @@ or a final distribution checkpoint, not each UI edit. Do not revive temporary
 owner-machine uninstall/firewall helpers or bypass blocked automation actions.
 Report failures and unrun checks accurately; source review is not rendered QA.
 
-## Current work: public required-gate hardening (#112)
+## Current work: Septuagint source-stack decision and proof (#97)
 
-Issue #83 is complete on accepted main `4051b225df79cff6e3f0b42b3d363fa93bcc1eb7`.
-Work only on `ci/required-gates-hardening` for #112. Do not start multilingual
-Search #78, LXX #97/#96, native packs #81, or unrelated product work until this
-public-repository CI slice is accepted.
+Accepted `main` is `e420f31be6a79fd34e5e520c80fa76cc640d9c40` after #112/#113.
+Work only on `research/septuagint-source-stack` for #97. Issue #83 is complete,
+so its deterministic source/Search generation contracts are now the maintained
+production-data authority. This slice is the Phase 0 source, rights, feasibility,
+and proof-of-import prerequisite for #96. Do not start the full #96 comparison UI
+or #78 multilingual Search integration in this branch.
 
 Required end state:
 
-- Node 20 and Node 24 both run deterministic/static/domain/generator/data and
-  publication checks without duplicating the rendered browser suite.
-- One maintained Node runtime runs the complete Edge desktop/mobile interaction
-  acceptance.
-- Search-highlight and portrait browser QA wait for deterministic rendered/
-  scroll readiness rather than depending on transient actionability timing.
-- Every pull request receives an exact-candidate, exact-range Gitleaks scan from
-  the existing pinned 8.30.1 Windows archive with checksum verification and
-  checkout credentials disabled.
-- The expensive existing `Desktop Verify` lifecycle remains path-scoped and
-  unchanged as native/package authority. An always-present `desktop/security
-  gate` must pass irrelevant PRs after security scanning, but for desktop-
-  relevant paths it must require the exact candidate's `desktop (windows-2022)`
-  check to complete successfully.
-- Workflow permissions stay least-privilege and Actions remain full-SHA pinned.
-- Required contexts are `deterministic (20)`, `deterministic (24)`, `browser (20)`,
-  and `desktop/security gate`. The owner has atomically replaced the obsolete
-  `verify (20)` / `verify (24)` ruleset contexts; connector verification confirmed
-  the four-context `Protect main` baseline. Do not modify that ruleset further
-  without separate owner authorization.
+- Maintain `docs/decisions/SEPTUAGINT_SOURCE_STACK.md` as the decision record.
+- Pin and verify the exact Greek-text proof source revision and source hash.
+- Recheck separate rights for text, annotations, lemma/morphology resources,
+  alignment data, versification data, and derived outputs. Public readability is
+  not redistribution permission.
+- Use Swete as the preferred Greek-text proof candidate unless current evidence
+  rejects it; preserve its share-alike obligations separately from MIT code.
+- Measure reproducible lemma/morphology join coverage rather than assuming that
+  Open Scriptures or STEPBible identifiers match the selected text.
+- Verify current STEPBible versification/lexical candidates by exact file and
+  revision; do not assume TAGOT exists merely because it is planned.
+- Do not commit, mirror, transform for redistribution, or use CATSS/restricted
+  alignment bytes as hidden public authority without documented permission.
+- Build only a small disposable/untracked proof covering Genesis 1, one Psalm
+  numbering/superscription case, and one prophetic passage used in the NT.
+- Report token/reference integrity, malformed or duplicate records,
+  normalization collisions, lemma-join coverage, versification mapping,
+  exact-GNT lemma matches, and raw/JSON/compressed size estimates.
+- Select an explicit first Hebrew↔Greek alignment delivery model: redistributable
+  source alignment, local-only restricted adapter, deterministic non-authoritative
+  candidates, limited manual review, or deferred word-level alignment.
+- State what #96 may and may not claim under that model and whether Phase 1
+  production contracts are cleared to begin.
 
-Do not weaken assertions, add retries that hide failures, enable auto-merge,
-change release/tag/settings, alter application data contracts, or modify
-dependency versions merely to complete this slice.
+Preserve the #96 invariant that `wlc` and `wlco` are two representations of one
+Westminster Leningrad Codex Hebrew base, not independent textual witnesses. Do
+not add a production LXX corpus, generated full-corpus output, runtime provider,
+new data pack, UI, backend, account, release, tag, or repository-settings change
+in #97 unless separately authorized after the source decision.
 
 ## Completion report
 
 Give the working path/branch, starting and final pushed SHAs, remote equality,
-actual workflow/test changes, exact emitted check names and results, tests run,
-live ruleset state, remaining blockers, and workspace status. Keep the report
-concise.
+exact source revisions/hashes/terms reviewed, proof inputs and disposable-output
+locations, measurements, selected source/alignment/packaging decisions, files
+committed, tests run and results, unsupported claims or blockers, and workspace
+status. Keep restricted source bytes and private local paths out of public GitHub
+artifacts. Keep the report concise.
