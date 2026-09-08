@@ -51,52 +51,56 @@ or a final distribution checkpoint, not each UI edit. Do not revive temporary
 owner-machine uninstall/firewall helpers or bypass blocked automation actions.
 Report failures and unrun checks accurately; source review is not rendered QA.
 
-## Current work: Septuagint source-stack decision and proof (#97)
+## Current work: Septuagint comparison contracts (#96 Phase 1)
 
-Accepted `main` is `e420f31be6a79fd34e5e520c80fa76cc640d9c40` after #112/#113.
-Work only on `research/septuagint-source-stack` for #97. Issue #83 is complete,
-so its deterministic source/Search generation contracts are now the maintained
-production-data authority. This slice is the Phase 0 source, rights, feasibility,
-and proof-of-import prerequisite for #96. Do not start the full #96 comparison UI
-or #78 multilingual Search integration in this branch.
+Accepted `main` is `0148d6f989c1eafef489fb452a4a33a1a8c899ab` after #97 / PR #114.
+Work only on `feature/septuagint-comparison-contracts` for this Phase 1 slice.
+Issue #83 remains the deterministic source-data generation authority. The accepted
+#97 decision allows shared witness/reference/evidence contracts to proceed, but
+it does not establish Swete token lemmas, morphology, or Hebrew↔Greek word-level
+alignment.
 
 Required end state:
 
-- Maintain `docs/decisions/SEPTUAGINT_SOURCE_STACK.md` as the decision record.
-- Pin and verify the exact Greek-text proof source revision and source hash.
-- Recheck separate rights for text, annotations, lemma/morphology resources,
-  alignment data, versification data, and derived outputs. Public readability is
-  not redistribution permission.
-- Use Swete as the preferred Greek-text proof candidate unless current evidence
-  rejects it; preserve its share-alike obligations separately from MIT code.
-- Measure reproducible lemma/morphology join coverage rather than assuming that
-  Open Scriptures or STEPBible identifiers match the selected text.
-- Verify current STEPBible versification/lexical candidates by exact file and
-  revision; do not assume TAGOT exists merely because it is planned.
-- Do not commit, mirror, transform for redistribution, or use CATSS/restricted
-  alignment bytes as hidden public authority without documented permission.
-- Build only a small disposable/untracked proof covering Genesis 1, one Psalm
-  numbering/superscription case, and one prophetic passage used in the NT.
-- Report token/reference integrity, malformed or duplicate records,
-  normalization collisions, lemma-join coverage, versification mapping,
-  exact-GNT lemma matches, and raw/JSON/compressed size estimates.
-- Select an explicit first Hebrew↔Greek alignment delivery model: redistributable
-  source alignment, local-only restricted adapter, deterministic non-authoritative
-  candidates, limited manual review, or deferred word-level alignment.
-- State what #96 may and may not claim under that model and whether Phase 1
-  production contracts are cleared to begin.
+- Keep the framework-neutral comparison contract under `app/src`; do not put
+  shared domain semantics into a browser-only or desktop-only adapter.
+- Model one canonical `textWitness` with multiple display/normalization
+  representations. `wlc` and `wlco` remain one `openbible:wlc` witness vote and
+  one source-token identity when witness/reference/token position match.
+- Model witness-qualified `sourceToken` identity with source reference and token
+  index. Canonical reference, lemma, morphology, and transliteration may be null;
+  unsupported fields must remain null rather than inferred from spelling,
+  Strong's ids, English glosses, or canonical ordering.
+- Model explicit verse maps for exact, split, merged/many-to-one, moved,
+  source-only, canonical-only, unavailable, and uncertain states. Preserve
+  source-only/unmapped records instead of inventing targets.
+- Model alignment states `aligned-1:1`, `aligned-1:n`, `aligned-n:1`,
+  `aligned-n:m`, `reordered`, `hebrew-unaligned`, `greek-unaligned`,
+  `lexical-substitution`, and `uncertain`, with cardinality validation.
+- Keep source-provided, deterministic generated-candidate, and manually reviewed
+  evidence distinct. A generated candidate cannot become reviewed merely from a
+  confidence value.
+- Keep LXX↔NT exact lemma identity, normalized alias, lexical relation, and
+  unresolved candidate separate from passage citation/quotation relations.
+  Shared vocabulary never creates quotation, allusion, or textual-dependence
+  authority by itself.
+- Maintain deterministic, corpus-free fixtures for all alignment shapes and the
+  accepted Psalm 50:1–3 → app Psalm 51:1 many-to-one versification divergence.
+  Fixtures may use synthetic token ids/characters and exact reference metadata;
+  do not copy a production LXX corpus into this branch.
+- Keep the accepted #97 Phase 1 boundary explicit: Swete text contract-ready;
+  TVTMS only bounded reference authority; Swete lemma/morphology and Hebrew↔Greek
+  word alignment unsupported; production corpus/optional pack not part of Phase 1.
 
-Preserve the #96 invariant that `wlc` and `wlco` are two representations of one
-Westminster Leningrad Codex Hebrew base, not independent textual witnesses. Do
-not add a production LXX corpus, generated full-corpus output, runtime provider,
-new data pack, UI, backend, account, release, tag, or repository-settings change
-in #97 unless separately authorized after the source decision.
+Do not add a production Swete/LXX pack, import restricted CATSS/CCAT bytes, infer
+an alternate Hebrew Vorlage, implement the comparison UI, implement #78 Search,
+change user-data v3, add a backend/account/sync path, change repository settings,
+or create a release/tag in this slice.
 
 ## Completion report
 
 Give the working path/branch, starting and final pushed SHAs, remote equality,
-exact source revisions/hashes/terms reviewed, proof inputs and disposable-output
-locations, measurements, selected source/alignment/packaging decisions, files
-committed, tests run and results, unsupported claims or blockers, and workspace
-status. Keep restricted source bytes and private local paths out of public GitHub
-artifacts. Keep the report concise.
+contract/fixture files changed, focused and aggregate tests run, exact failures or
+unrun checks, Gitleaks/diff status, remaining blockers, and workspace status.
+Keep restricted source bytes and private local paths out of public GitHub artifacts.
+Keep the report concise.
