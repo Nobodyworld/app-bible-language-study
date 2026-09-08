@@ -52,7 +52,7 @@ const SEARCH_STOP_WORDS = new Set([
   "your",
 ]);
 
-function searchTerms(query) {
+export function searchTerms(query) {
   return (
     String(query || "")
       .normalize("NFKD")
@@ -101,7 +101,7 @@ function appendHighlightedSearchText(container, text, query) {
   container.append(mark, textNode(value.slice(index + length)));
 }
 
-function refsMatchingTerms(shard, terms, limit = 250) {
+export function refsMatchingTerms(shard, terms, limit = 250) {
   if (!shard?.terms || !terms.length) return [];
   const counts = new Map();
   for (const term of terms) {
@@ -311,7 +311,7 @@ async function runCommentarySearch(ctx, query, scope, limit) {
   return results;
 }
 
-function runSearch(ctx, query, collection, scope, limit) {
+export function runSearch(ctx, query, collection, scope, limit) {
   if (collection === "lexicon" && !ctx.canUseCapability?.("lexicon-language-metadata")) return [];
   if (collection === "commentaries" && !ctx.canUseCapability?.("commentary")) return [];
   if (collection === "outlines" && !ctx.canUseCapability?.("outlines")) return [];

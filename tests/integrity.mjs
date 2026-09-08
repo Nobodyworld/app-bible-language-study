@@ -21,6 +21,18 @@ function walk(path) {
 }
 
 const packageJson = JSON.parse(readFileSync(join(repoRoot, "package.json"), "utf8"));
+const sourceManifest = JSON.parse(readFileSync(join(repoRoot, "app/data/source-manifest.json"), "utf8"));
+const generationAuthorities = {
+  original_language: ["app/tools/import-original-language-sources.mjs", "sources:check"],
+  search: ["app/tools/generate-search-indexes.mjs", "search:check"],
+};
+for (const [id, [tool, checkCommand]] of Object.entries(generationAuthorities)) {
+  const authority = sourceManifest.generation_authorities?.[id];
+  if (authority?.tool !== tool || authority?.check_command !== checkCommand
+      || !packageJson.scripts?.[checkCommand]?.includes(`node ./${tool} --check`)) {
+    failures.push(`Source generation authority ${id} must name ${tool} and the maintained no-write ${checkCommand} command.`);
+  }
+}
 for (const [name, command] of Object.entries(packageJson.scripts || {})) {
   const matches = [...command.matchAll(/node\s+([^\s&]+)/g)];
   for (const match of matches) {

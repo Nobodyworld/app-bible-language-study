@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "generated_at": "2026-09-07T06:19:20.639Z",
+  "generated_at": "2026-09-08T00:46:07.875Z",
   "distribution": "source-notices-retained",
   "source_manifest": "data/source-manifest.json",
   "note": "Package inventory for the local-first application. Bundled-data rights and provenance are recorded in data/source-manifest.json.",
@@ -41,11 +41,11 @@
         "source-tr94"
       ],
       "files": 2803,
-      "bytes": 954309221,
-      "mb": 910.1,
-      "gzip_bytes": 180460102,
-      "gzip_mb": 172.1,
-      "sha256": "sha256:84df01615458adc81523bd18813e3477e55752edad9ef3d13278c9a84832e2b9",
+      "bytes": 954598320,
+      "mb": 910.38,
+      "gzip_bytes": 180561119,
+      "gzip_mb": 172.2,
+      "sha256": "sha256:597d66f4d51bec8244423c05ea56c8f3a08dfaebcdeb64db866eea1a0529dde9",
       "largest_shard": {
         "path": "data/search/commentaries/gill/psalms.json",
         "bytes": 10293768
@@ -381,15 +381,15 @@
       "description": "Generated verse and study search shards and manifest.",
       "dependencies": [],
       "files": 993,
-      "bytes": 357669706,
-      "gzip_bytes": 43781568,
+      "bytes": 357958805,
+      "gzip_bytes": 43882585,
       "license_note": "Generated local index data retained for app functionality.",
       "paths": [
         "data/search"
       ],
-      "mb": 341.1,
-      "gzip_mb": 41.75,
-      "sha256": "sha256:d0b687f760e261a5849ebfcad43fa9a962e86c275b11665e226576cf3e5edd6e",
+      "mb": 341.38,
+      "gzip_mb": 41.85,
+      "sha256": "sha256:4590cd971d4a2897c831f0faa652c3bb8320ba14ec08ef730cf817c5e4528043",
       "largest_shard": {
         "path": "data/search/commentaries/gill/psalms.json",
         "bytes": 10293768

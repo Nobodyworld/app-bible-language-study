@@ -206,9 +206,28 @@ async function buildInventory(current) {
 
 const current = await readJson(manifestPath);
 const expected = await buildInventory(current);
+const inventoryChanged = JSON.stringify(expected) !== JSON.stringify(current);
+const distributionPath = join(dataRoot, "distribution-manifest.json");
+const distribution = await readJson(distributionPath);
+const reference = distribution.package_manifest;
+if (reference?.path !== "data/package-manifest.json" || reference.schema_version !== expected.schema_version) {
+  throw new Error("Distribution must reference the maintained package manifest path and schema.");
+}
+const referencedPackages = expected.packages.filter((pack) => pack.id === reference.package_id);
+if (referencedPackages.length !== 1) {
+  throw new Error(`Distribution package ${reference.package_id} must resolve to exactly one package inventory.`);
+}
+const expectedDistribution = {
+  ...distribution,
+  package_manifest: { ...reference, content_sha256: referencedPackages[0].sha256 },
+};
+const distributionChanged = JSON.stringify(expectedDistribution) !== JSON.stringify(distribution);
 if (checkOnly) {
-  if (JSON.stringify(expected) !== JSON.stringify(current)) {
+  if (inventoryChanged) {
     throw new Error("Package inventory is stale. Run `npm run inventory:refresh`.");
+  }
+  if (distributionChanged) {
+    throw new Error("Distribution package identity is stale. Run `npm run inventory:refresh`.");
   }
   console.log(
     JSON.stringify(
@@ -224,12 +243,17 @@ if (checkOnly) {
     ),
   );
 } else {
-  expected.generated_at = new Date().toISOString();
-  await writeFile(manifestPath, `${JSON.stringify(expected, null, 2)}\n`, "utf8");
+  if (inventoryChanged) {
+    expected.generated_at = new Date().toISOString();
+    await writeFile(manifestPath, `${JSON.stringify(expected, null, 2)}\n`, "utf8");
+  }
+  if (distributionChanged) {
+    await writeFile(distributionPath, `${JSON.stringify(expectedDistribution, null, 2)}\n`, "utf8");
+  }
   console.log(
     JSON.stringify(
       {
-        status: "updated",
+        status: inventoryChanged || distributionChanged ? "updated" : "unchanged",
         feature_packs: expected.feature_packs.length,
         files: expected.packages[0]?.files || 0,
         bytes: expected.packages[0]?.bytes || 0,
