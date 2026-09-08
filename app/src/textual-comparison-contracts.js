@@ -11,6 +11,7 @@ export const TEXTUAL_AUTHORITY_KINDS = Object.freeze([
 ]);
 
 export const TEXT_WITNESS_LANGUAGES = Object.freeze(["hebrew", "aramaic", "greek"]);
+export const TEXT_WITNESS_COVERAGE_SCOPES = Object.freeze(["complete", "partial", "unknown"]);
 export const VERSE_MAP_TYPES = Object.freeze([
   "exact",
   "split",
@@ -91,12 +92,15 @@ export const TEXTUAL_COMPARISON_CONTRACT = Object.freeze({
   representation_identity_rule:
     "Display and normalization representations do not create independent witnesses or source-token identities.",
   nullable_source_annotations: Object.freeze(["lemma", "morphology", "transliteration"]),
+  optional_source_position_fields: Object.freeze(["segment_index", "group_index"]),
   record_types: Object.freeze({
     textWitness: Object.freeze([
       "schema_version",
       "id",
       "language",
       "script",
+      "canon",
+      "coverage",
       "edition",
       "versification",
       "normalization_profile",
@@ -112,6 +116,8 @@ export const TEXTUAL_COMPARISON_CONTRACT = Object.freeze({
       "source_reference",
       "canonical_reference",
       "token_index",
+      "segment_index",
+      "group_index",
       "representation_id",
       "surface",
       "normalized_forms",
@@ -193,8 +199,8 @@ function requireString(value, path, errors, { nullable = false } = {}) {
 }
 
 function requireInteger(value, path, errors, { minimum = null } = {}) {
-  if (!Number.isInteger(value)) {
-    diagnostic(errors, path, "integer.required", "Expected an integer.");
+  if (!Number.isSafeInteger(value)) {
+    diagnostic(errors, path, "integer.required", "Expected a safe integer.");
     return false;
   }
   if (minimum !== null && value < minimum) {
@@ -283,6 +289,42 @@ function validateEvidence(value, path, errors) {
   }
 }
 
+function validateEvidenceReviewState(value, errors) {
+  if (value.evidence?.class === "deterministic-generated-candidate" && value.review_status !== "generated-candidate") {
+    diagnostic(errors, "$.review_status", "evidence.generated-review-state", "Generated candidates must remain generated-candidate until a separate reviewed record exists.");
+  }
+  if (value.evidence?.class === "manually-reviewed" && value.review_status !== "reviewed") {
+    diagnostic(errors, "$.review_status", "evidence.manual-review-state", "Manually reviewed evidence must use reviewed status.");
+  }
+  if (value.evidence?.class === "source-provided" && !["source-provided", "reviewed"].includes(value.review_status)) {
+    diagnostic(errors, "$.review_status", "evidence.source-review-state", "Source-provided evidence must remain source-provided or separately reviewed.");
+  }
+}
+
+// Book ids and references belong to the witness's source versification, not
+// the app's book catalog. A partial entry explicitly lists its covered units.
+function validateCoverage(value, path, errors) {
+  if (!Array.isArray(value)) {
+    diagnostic(errors, path, "array.required", "Expected a book coverage array.");
+    return;
+  }
+  if (!value.length) diagnostic(errors, path, "array.minimum", "Declare at least one source book, with unknown scope if coverage is unverified.");
+  const seen = new Set();
+  value.forEach((book, index) => {
+    const bookPath = `${path}[${index}]`;
+    if (!requireRecord(book, bookPath, errors)) return;
+    if (requireString(book.source_book_id, `${bookPath}.source_book_id`, errors)) {
+      if (seen.has(book.source_book_id)) diagnostic(errors, `${bookPath}.source_book_id`, "coverage.duplicate-book", "Source book ids must be unique within a witness.");
+      seen.add(book.source_book_id);
+    }
+    requireEnum(book.scope, TEXT_WITNESS_COVERAGE_SCOPES, `${bookPath}.scope`, errors);
+    requireStringArray(book.source_references, `${bookPath}.source_references`, errors, { minimum: book.scope === "partial" ? 1 : 0 });
+    if (["complete", "unknown"].includes(book.scope) && book.source_references?.length) {
+      diagnostic(errors, `${bookPath}.source_references`, "coverage.references", "Only partial coverage lists source units; complete means the whole source book and unknown makes no coverage claim.");
+    }
+  });
+}
+
 export function validateTextWitness(value) {
   const errors = [];
   if (!requireRecord(value, "$", errors)) return errors;
@@ -290,6 +332,8 @@ export function validateTextWitness(value) {
   requireString(value.id, "$.id", errors);
   requireEnum(value.language, TEXT_WITNESS_LANGUAGES, "$.language", errors);
   requireString(value.script, "$.script", errors);
+  requireString(value.canon, "$.canon", errors);
+  validateCoverage(value.coverage, "$.coverage", errors);
   if (requireRecord(value.edition, "$.edition", errors)) {
     requireString(value.edition.name, "$.edition.name", errors);
     requireString(value.edition.version, "$.edition.version", errors);
@@ -330,6 +374,13 @@ export function validateSourceToken(value) {
   requireString(value.source_reference, "$.source_reference", errors);
   requireString(value.canonical_reference, "$.canonical_reference", errors, { nullable: true });
   requireInteger(value.token_index, "$.token_index", errors, { minimum: 1 });
+  // One-based positions within this source reference/representation, independent
+  // of token_index. Neither grouping nor display segmentation restarts identity.
+  for (const field of TEXTUAL_COMPARISON_CONTRACT.optional_source_position_fields) {
+    if (value[field] !== undefined && value[field] !== null) {
+      requireInteger(value[field], `$.${field}`, errors, { minimum: 1 });
+    }
+  }
   requireString(value.representation_id, "$.representation_id", errors, { nullable: true });
   requireString(value.surface, "$.surface", errors);
   if (requireRecord(value.normalized_forms, "$.normalized_forms", errors)) {
@@ -338,6 +389,11 @@ export function validateSourceToken(value) {
   validateAnnotation(value.lemma, "$.lemma", errors, "lemma");
   validateAnnotation(value.morphology, "$.morphology", errors, "morphology");
   validateAnnotation(value.transliteration, "$.transliteration", errors, "transliteration");
+  if (value.witness_id === SEPTUAGINT_PHASE1_BOUNDARY.greek_text.witness_id) {
+    for (const kind of ["lemma", "morphology"]) {
+      if (value[kind] !== null) diagnostic(errors, `$.${kind}`, "source-token.unsupported-annotation", `Swete ${kind} must remain null under the Phase 1 source decision.`);
+    }
+  }
   if (!Array.isArray(value.external_ids)) {
     diagnostic(errors, "$.external_ids", "array.required", "Expected an external_ids array.");
   } else {
@@ -403,15 +459,7 @@ export function validateAlignmentEdge(value) {
   if (value.state === "greek-unaligned" && (h !== 0 || !g)) invalidShape("greek-unaligned requires Greek tokens and no Hebrew tokens.");
   if (["lexical-substitution", "uncertain"].includes(value.state) && (!h || !g)) invalidShape(`${value.state} requires identified units on both sides.`);
 
-  if (value.evidence?.class === "deterministic-generated-candidate" && value.review_status !== "generated-candidate") {
-    diagnostic(errors, "$.review_status", "evidence.generated-review-state", "Generated candidates must remain generated-candidate until a separate reviewed record exists.");
-  }
-  if (value.evidence?.class === "manually-reviewed" && value.review_status !== "reviewed") {
-    diagnostic(errors, "$.review_status", "evidence.manual-review-state", "Manually reviewed alignment evidence must use reviewed status.");
-  }
-  if (value.evidence?.class === "source-provided" && !["source-provided", "reviewed"].includes(value.review_status)) {
-    diagnostic(errors, "$.review_status", "evidence.source-review-state", "Source-provided evidence must remain source-provided or separately reviewed.");
-  }
+  validateEvidenceReviewState(value, errors);
   return errors;
 }
 
@@ -428,6 +476,11 @@ export function validateCrossCorpusLemmaLink(value) {
   validateEvidence(value.evidence, "$.evidence", errors);
   validateProvenance(value.provenance, "$.provenance", errors);
   requireEnum(value.review_status, REVIEW_STATES, "$.review_status", errors);
+  validateEvidenceReviewState(value, errors);
+
+  if (value.link_type === "exact-canonical-lemma" && value.lxx_lemma_id !== value.nt_lemma_id) {
+    diagnostic(errors, "$.nt_lemma_id", "lemma-link.exact-identity", "Exact canonical lemma links require the same canonical lemma id on both sides.");
+  }
 
   if (value.link_type === "unresolved-candidate") {
     if (value.evidence?.class !== "deterministic-generated-candidate") {
@@ -451,6 +504,7 @@ export function validatePassageRelation(value) {
   validateEvidence(value.evidence, "$.evidence", errors);
   validateProvenance(value.provenance, "$.provenance", errors);
   requireEnum(value.review_status, REVIEW_STATES, "$.review_status", errors);
+  validateEvidenceReviewState(value, errors);
   if (value.source_passage_id === value.receiving_passage_id) {
     diagnostic(errors, "$.receiving_passage_id", "passage-relation.self", "Passage relations must connect distinct passage identities.");
   }

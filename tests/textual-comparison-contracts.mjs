@@ -9,11 +9,13 @@ import {
   SEPTUAGINT_PHASE1_BOUNDARY,
   TEXTUAL_COMPARISON_CONTRACT,
   TEXTUAL_COMPARISON_SCHEMA_VERSION,
+  TEXT_WITNESS_COVERAGE_SCOPES,
   VERSE_MAP_TYPES,
   assertValidTextualComparisonRecord,
   sourceTokenIdentityKey,
   validateAlignmentEdge,
   validateCrossCorpusLemmaLink,
+  validatePassageRelation,
   validateSourceToken,
   validateTextWitness,
   validateVerseMap,
@@ -24,11 +26,13 @@ const provenance = (authority, sourceId = `fixture:${authority}`) => [
   { source_id: sourceId, revision: "fixture-v1", authority },
 ];
 
-const witness = ({ id, language, script, versification, representations, license = "fixture-only" }) => ({
+const witness = ({ id, language, script, canon, coverage, versification, representations, license = "fixture-only" }) => ({
   schema_version: TEXTUAL_COMPARISON_SCHEMA_VERSION,
   id,
   language,
   script,
+  canon,
+  coverage,
   edition: { name: `Fixture ${id}`, version: "fixture-v1" },
   versification,
   normalization_profile: "unicode-nfc",
@@ -41,6 +45,8 @@ const wlcWitness = witness({
   id: "openbible:wlc",
   language: "hebrew",
   script: "Hebrew",
+  canon: "fixture:hebrew-canon",
+  coverage: [{ source_book_id: "Gen", scope: "partial", source_references: ["Gen.1.1"] }],
   versification: "openbible:wlc:source-references",
   representations: [
     { id: "pointed", display: "Pointed Hebrew", normalization_profile: "unicode-nfc" },
@@ -52,6 +58,12 @@ const sweteWitness = witness({
   id: "swete:lxx",
   language: "greek",
   script: "Greek",
+  canon: "fixture:greek-canon",
+  coverage: [
+    { source_book_id: "Gen", scope: "partial", source_references: ["Gen.1.1"] },
+    { source_book_id: "Ps", scope: "partial", source_references: ["Ps.50.1", "Ps.50.2", "Ps.50.3"] },
+    { source_book_id: "FixtureAddition", scope: "unknown", source_references: [] },
+  ],
   versification: "swete:source-references",
   representations: [
     { id: "source-text", display: "Swete Greek", normalization_profile: "unicode-nfc" },
@@ -144,7 +156,12 @@ const acceptedPsalmDivergence = {
   source_references: ["Ps.50.1", "Ps.50.2", "Ps.50.3"],
   canonical_references: ["psalms/51/1"],
   map_type: "merged",
-  provenance: provenance("versification", "stepbible:tvtms@ea47bd4c7eab7375f2dca07086ccc356e95a4128"),
+  // Bounded reference metadata credited to STEPBible.org / Tyndale House,
+  // CC BY 4.0; selected, expanded and projected onto app targets per #97.
+  provenance: [
+    { source_id: "stepbible:tvtms", revision: "ea47bd4c7eab7375f2dca07086ccc356e95a4128", authority: "versification" },
+    ...provenance("versification", "fixture:app-title-merge-projection"),
+  ],
   review_status: "reviewed",
 };
 
@@ -215,7 +232,8 @@ const alignmentFixtures = [
 const exactLemmaLink = {
   schema_version: TEXTUAL_COMPARISON_SCHEMA_VERSION,
   id: "lemma-link:fixture:exact",
-  lxx_witness_id: "swete:lxx",
+  // Synthetic lexical authority; this does not assign lemmas to Swete tokens.
+  lxx_witness_id: "fixture:annotated-greek",
   lxx_lemma_id: "lemma:fixture:alpha",
   nt_witness_id: "openbible:nestle-1904",
   nt_lemma_id: "lemma:fixture:alpha",
@@ -289,6 +307,45 @@ export function runTextualComparisonContractTests() {
 
   check(() => assert.deepEqual(validateTextWitness(wlcWitness), []));
   check(() => assert.deepEqual(validateTextWitness(sweteWitness), []));
+  check(() => assert.deepEqual(TEXT_WITNESS_COVERAGE_SCOPES, ["complete", "partial", "unknown"]));
+  for (const field of ["canon", "coverage", "edition", "rights", "provenance", "versification", "normalization_profile"]) {
+    check(() => {
+      const invalid = { ...wlcWitness };
+      delete invalid[field];
+      assert.ok(validateTextWitness(invalid).some((item) => item.path === `$.${field}`), field);
+    });
+  }
+  for (const [field, key] of [["edition", "name"], ["edition", "version"], ["rights", "license_id"], ["rights", "delivery"]]) {
+    check(() => {
+      const invalid = { ...wlcWitness, [field]: { ...wlcWitness[field], [key]: "" } };
+      assert.ok(validateTextWitness(invalid).some((item) => item.path === `$.${field}.${key}`));
+    });
+  }
+  for (const coverage of [
+    [{ source_book_id: "FixtureAddition", scope: "complete", source_references: [] }],
+    [{ source_book_id: "Ps", scope: "partial", source_references: ["Ps.144.13a"] }],
+  ]) {
+    check(() => assert.deepEqual(validateTextWitness({ ...sweteWitness, coverage }), []));
+  }
+  for (const coverage of [
+    [],
+    [null],
+    [{ source_book_id: "", scope: "unknown", source_references: [] }],
+    [{ source_book_id: "Gen", scope: "invented", source_references: [] }],
+    [{ source_book_id: "Gen", scope: "partial", source_references: [] }],
+    [{ source_book_id: "Gen", scope: "partial", source_references: ["Gen.1.1", "Gen.1.1"] }],
+    [{ source_book_id: "Gen", scope: "complete", source_references: ["Gen.1.1"] }],
+    [{ source_book_id: "Gen", scope: "unknown", source_references: ["Gen.1.1"] }],
+    [...wlcWitness.coverage, ...wlcWitness.coverage],
+  ]) {
+    check(() => assert.ok(validateTextWitness({ ...wlcWitness, coverage }).length));
+  }
+  check(() => assert.ok(validateTextWitness({ ...wlcWitness, representations: [...wlcWitness.representations, wlcWitness.representations[0]] })
+    .some((item) => item.code === "representation.duplicate")));
+  check(() => assert.deepEqual(validateTextWitness({
+    ...wlcWitness,
+    representations: [...wlcWitness.representations, { id: "fixture-normalized", display: "Synthetic normalized view", normalization_profile: "fixture:lossy-alias" }],
+  }), []));
   check(() => assert.equal(wlcWitness.representations.length, 2));
   check(() => assert.equal(witnessVoteKey(pointedWlcToken), witnessVoteKey(consonantalWlcToken)));
   check(() => assert.equal(sourceTokenIdentityKey(pointedWlcToken), sourceTokenIdentityKey(consonantalWlcToken)));
@@ -297,6 +354,54 @@ export function runTextualComparisonContractTests() {
   check(() => assert.equal(sweteSourceOnlyToken.lemma, null));
   check(() => assert.equal(sweteSourceOnlyToken.morphology, null));
 
+  // Every non-identity field can vary without changing a canonical occurrence.
+  const identityVariants = [
+    { id: "fixture:another-record" },
+    { representation_id: "consonants-only" },
+    { representation_id: null },
+    { canonical_reference: null },
+    { segment_index: 2 },
+    { group_index: 3 },
+    { segment_index: 2, group_index: 3 },
+    { segment_index: null, group_index: null },
+    { surface: "ב", normalized_forms: { nfc: "ב", alias: "fixture:b" } },
+    { lemma: { id: "lemma:fixture:a", provenance: provenance("lemma") } },
+    { morphology: { value: "fixture:m", scheme: "fixture:scheme", provenance: provenance("morphology") } },
+    { transliteration: { value: "fixture:a", provenance: provenance("text") } },
+    { external_ids: [{ system: "fixture", value: "another-id", provenance: provenance("text") }] },
+    { provenance: provenance("text", "fixture:another-source") },
+  ];
+  for (const variant of identityVariants) {
+    check(() => assert.equal(sourceTokenIdentityKey({ ...pointedWlcToken, ...variant }), sourceTokenIdentityKey(pointedWlcToken), JSON.stringify(variant)));
+  }
+  for (const variant of [
+    { witness_id: "fixture:another-witness" },
+    { versification: "fixture:another-versification" },
+    { source_reference: "Gen.1.2" },
+    { token_index: 2 },
+  ]) {
+    check(() => assert.notEqual(sourceTokenIdentityKey({ ...pointedWlcToken, ...variant }), sourceTokenIdentityKey(pointedWlcToken)));
+  }
+  for (const field of ["token_index", "segment_index", "group_index"]) {
+    for (const invalid of [0, -1, 1.5, "1", Number.MAX_SAFE_INTEGER + 1]) {
+      check(() => assert.ok(validateSourceToken({ ...pointedWlcToken, [field]: invalid }).some((item) => item.path === `$.${field}`)));
+    }
+  }
+  for (const [kind, annotation] of [
+    ["lemma", { id: "lemma:fixture:unsupported", provenance: provenance("lemma") }],
+    ["morphology", { value: "fixture:m", scheme: "fixture:scheme", provenance: provenance("morphology") }],
+  ]) {
+    check(() => assert.ok(validateSourceToken({ ...sweteSourceOnlyToken, [kind]: annotation })
+      .some((item) => item.path === `$.${kind}` && item.code === "source-token.unsupported-annotation")));
+  }
+  check(() => {
+    const unmapped = { ...sweteSourceOnlyToken, source_reference: "Ps.144.13a", segment_index: 1, group_index: 2 };
+    const before = JSON.stringify(unmapped);
+    assertValidTextualComparisonRecord("sourceToken", unmapped);
+    sourceTokenIdentityKey(unmapped);
+    assert.equal(JSON.stringify(unmapped), before, "Unmapped source identity and null annotations must be preserved without mutation.");
+  });
+
   check(() => assert.deepEqual(validateVerseMap(exactVerseMap), []));
   check(() => assert.deepEqual(validateVerseMap(acceptedPsalmDivergence), []));
   check(() => assert.equal(acceptedPsalmDivergence.map_type, "merged"));
@@ -304,9 +409,27 @@ export function runTextualComparisonContractTests() {
   check(() => assert.deepEqual(acceptedPsalmDivergence.canonical_references, ["psalms/51/1"]));
   check(() => assert.deepEqual(validateVerseMap(sourceOnlyMap), []));
   check(() => assert.deepEqual(validateVerseMap(canonicalOnlyMap), []));
+  for (const fixture of [
+    { ...exactVerseMap, map_type: "split", canonical_references: ["fixture/1/1", "fixture/1/2"] },
+    { ...exactVerseMap, map_type: "moved", canonical_references: ["fixture/2/1"] },
+    { ...sourceOnlyMap, map_type: "unavailable" },
+    { ...sourceOnlyMap, map_type: "uncertain" },
+  ]) {
+    check(() => assert.deepEqual(validateVerseMap(fixture), [], fixture.map_type));
+  }
+  check(() => {
+    const mappedTokens = acceptedPsalmDivergence.source_references.map((source_reference) => ({
+      ...sweteSourceOnlyToken,
+      source_reference,
+      canonical_reference: "psalms/51/1",
+    }));
+    assert.equal(new Set(mappedTokens.map(sourceTokenIdentityKey)).size, 3, "Many-to-one verse mapping must retain three source identities.");
+  });
 
   alignmentFixtures.forEach((fixture) => {
     check(() => assert.deepEqual(validateAlignmentEdge(fixture), [], fixture.id));
+    check(() => assert.ok(validateAlignmentEdge({ ...fixture, hebrew_token_ids: [], greek_token_ids: [] })
+      .some((item) => item.code === "alignment.cardinality"), fixture.state));
   });
   check(() => assert.equal(alignmentFixtures.filter((item) => item.state === "hebrew-unaligned").length, 1));
   check(() => assert.equal(alignmentFixtures.filter((item) => item.state === "greek-unaligned").length, 1));
@@ -333,6 +456,27 @@ export function runTextualComparisonContractTests() {
 
   check(() => assert.deepEqual(validateCrossCorpusLemmaLink(exactLemmaLink), []));
   check(() => assert.deepEqual(validateCrossCorpusLemmaLink(unresolvedLemmaCandidate), []));
+  for (const link_type of ["normalized-alias", "documented-lexical-relation"]) {
+    check(() => assert.deepEqual(validateCrossCorpusLemmaLink({ ...exactLemmaLink, link_type, nt_lemma_id: "lemma:fixture:related" }), []));
+  }
+  check(() => assert.ok(validateCrossCorpusLemmaLink({ ...exactLemmaLink, nt_lemma_id: "lemma:fixture:different" })
+    .some((item) => item.code === "lemma-link.exact-identity")));
+  for (const [validate, fixture] of [
+    [validateAlignmentEdge, alignmentFixtures[0]],
+    [validateCrossCorpusLemmaLink, exactLemmaLink],
+    [validatePassageRelation, passageRelation],
+  ]) {
+    check(() => assert.ok(validate({
+      ...fixture,
+      evidence: { ...generatedEvidence, confidence: 1, confidence_basis: "fixture:certainty-does-not-confer-review" },
+      review_status: "reviewed",
+    }).some((item) => item.code === "evidence.generated-review-state")));
+    check(() => assert.ok(validate({ ...fixture, evidence: reviewedEvidence, review_status: "unreviewed" })
+      .some((item) => item.code === "evidence.manual-review-state")));
+  }
+  for (const relation_type of PASSAGE_RELATION_TYPES) {
+    check(() => assert.deepEqual(validatePassageRelation({ ...passageRelation, relation_type }), []));
+  }
   check(() => {
     const invalid = { ...unresolvedLemmaCandidate, review_status: "reviewed" };
     assert.ok(validateCrossCorpusLemmaLink(invalid).some((item) => item.code === "lemma-link.candidate-review-state"));
@@ -351,7 +495,7 @@ export function runTextualComparisonContractTests() {
   return {
     checks,
     witnesses: 2,
-    verseMaps: 4,
+    verseMaps: 8,
     alignmentFixtures: alignmentFixtures.length,
     phase1Boundary: {
       lemma: SEPTUAGINT_PHASE1_BOUNDARY.token_annotations.lemma,
