@@ -83,6 +83,11 @@ Required end state:
   versification, namespaced outputs, separate text/lemma/morphology/alignment
   authorities, and unaligned/source-only records so #96 can add LXX later without
   overwriting WLC/GNT authority.
+- Preserve #96's Hebrew-base invariant: `wlc` and `wlco` are pointed and
+  consonantal representations of the same Westminster Leningrad Codex base.
+  They must share one canonical witness/source-token identity and must not be
+  counted or asserted as independent textual witnesses. Represent the display/
+  normalization variant separately from that canonical witness identity.
 
 Historical JSON/SQLite/performance experiments are evidence only unless current
 measurements justify adoption. Do not introduce SQLite simply because an old
