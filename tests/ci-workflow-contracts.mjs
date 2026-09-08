@@ -8,8 +8,9 @@ import { fileURLToPath } from "node:url";
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const readText = (relativePath) => fs.readFile(path.join(repoRoot, relativePath), "utf8");
 
-const [verifyWorkflow, desktopWorkflow, packageText] = await Promise.all([
+const [verifyWorkflow, requiredWorkflow, desktopWorkflow, packageText] = await Promise.all([
   readText(".github/workflows/verify.yml"),
+  readText(".github/workflows/required-gates.yml"),
   readText(".github/workflows/desktop-verify.yml"),
   readText("package.json"),
 ]);
@@ -48,35 +49,37 @@ assert.equal(
   "Both Verify checkouts must keep persisted credentials disabled",
 );
 
-assert.doesNotMatch(
+assert.match(requiredWorkflow, /name: Required Gates/);
+assert.match(requiredWorkflow, /permissions:\s*\n\s+contents: read\s*\n\s+checks: read/);
+assert.match(requiredWorkflow, /name: security\/relevance/);
+assert.match(requiredWorkflow, /name: desktop\/security gate/);
+assert.match(requiredWorkflow, /if: always\(\)/);
+assert.match(requiredWorkflow, /gitleaks-8\.30\.1-windows-x64\.zip/);
+assert.match(requiredWorkflow, /D29144DEFF3A68AA93CED33DDDF84B7FDC26070ADD4AA0F4513094C8332AFC4E/);
+assert.match(requiredWorkflow, /gitleaks git --no-banner --redact=100 --log-opts=\$range \./);
+assert.match(requiredWorkflow, /desktop_relevant=/);
+assert.match(requiredWorkflow, /\^app\//);
+assert.match(requiredWorkflow, /\^src-tauri\//);
+assert.match(requiredWorkflow, /\^tests\/desktop-\.\*\\\.mjs\$/);
+assert.match(requiredWorkflow, /\^package\(-lock\)\?\\\.json\$/);
+assert.match(requiredWorkflow, /checkName = 'desktop \(windows-2022\)'/);
+assert.match(requiredWorkflow, /commits\/\$env:CANDIDATE_SHA\/check-runs/);
+assert.match(requiredWorkflow, /head_sha -eq \$env:CANDIDATE_SHA/);
+assert.match(requiredWorkflow, /if \(\$check\.conclusion -eq 'success'\) \{ exit 0 \}/);
+assert.equal(
+  (requiredWorkflow.match(/persist-credentials: false/g) || []).length,
+  1,
+  "The always-run security checkout must keep persisted credentials disabled",
+);
+
+assert.match(desktopWorkflow, /name: desktop \(windows-2022\)/);
+assert.match(
   desktopWorkflow,
   /pull_request:\s*\n\s+paths:/,
-  "Desktop Verify must emit an always-present PR gate instead of using workflow-level path filters",
+  "The expensive desktop lifecycle should remain path-scoped; the always-present required gate owns merge enforcement",
 );
-assert.doesNotMatch(
-  desktopWorkflow,
-  /push:\s*\n\s+branches:\s*\n\s+- main\s*\n\s+paths:/,
-  "Desktop Verify must emit an always-present main-push gate instead of using workflow-level path filters",
-);
-assert.match(desktopWorkflow, /name: security and relevance/);
-assert.match(desktopWorkflow, /name: desktop lifecycle \(windows-2022\)/);
-assert.match(desktopWorkflow, /if: needs\.preflight\.outputs\.desktop_relevant == 'true'/);
-assert.match(desktopWorkflow, /name: desktop\/security gate/);
-assert.match(desktopWorkflow, /if: always\(\)/);
-assert.match(desktopWorkflow, /needs: \[preflight, desktop\]/);
+assert.match(desktopWorkflow, /persist-credentials: false/);
 assert.match(desktopWorkflow, /gitleaks-8\.30\.1-windows-x64\.zip/);
-assert.match(desktopWorkflow, /D29144DEFF3A68AA93CED33DDDF84B7FDC26070ADD4AA0F4513094C8332AFC4E/);
-assert.match(desktopWorkflow, /gitleaks git --no-banner --redact=100 --log-opts=\$range \./);
-assert.match(desktopWorkflow, /desktop_relevant=true/);
-assert.match(desktopWorkflow, /desktop_relevant=false/);
-assert.match(desktopWorkflow, /\^app\//);
-assert.match(desktopWorkflow, /\^src-tauri\//);
-assert.match(desktopWorkflow, /\^tests\/desktop-\.\*\\\.mjs\$/);
-assert.match(desktopWorkflow, /\^package\(-lock\)\?\\\.json\$/);
-assert.ok(
-  (desktopWorkflow.match(/persist-credentials: false/g) || []).length >= 2,
-  "Security/relevance and desktop lifecycle checkouts must keep persisted credentials disabled",
-);
 
 console.log(JSON.stringify({
   ci_workflow_contracts: "PASS",
@@ -88,5 +91,6 @@ console.log(JSON.stringify({
   ],
   browser_matrix_duplication: "ABSENT",
   always_present_desktop_security_gate: "PASS",
+  path_scoped_desktop_lifecycle: "PRESERVED",
   gitleaks_every_pr: "PASS",
 }, null, 2));
