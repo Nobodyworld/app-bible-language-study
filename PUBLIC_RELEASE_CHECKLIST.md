@@ -121,11 +121,19 @@ Final screenshot work begins only after this reconciled documentation is on
 
 - [x] Private vulnerability reporting.
 - [x] Secret Protection and push protection.
-- [x] Branch protection requiring `verify (20)` and `verify (24)`.
+- [x] Branch protection requiring `deterministic (20)`, `deterministic (24)`,
+  `browser (20)`, and `desktop/security gate`.
 
 ### Repository-verified configuration
 
-- [x] Verify runs on Node 20 and Node 24.
+- [x] `deterministic (20)` and `deterministic (24)` run maintained
+  static/domain/data contracts and publication checks on both supported Node
+  runtimes without duplicating browser E2E.
+- [x] `browser (20)` runs the complete maintained desktop and mobile Edge
+  interaction acceptance once on Node 20.
+- [x] `desktop/security gate` is emitted on every pull request, requires the
+  pinned exact-range Gitleaks preflight, and requires the exact candidate's
+  `desktop (windows-2022)` lifecycle when desktop-relevant paths change.
 - [x] GitHub Actions references are pinned to full commit SHAs.
 - [x] Dependabot is configured weekly for npm and GitHub Actions.
 

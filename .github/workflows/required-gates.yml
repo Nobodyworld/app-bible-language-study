@@ -1,0 +1,150 @@
+name: Required Gates
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+
+permissions:
+  contents: read
+  checks: read
+
+concurrency:
+  group: required-gates-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  preflight:
+    name: security/relevance
+    runs-on: windows-2022
+    timeout-minutes: 10
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      REQUESTED_BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+    outputs:
+      desktop_relevant: ${{ steps.scope.outputs.desktop_relevant }}
+      scan_base: ${{ steps.scope.outputs.scan_base }}
+
+    steps:
+      - name: Check out exact candidate
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ env.CANDIDATE_SHA }}
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Verify exact checkout and classify change scope
+        id: scope
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $actual = (git rev-parse HEAD).Trim()
+          if ($actual -ne $env:CANDIDATE_SHA) {
+            throw "Required-gate candidate mismatch: expected $env:CANDIDATE_SHA, found $actual."
+          }
+
+          $base = [string]$env:REQUESTED_BASE_SHA
+          $validBase = $base -match '^[0-9a-f]{40}$' -and $base -ne ('0' * 40)
+          if ($validBase) {
+            git cat-file -e "$base^{commit}" 2>$null
+            $validBase = $LASTEXITCODE -eq 0
+          }
+          if (-not $validBase) {
+            $base = (git rev-parse 'HEAD^').Trim()
+            if ($LASTEXITCODE -ne 0) { throw 'Could not establish required-gate scan base.' }
+          }
+
+          $changed = @(git diff --name-only $base $env:CANDIDATE_SHA --)
+          if ($LASTEXITCODE -ne 0) { throw 'Could not determine candidate changed paths.' }
+          $desktopPatterns = @(
+            '^\.github/workflows/desktop-verify\.yml$',
+            '^app/',
+            '^src-tauri/',
+            '^tests/desktop-.*\.mjs$',
+            '^package(-lock)?\.json$'
+          )
+          $desktopRelevant = $false
+          foreach ($path in $changed) {
+            if ($desktopPatterns | Where-Object { $path -match $_ }) {
+              $desktopRelevant = $true
+              break
+            }
+          }
+
+          "scan_base=$base" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          "desktop_relevant=$($desktopRelevant.ToString().ToLowerInvariant())" | Out-File -FilePath $env:GITHUB_OUTPUT -Append -Encoding utf8
+          [pscustomobject]@{
+            candidate = $env:CANDIDATE_SHA
+            base = $base
+            changed_files = $changed.Count
+            desktop_relevant = $desktopRelevant
+          } | ConvertTo-Json -Compress
+
+      - name: Scan exact candidate commit range
+        shell: pwsh
+        env:
+          SCAN_BASE_SHA: ${{ steps.scope.outputs.scan_base }}
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $archive = Join-Path $env:RUNNER_TEMP 'gitleaks-8.30.1-windows-x64.zip'
+          $tools = Join-Path $env:RUNNER_TEMP 'bibleapp-gitleaks-8.30.1-required-gate'
+          Invoke-WebRequest -Uri 'https://github.com/gitleaks/gitleaks/releases/download/v8.30.1/gitleaks_8.30.1_windows_x64.zip' -OutFile $archive
+          $expected = 'D29144DEFF3A68AA93CED33DDDF84B7FDC26070ADD4AA0F4513094C8332AFC4E'
+          if ((Get-FileHash -LiteralPath $archive -Algorithm SHA256).Hash -ne $expected) {
+            throw 'Pinned Gitleaks archive hash mismatch.'
+          }
+          Expand-Archive -LiteralPath $archive -DestinationPath $tools
+          $gitleaks = Join-Path $tools 'gitleaks.exe'
+          & $gitleaks version
+          if ($LASTEXITCODE -ne 0) { throw 'Gitleaks version check failed.' }
+          $range = "$env:SCAN_BASE_SHA..$($env:CANDIDATE_SHA)"
+          Write-Host "Gitleaks range: $range"
+          & $gitleaks git --no-banner --redact=100 --log-opts=$range .
+          if ($LASTEXITCODE -ne 0) { throw 'Exact-range secret scan failed.' }
+
+  desktop_gate:
+    name: desktop/security gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 100
+    needs: preflight
+    if: always()
+    env:
+      CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+      DESKTOP_RELEVANT: ${{ needs.preflight.outputs.desktop_relevant }}
+      PREFLIGHT_RESULT: ${{ needs.preflight.result }}
+      GH_TOKEN: ${{ github.token }}
+
+    steps:
+      - name: Require security preflight and relevant desktop lifecycle
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          if ($env:PREFLIGHT_RESULT -ne 'success') {
+            throw "Security/relevance preflight concluded $env:PREFLIGHT_RESULT."
+          }
+          if ($env:DESKTOP_RELEVANT -ne 'true') {
+            Write-Host 'No desktop-relevant paths changed; exact-range Gitleaks passed and the expensive desktop lifecycle is not required.'
+            exit 0
+          }
+
+          $checkName = 'desktop (windows-2022)'
+          $deadline = (Get-Date).AddMinutes(95)
+          while ((Get-Date) -lt $deadline) {
+            $json = gh api --method GET "repos/$env:GITHUB_REPOSITORY/commits/$env:CANDIDATE_SHA/check-runs" -f check_name=$checkName -f filter=latest -f per_page=20
+            if ($LASTEXITCODE -ne 0) { throw 'Could not query exact-candidate desktop check runs.' }
+            $response = $json | ConvertFrom-Json
+            $matches = @($response.check_runs | Where-Object { $_.name -eq $checkName -and $_.head_sha -eq $env:CANDIDATE_SHA })
+            if ($matches.Count -gt 0) {
+              $check = $matches | Sort-Object started_at -Descending | Select-Object -First 1
+              Write-Host "Desktop lifecycle status=$($check.status) conclusion=$($check.conclusion) url=$($check.html_url)"
+              if ($check.status -eq 'completed') {
+                if ($check.conclusion -eq 'success') { exit 0 }
+                throw "Desktop lifecycle concluded $($check.conclusion) for exact candidate $env:CANDIDATE_SHA."
+              }
+            } else {
+              Write-Host "Waiting for exact-candidate '$checkName' to be emitted."
+            }
+            Start-Sleep -Seconds 15
+          }
+          throw "Timed out waiting for '$checkName' on exact candidate $env:CANDIDATE_SHA."

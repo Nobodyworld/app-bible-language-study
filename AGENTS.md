@@ -51,58 +51,43 @@ or a final distribution checkpoint, not each UI edit. Do not revive temporary
 owner-machine uninstall/firewall helpers or bypass blocked automation actions.
 Report failures and unrun checks accurately; source review is not rendered QA.
 
-## Current work: deterministic source/Search generation authority (#83)
+## Current work: public required-gate hardening (#112)
 
-The desktop foundation and feature-scope cleanup are complete through PR #110.
-Work only on `tooling/source-search-generators` from accepted main
-`b351b850078cbd5f9a77aa229abf9df811ab66d3`. Do not redo #105/#109 or start the
-multilingual Search UI from #78 yet.
-
-Reconcile the preserved historical source/index tooling against current tracked
-authority, then implement one singular reproducible generation path. Review the
-owner's preserved historical candidates outside the repository; record their
-hashes/timestamps and dispositions in the local report, but do not publish local
-archive paths or blindly copy archived files into the branch.
+Issue #83 is complete on accepted main `4051b225df79cff6e3f0b42b3d363fa93bcc1eb7`.
+Work only on `ci/required-gates-hardening` for #112. Do not start multilingual
+Search #78, LXX #97/#96, native packs #81, or unrelated product work until this
+public-repository CI slice is accepted.
 
 Required end state:
 
-- `app/tools/import-original-language-sources.mjs` is the documented singular
-  original-language source-generation authority, with any genuinely missing
-  historical transformation/provenance logic merged into it rather than keeping
-  duplicate Node/Python authorities.
-- Current exact Search data has a maintained deterministic generator plus
-  no-write/check mode, source identity, stable ordering/normalization, digest or
-  manifest identity, reconciled counts, and actionable mismatch failures.
-- Add direct storage-engine-neutral Search contract coverage suitable for #78;
-  preserve existing exact Search behavior rather than implementing the new
-  multilingual lanes prematurely.
-- Wire maintained commands into `package.json`, tests/TEST_INVENTORY, integrity/
-  inventory checks, source/provenance docs, and package identities when outputs
-  legitimately change.
-- Keep extension points for witness-qualified source identities, source-specific
-  versification, namespaced outputs, separate text/lemma/morphology/alignment
-  authorities, and unaligned/source-only records so #96 can add LXX later without
-  overwriting WLC/GNT authority.
-- Preserve #96's Hebrew-base invariant: `wlc` and `wlco` are pointed and
-  consonantal representations of the same Westminster Leningrad Codex base.
-  They must share one canonical witness/source-token identity and must not be
-  counted or asserted as independent textual witnesses. Represent the display/
-  normalization variant separately from that canonical witness identity.
+- Node 20 and Node 24 both run deterministic/static/domain/generator/data and
+  publication checks without duplicating the rendered browser suite.
+- One maintained Node runtime runs the complete Edge desktop/mobile interaction
+  acceptance.
+- Search-highlight and portrait browser QA wait for deterministic rendered/
+  scroll readiness rather than depending on transient actionability timing.
+- Every pull request receives an exact-candidate, exact-range Gitleaks scan from
+  the existing pinned 8.30.1 Windows archive with checksum verification and
+  checkout credentials disabled.
+- The expensive existing `Desktop Verify` lifecycle remains path-scoped and
+  unchanged as native/package authority. An always-present `desktop/security
+  gate` must pass irrelevant PRs after security scanning, but for desktop-
+  relevant paths it must require the exact candidate's `desktop (windows-2022)`
+  check to complete successfully.
+- Workflow permissions stay least-privilege and Actions remain full-SHA pinned.
+- Required contexts are `deterministic (20)`, `deterministic (24)`, `browser (20)`,
+  and `desktop/security gate`. The owner has atomically replaced the obsolete
+  `verify (20)` / `verify (24)` ruleset contexts; connector verification confirmed
+  the four-context `Protect main` baseline. Do not modify that ruleset further
+  without separate owner authorization.
 
-Historical JSON/SQLite/performance experiments are evidence only unless current
-measurements justify adoption. Do not introduce SQLite simply because an old
-benchmark exists. Do not restore destructive publish/sync helpers. Do not import
-or publish LXX/CATSS data in this slice; #97/#96 own source-rights and LXX work.
-
-Preserve current Reader, Search, Language Study, Strong's, Study Marks, Meaning,
-My Data, browser/desktop data resolution, package manifests/provenance, and
-`bibleapp:user-data` v3. No native-pack #81 work, framework/database rewrite,
-accounts/sync/backend, release/tag/settings change, or personal-data operation.
+Do not weaken assertions, add retries that hide failures, enable auto-merge,
+change release/tag/settings, alter application data contracts, or modify
+dependency versions merely to complete this slice.
 
 ## Completion report
 
 Give the working path/branch, starting and final pushed SHAs, remote equality,
-actual behavior/data-tooling changes, candidate-script dispositions, tests run and
-results, remaining blockers, and workspace status. Include extra workspace
-inventories only if a workspace was created or removed, or unexpected local work
-requires explanation. Keep the report concise.
+actual workflow/test changes, exact emitted check names and results, tests run,
+live ruleset state, remaining blockers, and workspace status. Keep the report
+concise.

@@ -67,6 +67,25 @@ async function waitForFrames(page, count = 2) {
   }, count);
 }
 
+async function waitForViewportScrollStable(page, label, stableFrames = 4, maxFrames = 120) {
+  const result = await page.evaluate(async ({ requiredStableFrames, frameLimit }) => {
+    let previous = window.scrollY;
+    let stable = 0;
+    for (let frame = 0; frame < frameLimit; frame += 1) {
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+      const current = window.scrollY;
+      stable = Math.abs(current - previous) <= 0.5 ? stable + 1 : 0;
+      previous = current;
+      if (stable >= requiredStableFrames) {
+        return { stable: true, pageY: current, frames: frame + 1 };
+      }
+    }
+    return { stable: false, pageY: window.scrollY, frames: frameLimit };
+  }, { requiredStableFrames: stableFrames, frameLimit: maxFrames });
+  assert(result.stable, `${label}: scripture viewport scroll never settled: ${JSON.stringify(result)}`);
+  return result.pageY;
+}
+
 async function waitForApp(page, baseUrl) {
   await page.goto(`${baseUrl}/#/read/bsb/2_timothy/2/1`, { waitUntil: "load" });
   await page.waitForFunction(() =>
@@ -76,6 +95,7 @@ async function waitForApp(page, baseUrl) {
   );
   await page.waitForLoadState("networkidle");
   await waitForFrames(page, 3);
+  await waitForViewportScrollStable(page, "reader startup");
 }
 
 async function layoutState(page) {
@@ -145,6 +165,8 @@ async function openStrongDetail(page) {
   const token = page.locator('#chapterContent .strong-token[data-strong-code="G2424"]').first();
   assert.equal(await token.count(), 1, "The deterministic G2424 token was not found in 2 Timothy 2");
   await token.scrollIntoViewIfNeeded();
+  await waitForViewportScrollStable(page, "Strong's token positioning");
+  await token.click({ trial: true });
   await token.click();
   await page.waitForFunction(() =>
     document.querySelector("#detailTitle")?.textContent === "Strong's" &&
@@ -152,13 +174,25 @@ async function openStrongDetail(page) {
     Boolean(document.querySelector(".reader-context-word")),
   );
   await waitForFrames(page, 2);
+  await waitForViewportScrollStable(page, "Strong's detail readiness");
 }
 
 async function exerciseIndependentScroll(page) {
-  const initial = await page.evaluate(() => {
+  await page.evaluate(() => {
     const detail = document.querySelector("#detailContent");
     if (!detail) throw new Error("Detail content is missing");
     detail.scrollTop = 0;
+  });
+  await page.waitForFunction(() => {
+    const detail = document.querySelector("#detailContent");
+    return detail && detail.scrollTop <= 2;
+  });
+  await waitForFrames(page, 2);
+  await waitForViewportScrollStable(page, "before independent detail scroll");
+
+  const initial = await page.evaluate(() => {
+    const detail = document.querySelector("#detailContent");
+    if (!detail) throw new Error("Detail content is missing");
     const selected = document.querySelector(".reader-context-word");
     return {
       pageY: window.scrollY,
@@ -180,6 +214,8 @@ async function exerciseIndependentScroll(page) {
     const detail = document.querySelector("#detailContent");
     return detail && detail.scrollTop >= detail.scrollHeight - detail.clientHeight - 2;
   });
+  await waitForFrames(page, 2);
+  await waitForViewportScrollStable(page, "after independent detail scroll");
   const final = await page.evaluate(() => {
     const selected = document.querySelector(".reader-context-word");
     return {
@@ -204,6 +240,8 @@ async function exerciseHideAndRestore(page) {
     window.__portraitQaDetailFirst = detail.firstElementChild;
     window.__portraitQaReaderWord = document.querySelector(".reader-context-word");
   });
+  await waitForFrames(page, 2);
+  await waitForViewportScrollStable(page, "before workspace hide");
   const before = await page.evaluate(() => ({
     hash: window.location.hash,
     pageY: window.scrollY,
@@ -231,6 +269,7 @@ async function exerciseHideAndRestore(page) {
     getComputedStyle(document.querySelector(".detail-pane")).display !== "none",
   );
   await waitForFrames(page, 3);
+  await waitForViewportScrollStable(page, "after workspace restore");
 
   const after = await page.evaluate(() => ({
     hash: window.location.hash,
@@ -257,6 +296,7 @@ async function exerciseHideAndRestore(page) {
 }
 
 async function exerciseBookPicker(page) {
+  await waitForViewportScrollStable(page, "before book picker");
   const pageY = await page.evaluate(() => window.scrollY);
   await page.locator("#bookPickerButton").click();
   await page.waitForFunction(() => document.querySelector("#bookPickerPanel")?.hidden === false);
@@ -308,6 +348,7 @@ async function runViewport(browser, baseUrl, viewport) {
       await exerciseBookPicker(page);
       await page.locator("#themeToggle").click();
       await page.waitForFunction(() => document.documentElement.dataset.theme === "dark");
+      await waitForFrames(page, 2);
       assertPortraitLayout(await layoutState(page), `${viewport.name}/dark`);
     }
     assertHealthy();

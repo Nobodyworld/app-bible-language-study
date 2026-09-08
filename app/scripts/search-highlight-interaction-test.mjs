@@ -35,6 +35,44 @@ function contrast(foreground, background) {
   return (lighter + 0.05) / (darker + 0.05);
 }
 
+async function waitForFrames(page, count = 3) {
+  await page.evaluate(async (frameCount) => {
+    for (let index = 0; index < frameCount; index += 1) {
+      await new Promise((resolve) => window.requestAnimationFrame(resolve));
+    }
+  }, count);
+}
+
+async function clickWhenStable(page, locator, label) {
+  await locator.waitFor({ state: "visible", timeout: 20_000 });
+  await locator.scrollIntoViewIfNeeded();
+  let previous = null;
+  let stableFrames = 0;
+  for (let attempt = 0; attempt < 30; attempt += 1) {
+    const current = await locator.boundingBox();
+    if (
+      current &&
+      previous &&
+      Math.abs(current.x - previous.x) <= 0.5 &&
+      Math.abs(current.y - previous.y) <= 0.5 &&
+      Math.abs(current.width - previous.width) <= 0.5 &&
+      Math.abs(current.height - previous.height) <= 0.5
+    ) {
+      stableFrames += 1;
+    } else {
+      stableFrames = 0;
+    }
+    if (current && stableFrames >= 2) {
+      await locator.click({ trial: true });
+      await locator.click();
+      return;
+    }
+    previous = current;
+    await waitForFrames(page, 1);
+  }
+  throw new Error(`${label} never reached a stable actionable layout state.`);
+}
+
 async function waitForReader(page) {
   await page.waitForFunction(
     () =>
@@ -44,19 +82,25 @@ async function waitForReader(page) {
     undefined,
     { timeout: 30_000 },
   );
+  await waitForFrames(page, 3);
 }
 
 async function openPopulatedSearch(page) {
-  await page.locator("#showSearch").click();
+  await clickWhenStable(page, page.locator("#showSearch"), "Search launcher");
   await page.waitForFunction(() => document.querySelector("#detailTitle")?.textContent === "Search");
-  await page.locator('.search-form input[name="query"]').fill("wisdom");
-  await page.locator('.search-form button[type="submit"]').click();
+  const query = page.locator('.search-form input[name="query"]');
+  const submit = page.locator('.search-form button[type="submit"]');
+  await query.waitFor({ state: "visible", timeout: 15_000 });
+  await waitForFrames(page, 2);
+  await query.fill("wisdom");
+  await clickWhenStable(page, submit, "Search submit button");
   await page.waitForFunction(
     () => document.querySelector(".search-result")?.textContent.includes("Proverbs 1:2"),
     undefined,
     { timeout: 15_000 },
   );
   await page.waitForSelector(".search-result-text mark", { state: "visible" });
+  await waitForFrames(page, 2);
 }
 
 async function captureSearchMatch(page) {
@@ -132,17 +176,19 @@ try {
   await page.goto(`${url}/#/read/bsb/proverbs/1`, { waitUntil: "load" });
   await waitForReader(page);
 
-  await page.locator(".strong-token").first().click();
+  await clickWhenStable(page, page.locator(".strong-token").first(), "Reader Strong's token");
   await page.waitForSelector(".reader-context-word");
+  await waitForFrames(page, 2);
   evidence.readerHighlight = await page.locator(".reader-context-word").first().evaluate((node) => {
     const style = getComputedStyle(node);
     return { color: style.color, background: style.backgroundColor, outline: style.outlineColor };
   });
 
-  await page.locator("#showInterlinear").click();
+  await clickWhenStable(page, page.locator("#showInterlinear"), "Language Study launcher");
   await page.waitForSelector(".interlinear-picker", { state: "visible", timeout: 20_000 });
-  await page.locator(".interlinear-picker .mini-button").first().click();
+  await clickWhenStable(page, page.locator(".interlinear-picker .mini-button").first(), "Language Study source picker");
   await page.waitForSelector(".interlinear-token", { state: "visible", timeout: 20_000 });
+  await waitForFrames(page, 2);
   evidence.languageStudyHighlight = await page.locator(".interlinear-token").first().evaluate((node) => {
     const style = getComputedStyle(node);
     return { color: style.color, background: style.backgroundColor, border: style.borderColor };
@@ -153,6 +199,7 @@ try {
     localStorage.setItem("bibleAppTheme", "light");
     document.documentElement.setAttribute("data-theme", "light");
   });
+  await waitForFrames(page, 2);
   evidence.light = await captureSearchMatch(page);
   evidence.light.contrast = verifyReadable("explicit light mode", evidence.light);
 
@@ -160,6 +207,7 @@ try {
     localStorage.setItem("bibleAppTheme", "dark");
     document.documentElement.setAttribute("data-theme", "dark");
   });
+  await waitForFrames(page, 2);
   evidence.dark = await captureSearchMatch(page);
   evidence.dark.contrast = verifyReadable("explicit dark mode", evidence.dark);
 
@@ -168,6 +216,7 @@ try {
     localStorage.removeItem("bibleAppTheme");
     document.documentElement.removeAttribute("data-theme");
   });
+  await waitForFrames(page, 2);
   evidence.osPreferredDark = await captureSearchMatch(page);
   evidence.osPreferredDark.contrast = verifyReadable("OS-preferred dark mode", evidence.osPreferredDark);
   assert(
@@ -176,6 +225,7 @@ try {
   );
 
   await page.emulateMedia({ colorScheme: "dark", forcedColors: "active" });
+  await waitForFrames(page, 2);
   evidence.forcedColors = await captureSearchMatch(page);
   assert(evidence.forcedColors.visible && evidence.forcedColors.contained, `forced-colors Search match is hidden or clipped: ${JSON.stringify(evidence.forcedColors)}`);
   assert(
@@ -188,6 +238,7 @@ try {
 
   await page.emulateMedia({ colorScheme: "dark", forcedColors: "none" });
   await page.setViewportSize({ width: 390, height: 844 });
+  await waitForFrames(page, 3);
   evidence.mobile = await captureSearchMatch(page);
   evidence.mobile.viewport = { width: 390, height: 844 };
   evidence.mobile.contrast = verifyReadable("narrow OS-preferred dark mode", evidence.mobile);

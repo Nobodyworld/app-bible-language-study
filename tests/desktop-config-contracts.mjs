@@ -7,13 +7,17 @@ import { fileURLToPath } from "node:url";
 
 const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const readJson = async (relativePath) => JSON.parse(await fs.readFile(path.join(repoRoot, relativePath), "utf8"));
+const readText = async (relativePath) => fs.readFile(path.join(repoRoot, relativePath), "utf8");
 
 const stableConfig = await readJson("src-tauri/tauri.conf.json");
 const labConfig = await readJson("src-tauri/tauri.lab.conf.json");
 const capability = await readJson("src-tauri/capabilities/main.json");
 const packageJson = await readJson("package.json");
-const cargoToml = await fs.readFile(path.join(repoRoot, "src-tauri/Cargo.toml"), "utf8");
-const desktopE2e = await fs.readFile(path.join(repoRoot, "app/tools/run-desktop-e2e.mjs"), "utf8");
+const cargoToml = await readText("src-tauri/Cargo.toml");
+const desktopE2e = await readText("app/tools/run-desktop-e2e.mjs");
+const verifyWorkflow = await readText(".github/workflows/verify.yml");
+const requiredGatesWorkflow = await readText(".github/workflows/required-gates.yml");
+const desktopVerifyWorkflow = await readText(".github/workflows/desktop-verify.yml");
 
 function onlyWindow(config, label) {
   assert.equal(config?.app?.windows?.length, 1, `${label} must configure exactly one shared application window`);
@@ -70,6 +74,55 @@ assert.doesNotMatch(
 );
 assert.match(desktopE2e, /PROFILE_ID === ["']lab["'][\s\S]*?--features["'], ["']lab-profile/, "Lab E2E builds must compile the native Lab feature");
 
+assert.match(verifyWorkflow, /name: deterministic \(\$\{\{ matrix\.node-version \}\}\)/);
+assert.match(verifyWorkflow, /node-version:\s*\n\s*- "20"\s*\n\s*- "24"/);
+assert.match(verifyWorkflow, /run: npm run test:static/);
+assert.match(verifyWorkflow, /run: npm run audit/);
+assert.match(verifyWorkflow, /name: browser \(20\)/);
+assert.match(verifyWorkflow, /run: npm run test:browser\s*$/m);
+assert.match(verifyWorkflow, /run: npm run test:browser:mobile/);
+assert.doesNotMatch(
+  verifyWorkflow,
+  /run: npm run verify\s*$/m,
+  "Hosted Node compatibility jobs must not duplicate the complete browser aggregate",
+);
+assert.equal(
+  (verifyWorkflow.match(/persist-credentials: false/g) || []).length,
+  2,
+  "Both Verify checkouts must keep persisted credentials disabled",
+);
+
+assert.match(requiredGatesWorkflow, /name: Required Gates/);
+assert.match(requiredGatesWorkflow, /permissions:\s*\n\s+contents: read\s*\n\s+checks: read/);
+assert.match(requiredGatesWorkflow, /name: security\/relevance/);
+assert.match(requiredGatesWorkflow, /name: desktop\/security gate/);
+assert.match(requiredGatesWorkflow, /if: always\(\)/);
+assert.match(requiredGatesWorkflow, /gitleaks-8\.30\.1-windows-x64\.zip/);
+assert.match(requiredGatesWorkflow, /D29144DEFF3A68AA93CED33DDDF84B7FDC26070ADD4AA0F4513094C8332AFC4E/);
+assert.match(requiredGatesWorkflow, /gitleaks git --no-banner --redact=100 --log-opts=\$range \./);
+assert.match(requiredGatesWorkflow, /\^app\//);
+assert.match(requiredGatesWorkflow, /\^src-tauri\//);
+assert.match(requiredGatesWorkflow, /\^tests\/desktop-\.\*\\\.mjs\$/);
+assert.match(requiredGatesWorkflow, /\^package\(-lock\)\?\\\.json\$/);
+assert.match(requiredGatesWorkflow, /checkName = 'desktop \(windows-2022\)'/);
+assert.match(requiredGatesWorkflow, /commits\/\$env:CANDIDATE_SHA\/check-runs/);
+assert.match(requiredGatesWorkflow, /head_sha -eq \$env:CANDIDATE_SHA/);
+assert.match(requiredGatesWorkflow, /if \(\$check\.conclusion -eq 'success'\) \{ exit 0 \}/);
+assert.equal(
+  (requiredGatesWorkflow.match(/persist-credentials: false/g) || []).length,
+  1,
+  "The always-run security checkout must keep persisted credentials disabled",
+);
+
+assert.match(desktopVerifyWorkflow, /name: desktop \(windows-2022\)/);
+assert.match(
+  desktopVerifyWorkflow,
+  /pull_request:\s*\n\s+paths:/,
+  "The expensive desktop lifecycle should remain path-scoped; Required Gates owns always-present merge enforcement",
+);
+assert.match(desktopVerifyWorkflow, /persist-credentials: false/);
+assert.match(desktopVerifyWorkflow, /gitleaks-8\.30\.1-windows-x64\.zip/);
+
 console.log(JSON.stringify({
   desktop_config_contracts: "PASS",
   shared_internal_index: "PASS",
@@ -80,4 +133,12 @@ console.log(JSON.stringify({
   least_privilege_main_capability: "PASS",
   sequential_dev_staging: "PASS",
   no_localhost_dev_server: "PASS",
+  ci_required_context_candidates: [
+    "deterministic (20)",
+    "deterministic (24)",
+    "browser (20)",
+    "desktop/security gate",
+  ],
+  browser_matrix_duplication: "ABSENT",
+  always_present_desktop_security_gate: "PASS",
 }, null, 2));

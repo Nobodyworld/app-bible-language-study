@@ -108,6 +108,14 @@ checkout credentials disabled, and then runs:
 - Gitleaks 8.30.1 from a checksum-pinned upstream release ZIP over the PR base-to-head
   or push range (the parent-to-head range for manual dispatch).
 
+The separate always-present `.github/workflows/required-gates.yml` workflow owns
+merge enforcement for the desktop lifecycle without running that expensive
+lifecycle on irrelevant changes. Its `security/relevance` preflight performs the
+checksum-pinned Gitleaks 8.30.1 exact candidate range scan on every pull request.
+The required `desktop/security gate` then passes non-desktop changes after that
+preflight, while desktop-relevant changes must also have a successful exact-SHA
+`desktop (windows-2022)` check before the gate can pass.
+
 Tauri temporarily patches the bundle-type marker before creating NSIS and then
 restores the target-specific release executable. The restored release file and
 the installed executable are therefore expected to have different hashes. The
@@ -171,16 +179,26 @@ Current limitations are intentional:
 
 ## Test authority
 
-Browser authority remains `npm run verify` on Node 20 and Node 24. Desktop
-authority is `desktop:prepare:check`, `desktop:check`, `desktop:test`, the
+Local full browser/release verification remains `npm run verify`. Hosted CI
+separates concerns: `deterministic (20)` and `deterministic (24)` run maintained
+static/domain/data contracts plus publication checks on both supported Node
+runtimes, while `browser (20)` runs the complete maintained Edge desktop and
+mobile interaction acceptance once on Node 20. Branch protection requires those
+three contexts plus the always-present `desktop/security gate`.
+
+Desktop authority is `desktop:prepare:check`, `desktop:check`, `desktop:test`, the
 explicit Cargo format/clippy/test gates, `desktop:build`, and the path-scoped
-`Desktop Verify` workflow on the exact candidate. The hosted workflow includes
-both source-built debug and installed-release WebDriver journeys, exact payload
-identity, independent installed launch, and uninstall cleanup. Installed manual
-QA must still use the release installer and executable to observe native dialogs,
-strict offline behavior, real Stable/Lab directories, system-browser handoff,
-normal user-driven window close, and the native visual/accessibility matrix.
-Automated installed acceptance does not replace those human-observable gates.
+`Desktop Verify` workflow on the exact candidate. For desktop-relevant pull
+requests, `desktop/security gate` requires the exact candidate's
+`desktop (windows-2022)` lifecycle to succeed, making the path-scoped native
+lifecycle merge-blocking without running it for unrelated changes. The hosted
+workflow includes both source-built debug and installed-release WebDriver
+journeys, exact payload identity, independent installed launch, and uninstall
+cleanup. Installed manual QA must still use the release installer and executable
+to observe native dialogs, strict offline behavior, real Stable/Lab directories,
+system-browser handoff, normal user-driven window close, and the native
+visual/accessibility matrix. Automated installed acceptance does not replace
+those human-observable gates.
 
 ## Desktop baseline and deferred content management
 
