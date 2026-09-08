@@ -37,8 +37,11 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run deterministic release verification
-        run: npm run verify:deterministic
+      - name: Run deterministic static/domain/data contracts
+        run: npm run test:static
+
+      - name: Run publication audit
+        run: npm run audit
 
   browser:
     name: browser (20)
@@ -60,5 +63,8 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Run browser and mobile acceptance
-        run: npm run verify:browser
+      - name: Run desktop browser acceptance
+        run: npm run test:browser
+
+      - name: Run mobile browser acceptance
+        run: npm run test:browser:mobile
