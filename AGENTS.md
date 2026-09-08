@@ -75,19 +75,19 @@ Required end state:
   relevant paths it must require the exact candidate's `desktop (windows-2022)`
   check to complete successfully.
 - Workflow permissions stay least-privilege and Actions remain full-SHA pinned.
-- Candidate required contexts are `deterministic (20)`, `deterministic (24)`,
-  `browser (20)`, and `desktop/security gate`. Do not alter the `Protect main`
-  ruleset until these exact contexts have been emitted and passed on the PR;
-  then the owner must replace the old contexts atomically.
+- Required contexts are `deterministic (20)`, `deterministic (24)`, `browser (20)`,
+  and `desktop/security gate`. The owner has atomically replaced the obsolete
+  `verify (20)` / `verify (24)` ruleset contexts; connector verification confirmed
+  the four-context `Protect main` baseline. Do not modify that ruleset further
+  without separate owner authorization.
 
 Do not weaken assertions, add retries that hide failures, enable auto-merge,
-change release/tag/settings outside the authorized ruleset follow-up, alter
-application data contracts, or modify dependency versions merely to complete
-this slice.
+change release/tag/settings, alter application data contracts, or modify
+dependency versions merely to complete this slice.
 
 ## Completion report
 
 Give the working path/branch, starting and final pushed SHAs, remote equality,
 actual workflow/test changes, exact emitted check names and results, tests run,
-remaining ruleset/manual steps, blockers, and workspace status. Keep the report
+live ruleset state, remaining blockers, and workspace status. Keep the report
 concise.
