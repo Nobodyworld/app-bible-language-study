@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-09-07
+Reviewed: 2026-09-08
 
 ## Authority
 
@@ -78,7 +78,7 @@ order:
 |---|---|
 | `tests/integrity.mjs` | Tracked package, manifest, path, and bundled-data integrity. |
 | `tests/serve-app.mjs` | Static server behavior and application delivery boundaries. |
-| `tests/run.mjs` | Core runtime-data and application-source contracts. |
+| `tests/run.mjs` | Core runtime-data and application-source contracts, including the imported corpus-free textual-comparison fixtures described below. |
 | `tests/feature-registry.mjs` | Complete static feature inventory, lifecycle values, dependencies, ownership, profile closure, Lab-only capability controls independent from recovery diagnostics, test ownership, and actionable invalid-fixture diagnostics. |
 | `tests/feature-profiles.mjs` | Deterministic Stable/Lab resolution, hidden Stable and unknown-profile capability controls, retained independent recovery/compatibility access, disabled-feature closure, unchanged Stable identities, and isolated Lab identities. |
 | `tests/platform-contracts.mjs` | Platform shape, user-storage isolation, profile-scoped notifications, browser file/data operations, digest/source/estimate services, profile-scoped physical registry identity, and explicit byte-store operations. |
@@ -109,6 +109,21 @@ order:
 | `tests/public-screenshot-contract.mjs` | Public capture manifest, Standard-width and contained-tool capture guards, browser-health enforcement, retired-dependency guard, generated inventory, documentation references, and tracked screenshot consistency. |
 | `app/scripts/accessibility-test.mjs` | Static accessibility and retired-control source assertions. |
 | `app/scripts/doc-consistency-test.mjs` | Classified maintained-document, command, manifest, retired-job metadata, schema, and current-product consistency. |
+
+`tests/run.mjs` imports and executes `runTextualComparisonContractTests` from
+`tests/textual-comparison-contracts.mjs` once. The fixture can also run directly
+with `node tests/textual-comparison-contracts.mjs`; it is not a second package
+script or a corpus generator. It covers explicit witness canon/book coverage,
+edition/version, rights/provenance and normalization metadata; WLC/WLCO one-witness
+voting and canonical source-token identity; optional segment/group indexes;
+nullable annotations and enforced unsupported Swete lemma/morphology; source-only
+books, suffix/unmapped references; all eight verse-map types, including Psalm
+50:1–3 → app Psalm 51:1 without collapsed source identities; all nine alignment
+states with cardinality rejection; and separate lexical identity/alias/relation/
+candidate and passage-relation contracts. Invalid metadata, positions, duplicate
+coverage/representations, unequal exact lemma IDs and confidence-based promotion
+of generated evidence are rejected. These synthetic fixtures establish contract
+behavior, not corpus coverage, word-alignment authority or rendered UI acceptance.
 
 `test:static` also runs `npm run test:domain`, `npm run search:check`, and
 `npm run inventory:check`. The Search command reconstructs the complete indexes

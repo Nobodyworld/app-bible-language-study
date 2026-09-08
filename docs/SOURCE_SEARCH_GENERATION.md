@@ -136,7 +136,59 @@ It hashes the sorted path/byte-count/SHA-256 inventory, not concatenated text.
 Current input and manifest identities are stored in the generated manifest;
 they change when provenance or canonical inputs change.
 
-## Future witness and alignment contracts
+## Shared witness and alignment contracts
+
+`app/src/textual-comparison-contracts.js` owns the framework-neutral shared
+domain semantics and validators for `textWitness`, `sourceToken`, verse maps,
+alignment evidence, lexical links and passage relations. Browser and Windows
+consumers share that authority. `app/tools/import-original-language-sources.mjs`
+remains the single deterministic original-language generation authority: it owns
+extraction, transformation, output namespaces, provenance digests and no-write
+checks. The shared module generates no corpus and does not replace the importer;
+future import support must consume its semantics rather than define a second
+witness/token model. Existing production data formats are unchanged in Phase 1.
+
+A `textWitness` declares one canonical `id`, language/script, a source-defined
+`canon` identifier, `edition.name`/`edition.version`, text `rights` (license and
+delivery), revision-qualified `provenance`, source `versification` and default
+`normalization_profile`. Its `coverage` array identifies source books using
+`source_book_id`, not app book IDs. Each book has `scope: complete`, `partial`,
+or `unknown`: complete means the whole source book, partial explicitly lists
+covered source units in `source_references`, and unknown makes no coverage
+claim. Complete/unknown entries have empty reference arrays. The coverage list
+does not assert that the entire canon is present. Source-only books and suffix
+references remain valid. `representations` declares unique display IDs and their
+normalization profiles beneath this one witness; neither canon metadata nor
+edition/representation labels create extra votes.
+
+For `sourceToken`, `sourceTokenIdentityKey` uses exactly `witness_id`,
+`versification`, `source_reference` and the one-based safe-integer `token_index`.
+The record's `id` labels a record/view; consumers use the canonical key for
+occurrence deduplication. Optional `segment_index` and `group_index` may be omitted
+or null; when supplied they are one-based safe integers within the source
+reference and representation (group indexes within the segment when supplied).
+They describe segmentation/grouping and never restart `token_index` or define
+new occurrences. Canonical/app reference, representation, display form, normalized
+forms, annotations, external IDs and provenance are not token identity fields.
+Changing source tokenization or edition offsets still requires explicit
+compatibility review; metadata changes cannot silently reuse incompatible IDs.
+
+The corpus-free `tests/textual-comparison-contracts.mjs` fixtures run directly
+with Node and are imported once by `tests/run.mjs` in `test:static`. They exercise
+coverage, nullable positioning/annotations, identity invariants, all eight verse
+map types and nine alignment states, and distinct lexical/passage evidence.
+The accepted Psalm 50:1–3 → app Psalm 51:1 many-to-one fixture keeps three source
+identities even though their app target is shared. Generated confidence cannot
+promote an alignment, lexical link or passage relation to reviewed evidence;
+exact canonical lemma links require matching canonical lemma IDs.
+
+The [accepted #97 decision](decisions/SEPTUAGINT_SOURCE_STACK.md) remains the
+source/rights boundary: Swete is text-contract-ready, TVTMS is bounded reference
+authority, and Swete token lemma/morphology must remain null (enforced by the
+validator). Synthetic annotation fixtures for other witnesses establish schema
+behavior only. Hebrew↔Greek word alignment, certified Swete/GNT token bridges,
+production LXX delivery and an optional separately licensed pack remain unsupported
+or outside this Phase 1 slice. Text rights do not confer annotation/alignment rights.
 
 The source identity is witness-qualified, with a canonical source-token namespace,
 source-specific versification identifier and source reference. Representation,

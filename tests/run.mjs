@@ -3,6 +3,7 @@
 import { readFileSync, existsSync } from "node:fs";
 import { join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { runTextualComparisonContractTests } from "./textual-comparison-contracts.mjs";
 
 const repoRoot = resolve(fileURLToPath(new URL(".", import.meta.url)), "..");
 const appRoot = join(repoRoot, "app");
@@ -52,6 +53,14 @@ async function runTests() {
     }
     if (!Array.isArray(sourceManifest.exceptions)) throw new Error("Missing exceptions array");
     if (!Array.isArray(sourceManifest.transformations)) throw new Error("Missing transformations array");
+  });
+
+  test("textual comparison contracts preserve witness, mapping, and evidence boundaries", () => {
+    const summary = runTextualComparisonContractTests();
+    if (summary.alignmentFixtures !== 9) throw new Error("Expected all nine alignment-state fixtures.");
+    if (summary.phase1Boundary?.wordAlignment !== "unsupported") {
+      throw new Error("Phase 1 must not claim Hebrew↔Greek word-level alignment availability.");
+    }
   });
 
   // Data completeness tests
