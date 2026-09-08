@@ -28,14 +28,54 @@ This document is the maintained decision record for #97. It should be updated on
 
 ## Current candidate inventory
 
-The entries below preserve the latest repository-recorded findings. The local #97 proof must re-verify exact source revision, files, hashes, terms, and fitness before changing any disposition to approved.
+The public GitHub candidates below were re-verified through the repository connector on 2026-09-08. The local #97 proof must still verify downloaded bytes/hashes, parsing behavior, join coverage, mapping quality, and fitness before changing any production disposition to approved.
 
-| Role | Candidate | Repository-recorded revision | Recorded terms | Current disposition |
+| Role | Candidate | Connector-verified revision | Verified repository terms/state | Current disposition |
 |---|---|---:|---|---|
-| Greek OT text proof | `nathans/lxx-swete` | `26bad3eb42bba98471d154c954e36a6f30a0279d` | Greek text/data annotations recorded as CC BY-SA 4.0; build code MIT | Preferred proof candidate; production approval pending |
-| LXX lexical support | `openscriptures/GreekResources` | `dd5a2fd530ab3c6b748c174cec38966c356d8111` | Repository-owned resources recorded as CC BY 4.0; actual LXX text explicitly excluded | Candidate for reproducible lemma/word-list joins only |
-| Lexicon/versification support | `STEPBible/STEPBible-Data` | `ea47bd4c7eab7375f2dca07086ccc356e95a4128` | Recorded as CC BY 4.0 | Candidate where exact current files/fields prove fit; TAGOT not assumed available |
-| Hebrew↔Greek alignment | CATSS/Tov-style parallel data | restricted | Restrictive user agreement / noncommercial or permission constraints recorded | Not approved for repository/public redistribution |
+| Greek OT text proof | `nathans/lxx-swete` | `26bad3eb42bba98471d154c954e36a6f30a0279d` | README states Greek text/data annotations are CC BY-SA 4.0 and build code is MIT | **Selected for the Phase 0 proof**; production approval pending measurements/packaging decision |
+| LXX lexical support | `openscriptures/GreekResources` | `dd5a2fd530ab3c6b748c174cec38966c356d8111` | README states repository-owned resources are CC BY 4.0 and explicitly excludes actual LXX text because of CCAT restrictions | Candidate for reproducible lemma/word-list joins only; compatibility with Swete must be measured |
+| Lexicon/versification support | `STEPBible/STEPBible-Data` | `ea47bd4c7eab7375f2dca07086ccc356e95a4128` | README states CC BY 4.0 and allows inclusion/modification with attribution and recorded changes | TVTMS/TBESG are current proof candidates; TAGOT remains unavailable/“coming” |
+| Hebrew↔Greek alignment | CATSS/Tov-style parallel data | restricted | Restrictive user agreement / noncommercial or permission constraints remain recorded | Not approved for repository/public redistribution |
+
+## Connector-verified source evidence — 2026-09-08
+
+### Swete Greek text
+
+- Repository/default branch: `nathans/lxx-swete` / `master`.
+- Current head: `26bad3eb42bba98471d154c954e36a6f30a0279d` (2025-12-18).
+- README states the data derive from OpenGreekAndLatin First1KGreek `tlg0527` and that the 2025-12 update rebased to upstream commit `eb81494731fd632f582c4b94634127bdbd596b43`.
+- README states Greek text and annotations under `data/` are CC BY-SA 4.0; build source code is MIT.
+- `data/01.Genesis.txt` exists at blob `aa532fd04891476d56f9f3f0191e57c24770d658`, size 609,070 bytes.
+- The file shape is word-per-line with repeated `chapter.verse` prefixes, e.g. `1.1.1 ΕΝ`, `1.1.1 ΑΡΧΗ`, followed by the remaining verse tokens.
+
+This verifies the planned proof input and basic deterministic parser shape. It does not establish lemma, morphology, Hebrew alignment, or app versification compatibility.
+
+### Open Scriptures GreekResources
+
+- Repository/default branch: `openscriptures/GreekResources` / `master`.
+- Current head: `dd5a2fd530ab3c6b748c174cec38966c356d8111` (2019-12-30).
+- Top-level README explicitly says the actual Septuagint text is excluded because of the restrictive CCAT license.
+- The same README licenses the repository's own resources under CC BY 4.0 with attribution to the Open Scriptures Septuagint Project.
+- `LxxLemmas/readme.md` says the lemma files use OSIS references and per-verse arrays of word objects with `key` and `lemma` fields; the array index corresponds to source word order.
+
+These files are therefore a plausible lexical-join candidate, not an independent redistributable LXX text or alignment authority. Their word numbering is designed around the historical `lxxmorph` structure, so exact compatibility with Swete must be measured rather than assumed.
+
+### STEPBible data
+
+- Repository/default branch: `STEPBible/STEPBible-Data` / `master`.
+- Current head: `ea47bd4c7eab7375f2dca07086ccc356e95a4128` (2026-09-07).
+- README states the repository is CC BY 4.0 and permits inclusion/modification with attribution and change recording.
+- The current `Versification` directory contains exactly one TVTMS file:
+  - `Versification/TVTMS - Translators Versification Traditions with Methodology for Standardisation for Eng+Heb+Lat+Grk+Others - STEPBible.org CC BY.txt`
+  - blob `4fdcb4fd761ba8a680a3f0cc95ad65f591e18d4b`
+  - size 5,790,928 bytes.
+- The current `Lexicons` directory contains, among others:
+  - `TBESG - Translators Brief lexicon of Extended Strongs for Greek - STEPBible.org CC BY.txt`
+  - blob `efe271a1dbb73fa01f8fa6e0f164c6687757a9ae`
+  - size 4,736,912 bytes.
+- README still lists `TAGOT - Translators Amalgamated Greek OT` under **Datasets coming**, not available datasets.
+
+TVTMS is therefore a concrete current versification proof candidate and TBESG is a concrete Greek lexical candidate. Neither proves an exact join to Swete; TAGOT must not be treated as available production data.
 
 ## Required local proof
 
@@ -55,14 +95,16 @@ Record the exact selected passages and why they exercise the required boundary.
 
 ### Source integrity
 
-Record for every source actually used:
+The GitHub repository heads, repository-side licenses, and key file/blob identities above have already been connector-verified. The local proof should not spend time rediscovering those facts unless the remote heads have moved.
+
+Record for every source actually downloaded/used:
 
 - repository/site and exact data role;
 - pinned commit/version;
 - exact file path(s);
 - retrieval/acquisition date;
-- source archive/file hash where practical;
-- relevant license/terms evidence;
+- local downloaded file/archive SHA-256 and correspondence to the pinned GitHub content;
+- any additional file-specific terms not visible in the verified repository-level evidence;
 - transformations applied;
 - whether any output may be committed or redistributed.
 
@@ -92,7 +134,11 @@ For each candidate lexical source, report:
 - whether morphology is actually available and compatible with the chosen Greek text;
 - unresolved-token rate.
 
+At minimum measure the Open Scriptures LxxLemmas compatibility with Swete and whether STEPBible TBESG contributes a reproducible lexical identity mapping. Do not treat Extended Strong's compatibility as token alignment proof.
+
 ### Versification
+
+Use the pinned STEPBible TVTMS file as the first mapping candidate unless direct proof rejects it.
 
 Report:
 
@@ -100,7 +146,7 @@ Report:
 - Psalm numbering/superscription behavior;
 - split/merged or source-only units encountered;
 - orphan/unmapped counts;
-- exact data source and revision supporting the mapping.
+- exact mapping rules/records used from the pinned data.
 
 Do not assume source references are identical to the app's canonical references.
 
@@ -133,17 +179,19 @@ Complete each row from proof evidence before closing #97.
 
 | Decision | Options | Selected | Evidence |
 |---|---|---|---|
-| Greek text | Swete candidate / other / reject | Pending | Pending local proof |
-| Lemma source | same-source / Open Scriptures / STEPBible / other / none | Pending | Pending join measurements |
-| Morphology source | same-source / STEPBible / other / none | Pending | Pending coverage measurements |
-| Versification source | STEPBible / source-native + project map / other | Pending | Pending mapping proof |
+| Greek text | Swete candidate / other / reject | **Swete for Phase 0 proof** | Connector-verified head, license, upstream provenance statement, and parseable Genesis file |
+| Lemma source | same-source / Open Scriptures / STEPBible / other / none | Pending | Measure Open Scriptures/STEPBible joins to Swete |
+| Morphology source | same-source / STEPBible / other / none | Pending | Current candidates do not yet establish Swete-compatible LXX morphology |
+| Versification source | STEPBible / source-native + project map / other | **STEPBible TVTMS for proof** | Exact current TVTMS file verified; mapping quality still pending |
 | Hebrew↔Greek alignment | redistributable source / local-only adapter / deterministic candidate / manual limited / defer | Pending | Pending rights and feasibility decision |
-| Packaging | core bundled / optional pack / desktop-only / user-supplied / hybrid | Pending | Pending rights + size/performance evidence |
+| Packaging | core bundled / optional pack / desktop-only / user-supplied / hybrid | Pending | Pending share-alike boundary + size/performance evidence |
 | #96 Phase 1 readiness | proceed / proceed with exclusions / blocked | Pending | Pending all above |
 
 ## Delivery and licensing decision
 
 Pending.
+
+Current evidence already establishes that a Swete-derived production pack cannot be silently treated as MIT application data: its Greek text/data are CC BY-SA 4.0. The final delivery decision must define the separately licensed derivative-data boundary and attribution/share-alike handling.
 
 The final decision must explicitly state:
 
@@ -174,7 +222,7 @@ The final record must state what claims #96 can and cannot make under the select
 Add candidates here only with exact evidence and reason. Do not remove rejected candidates silently; retain the decision history.
 
 - CATSS/restricted alignment data: **not approved for repository/public redistribution under the current evidence**. Reassess only with a documented permission or delivery model that satisfies its terms.
-- TAGOT: **do not assume available**. Recheck exact current STEPBible files before any production dependency is proposed.
+- TAGOT: **not available in the current connector-verified STEPBible repository state**. Recheck only if the upstream repository changes.
 
 ## #96 handoff boundary
 
