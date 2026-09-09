@@ -494,3 +494,139 @@
     font-size: clamp(24px, 9vw, 34px);
   }
 }
+
+/* Shared browser/Tauri baseline visual polish. Keep this presentation-only. */
+:root {
+  --ui-header-surface: rgba(244, 244, 241, 0.94);
+  --ui-hover-soft: rgba(37, 99, 95, 0.055);
+  --ui-hover-strong: rgba(37, 99, 95, 0.11);
+  --ui-reader-row-hover: rgba(37, 99, 95, 0.035);
+  --ui-control-shadow: 0 1px 2px rgba(16, 24, 40, 0.06);
+  --ui-panel-shadow: 0 12px 32px rgba(33, 36, 38, 0.07);
+}
+
+:root[data-theme="dark"] {
+  --ui-header-surface: rgba(26, 26, 24, 0.93);
+  --ui-hover-soft: rgba(78, 205, 193, 0.08);
+  --ui-hover-strong: rgba(78, 205, 193, 0.14);
+  --ui-reader-row-hover: rgba(78, 205, 193, 0.045);
+  --ui-control-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+  --ui-panel-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme]) {
+    --ui-header-surface: rgba(26, 26, 24, 0.93);
+    --ui-hover-soft: rgba(78, 205, 193, 0.08);
+    --ui-hover-strong: rgba(78, 205, 193, 0.14);
+    --ui-reader-row-hover: rgba(78, 205, 193, 0.045);
+    --ui-control-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
+    --ui-panel-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+  }
+}
+
+.app-header {
+  background: var(--ui-header-surface);
+  box-shadow: 0 1px 0 rgba(16, 24, 40, 0.04);
+}
+
+.brand-mark {
+  border-radius: 10px;
+  box-shadow: var(--ui-control-shadow);
+}
+
+.reader-control-label,
+.reader-control-label-line {
+  font-weight: 800;
+  letter-spacing: 0.015em;
+}
+
+.reader-controls select,
+.reader-picker-button,
+.theme-toggle-button,
+.header-status,
+.chapter-stepper,
+.action-group {
+  box-shadow: var(--ui-control-shadow);
+}
+
+.reader-controls select:hover,
+.reader-picker-button:hover {
+  border-color: var(--accent);
+}
+
+.reader-controls select:focus-visible {
+  border-color: var(--accent);
+  outline: 3px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.reader-pane,
+.detail-pane {
+  border-radius: 12px;
+  box-shadow: var(--ui-panel-shadow);
+}
+
+.chapter-title,
+.detail-header {
+  background: linear-gradient(180deg, var(--panel-alt) 0%, var(--bg-elevated) 100%);
+}
+
+.toolbar-button {
+  transition:
+    background-color 140ms ease,
+    color 140ms ease,
+    box-shadow 140ms ease,
+    transform 140ms ease;
+}
+
+.toolbar-button:hover,
+.toolbar-button:focus-visible,
+.chapter-nav-button:hover,
+.chapter-nav-button:focus-visible {
+  background: var(--ui-hover-soft);
+}
+
+.toolbar-button.primary-tool {
+  background: var(--ui-hover-strong);
+  box-shadow: inset 0 0 0 1px rgba(37, 99, 95, 0.1);
+}
+
+:root[data-theme="dark"] .toolbar-button.primary-tool {
+  box-shadow: inset 0 0 0 1px rgba(78, 205, 193, 0.14);
+}
+
+.verse-row {
+  border-radius: 8px;
+  transition: background-color 120ms ease;
+}
+
+.verse-row:hover,
+.verse-row:focus-within {
+  background: var(--ui-reader-row-hover);
+}
+
+.verse-number {
+  font-weight: 700;
+}
+
+.verse-body {
+  line-height: 1.74;
+  text-wrap: pretty;
+}
+
+.manage-labels-panel,
+.storage-details-panel,
+.technical-details-panel,
+.original-language-study-intro,
+.original-language-source-card,
+.interlinear-token.original-language-word-card {
+  box-shadow: var(--ui-control-shadow);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .toolbar-button,
+  .verse-row {
+    transition: none;
+  }
+}
