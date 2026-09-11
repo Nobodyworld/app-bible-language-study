@@ -82,6 +82,6 @@
   "homepage": "https://github.com/Nobodyworld/app-bible-language-study#readme",
   "devDependencies": {
     "@tauri-apps/cli": "2.11.4",
-    "playwright-core": "^1.62.1"
+    "playwright-core": "^1.63.0"
   }
 }
