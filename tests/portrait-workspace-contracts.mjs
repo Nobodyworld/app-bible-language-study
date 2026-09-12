@@ -75,9 +75,9 @@ assert(
 );
 assert(
   /@media\s*\(min-width:\s*769px\)[\s\S]*?\.detail-header\s*{[\s\S]*?--study-header-layout-band:\s*narrow;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?\.detail-header-main\s*{\s*display:\s*contents;/.test(css) &&
-    /@container\s+study-workspace\s*\(min-width:\s*320px\)[\s\S]*?--study-header-layout-band:\s*constrained;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto;/.test(css) &&
-    /@container\s+study-workspace\s*\(min-width:\s*420px\)[\s\S]*?--study-header-layout-band:\s*wide;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;/.test(css),
-  "Desktop detail controls must progress through measured three-row, two-row, and one-row container bands.",
+    /@container\s+study-workspace\s*\(min-width:\s*320px\)[\s\S]*?--study-header-layout-band:\s*wide;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;[\s\S]*?\.detail-title-block\s*{[\s\S]*?grid-row:\s*1;[\s\S]*?\.study-workspace-width-controls\s*{[\s\S]*?grid-row:\s*1;[\s\S]*?\.detail-header-actions\s*{[\s\S]*?grid-row:\s*1;/.test(css) &&
+    !/@container\s+study-workspace\s*\(min-width:\s*420px\)/.test(css),
+  "Desktop Study controls must stay on one header row from the compact 320px pane minimum upward.",
 );
 assert(
   /\.detail-header-icon-button\s*{[\s\S]*?min-width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*11px;/.test(css),
