@@ -902,3 +902,65 @@
   color: var(--text);
   font-weight: 600;
 }
+/* Cited scripture stays subordinate to the original footnote wording. */
+.footnote-scripture {
+  margin-block-start: 18px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--line);
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+.footnote-scripture-entry {
+  margin-block: 12px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  min-width: 0;
+  background: var(--panel-alt);
+}
+.footnote-scripture-entry h5 {
+  margin: 0 0 6px;
+  color: var(--text);
+  font-size: 13px;
+}
+.footnote-scripture-passage {
+  font-family: Georgia, "Times New Roman", serif;
+  font-size: 15px;
+  line-height: 1.6;
+  color: var(--text);
+  overflow-wrap: anywhere;
+  user-select: text;
+}
+.footnote-scripture-number {
+  color: var(--muted);
+  font: 11px ui-sans-serif, system-ui, sans-serif;
+}
+.footnote-scripture-expanded > .footnote-scripture-passage {
+  max-height: 18rem;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  padding-inline-end: 6px;
+}
+.footnote-scripture-expanded > summary {
+  min-height: 44px;
+  padding-block: 10px;
+  cursor: pointer;
+  color: var(--accent-dark);
+}
+.footnote-scripture-refresh,
+.footnote-scripture-open {
+  min-height: 44px;
+  max-width: 100%;
+  white-space: normal;
+  text-align: start;
+}
+.footnote-scripture :is(summary, .footnote-scripture-passage):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+@media (forced-colors: active) {
+  .footnote-scripture :is(summary, .footnote-scripture-passage):focus-visible {
+    outline-color: Highlight;
+  }
+}

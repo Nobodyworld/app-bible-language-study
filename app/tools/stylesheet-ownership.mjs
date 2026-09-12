@@ -82,7 +82,7 @@ const COMPONENT_OWNERS = [
   ["styles-workspace.css", /study-workspace-width|\.detail-header|\.detail-title-block|\.detail-mode-status/],
   ["styles-shell.css", /\.(?:app-shell|app-header|brand|home-button|theme-toggle|theme-option|theme-switch|header-status|reader-control|reader-picker|book-picker|chapter-picker|detail-pane\b|detail-content|detail-work-area)/],
   ["styles-reader.css", /\.(?:reader-pane|reader-nav|verse-(?:row|body|line|number|actions|text|content|study)|strong-token|reader-text-segment|fn-marker|reader-target-badges|reader-context|chapter-(?:title|heading|content|stepper|nav|toolbar|actions|info|tools)|action-group|toolbar-button)/],
-  ["styles-study.css", /\.(?:translation-(?:alignment|token|rendering)|alignment-|workspace-map|study-(?:mark|data)-|manage-labels|storage-details|technical-details|language-breakdown|mark-(?:list|pill|glyph)|original-language-|interlinear-|transliteration-symbol)/],
+  ["styles-study.css", /\.(?:footnote-scripture|translation-(?:alignment|token|rendering)|alignment-|workspace-map|study-(?:mark|data)-|manage-labels|storage-details|technical-details|language-breakdown|mark-(?:list|pill|glyph)|original-language-|interlinear-|transliteration-symbol)/],
 ];
 const STRUCTURE = /^(?:display|position|inset(?:-.+)?|top|right|bottom|left|float|clear|z-index|(?:min-|max-)?(?:width|height|inline-size|block-size)|(?:grid|flex|align|justify|place|gap|row-gap|column-gap|padding|margin|overflow|container|contain|box-sizing|vertical-align)(?:-.+)?)$/;
 
