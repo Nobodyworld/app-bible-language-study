@@ -8,7 +8,7 @@
       content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'"
     />
     <title>Bible App Reader</title>
-    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%231d4ed8'/%3E%3Ctext x='8' y='12' font-size='10' font-family='sans-serif' fill='white' text-anchor='middle'%3EB%3C/text%3E%3C/svg%3E" />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' rx='3' fill='%231d4ed8'/%3E%3Ctext x='8' y='12' font-size='10' font-family='sans-serif' fill='white' text-anchor='middle'%3EB%3C/text x='8' y='12' font-size='10' font-family='sans-serif' fill='white' text-anchor='middle'%3EB%3C/text/%3E%3C/svg%3E" />
     <script src="./src/study-workspace-width-boot.js?v=issue55-workspace"></script>
     <link rel="stylesheet" href="./styles.css?v=pr13-live-qa-20260711e" />
     <link rel="stylesheet" href="./styles-polish.css?v=pr13-live-qa-20260711e" />
@@ -133,9 +133,11 @@
         hidden
       >
         Show study workspace
-        <svg aria-hidden="true" viewBox="0 0 24 24">
+        <svg class="study-workspace-panel-icon" data-workspace-direction="restore-left" aria-hidden="true" viewBox="0 0 24 24">
           <rect x="3" y="4" width="18" height="16" rx="2"></rect>
-          <path d="M14 4v16M10 12h8M15 9l3 3-3 3"></path>
+          <path d="M14 4v16"></path>
+          <path class="study-workspace-panel-arrow-shaft" d="M18 12H10"></path>
+          <path class="study-workspace-panel-arrow-head" d="M13 9l-3 3 3 3"></path>
         </svg>
       </button>
 
@@ -157,19 +159,19 @@
                 data-study-workspace-width-mode="compact"
                 aria-label="Use compact study workspace"
                 title="Compact study workspace"
-                aria-pressed="false">Compact<span aria-hidden="true" class="study-workspace-width-symbol">−</span></button>
+                aria-pressed="false">Compact<svg data-width-artwork="compact" aria-hidden="true" class="study-workspace-width-symbol" viewBox="0 0 16 16"><path class="study-workspace-width-artwork" d="M4 8h8"></path></svg></button>
               <button
                 type="button"
                 data-study-workspace-width-mode="standard"
                 aria-label="Use standard study workspace"
                 title="Standard study workspace"
-                aria-pressed="true">Standard<span aria-hidden="true" class="study-workspace-width-symbol study-workspace-width-reset-symbol">↺</span></button>
+                aria-pressed="true">Standard<svg data-width-artwork="standard" aria-hidden="true" class="study-workspace-width-symbol" viewBox="0 0 16 16"><rect class="study-workspace-width-artwork" x="4" y="4" width="8" height="8" rx="1"></rect></svg></button>
               <button
                 type="button"
                 data-study-workspace-width-mode="expanded"
                 aria-label="Use expanded study workspace"
                 title="Expanded study workspace"
-                aria-pressed="false">Expanded<span aria-hidden="true" class="study-workspace-width-symbol">+</span></button>
+                aria-pressed="false">Expanded<svg data-width-artwork="expanded" aria-hidden="true" class="study-workspace-width-symbol" viewBox="0 0 16 16"><path class="study-workspace-width-artwork" d="M4 8h8M8 4v8"></path></svg></button>
             </div>
             <div class="detail-header-actions">
               <button
@@ -179,7 +181,7 @@
                 title="Clear study workspace"
                 aria-label="Clear study workspace"
               >
-                Clear
+                <span class="detail-header-icon-label">Clear</span>
                 <svg aria-hidden="true" viewBox="0 0 24 24">
                   <path d="M6 6l12 12M18 6L6 18"></path>
                 </svg>
@@ -193,10 +195,12 @@
                 aria-controls="detailPane"
                 aria-expanded="true"
               >
-                <span id="hideStudyWorkspaceLabel">Hide</span>
-                <svg aria-hidden="true" viewBox="0 0 24 24">
+                <span id="hideStudyWorkspaceLabel" class="detail-header-icon-label">Hide</span>
+                <svg class="study-workspace-panel-icon" data-workspace-direction="collapse-right" aria-hidden="true" viewBox="0 0 24 24">
                   <rect x="3" y="4" width="18" height="16" rx="2"></rect>
-                  <path d="M14 4v16M18 12h-8M13 9l-3 3 3 3"></path>
+                  <path d="M14 4v16"></path>
+                  <path class="study-workspace-panel-arrow-shaft" d="M10 12H18"></path>
+                  <path class="study-workspace-panel-arrow-head" d="M15 9l3 3-3 3"></path>
                 </svg>
               </button>
             </div>
