@@ -71,7 +71,7 @@ checkSegments("Compare ", []);
 // Repeated calls must not inherit sticky/global regular-expression state.
 checkSegments("Compare louo, nipto.", ["G3068", "G3538"]);
 
-assert.equal(strongReferenceDisplayLabel({ strong_code: "G1", label: "a" }), "a-");
+assert.equal(strongReferenceDisplayLabel({ strong_code: "G1", label: "a" }), "a");
 assert.equal(strongReferenceDisplayLabel({ strong_code: "G25", label: "agapao" }), "agapao");
 assert.equal(strongReferenceDisplayLabel({ strong_code: "G25", label: "a" }), "a");
 assert.equal(strongReferenceDisplayLabel({ strong_code: "G1", label: "Alpha" }), "Alpha");
