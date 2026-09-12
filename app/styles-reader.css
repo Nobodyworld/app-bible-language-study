@@ -1,4 +1,4 @@
-/* Context controls and Meaning surfaces, including their responsive states. */
+/* Reader rows, inline tokens and chapter/navigation controls; responsive and state rules stay with their owner. */
 .chapter-actions {
   display: flex;
   justify-content: flex-end;

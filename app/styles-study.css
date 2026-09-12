@@ -1,3 +1,4 @@
+/* Study content, language cards, marks and cited footnote scripture; responsive and state rules stay with their owner. */
 @media (max-width: 768px) {
 .interlinear-token {
     grid-template-columns: 1fr;

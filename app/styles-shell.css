@@ -1,4 +1,4 @@
-/* Context controls and Meaning surfaces, including their responsive states. */
+/* App header, shared shell and bounded Detail pane; responsive and state rules stay with their owner. */
 .theme-option {
   display: grid;
   place-items: center;

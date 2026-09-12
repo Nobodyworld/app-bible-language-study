@@ -35,6 +35,19 @@ checks padding-only fragments and preserves text selection and keyboard previews
 Study-header rendered coverage measures the actual 320px border-box pane, all
 three modes and the smaller-container fallback; viewport reflow is not browser zoom.
 
+`tests/footnote-scripture.mjs` runs in `test:static` and verifies canonical aliases,
+collision rejection, exact BSB/KJV text, complete same/chapter-spanning ranges,
+invalid Revelation 7:17–18 boundaries, cache/request identity, unavailable data,
+wrong-version payloads, missing middle verses and recoverable failures.
+`app/scripts/footnote-scripture-interaction-test.mjs` runs in `test:browser`,
+including touch/mobile cases. It covers the actual Psalm 23:1 note, real cited
+datasets, multiple references, disclosures, translation switching, history/refresh,
+four delayed success/failure races, route/scroll/lock preservation, safe hostile
+wording, RTL WLC fixture, themes, forced colors, reduced motion and trusted input.
+`desktop-ui-polish-acceptance.mjs` extends `desktop:test` with real WebDriver
+clicks/keys for width modes, G227/G4151, wrapping and footnote scripture; it records
+whether native zoom hotkeys actually changed geometry instead of assuming zoom.
+
 These maintained aliases expose narrower checks without changing the suite
 composition above:
 
@@ -159,8 +172,8 @@ entry.
 | `app/scripts/strong-preview-hydration-test.mjs` | Desktop | Strong's preview hydration and interaction lifecycle. |
 | `app/scripts/panel-context-interaction-test.mjs` | Desktop, narrow, and mobile; light/dark | Compact context, scope inheritance, explicit contained Study Marks, stable underlay, focus restoration, responsive layout, and browser-error checks. |
 | `app/scripts/word-meaning-focus-test.mjs` | Desktop and mobile | Contained Meaning and Study Marks overlay coordination, exact-target save/remove, data-neutral dismissal, lifecycle cleanup, and focus restoration. |
-| `app/scripts/study-workspace-interaction-test.mjs` | Desktop, intermediate, mobile, light/dark, forced colors, and reduced motion | Width switching/persistence/storage failure, semantic reader anchors, independent scroll ownership, contained tools, lifecycle/history/selection preservation, Clear behavior with browser-owned Reader navigation availability, responsive header container bands at 320px and 420px, exact 773px title containment, 280–760px Study-panel sweeps, per-word geometry, focus order/clipping, responsive bounds, and browser-error/overflow checks. |
-| `app/scripts/study-header-artwork-interaction-test.mjs` | Edge desktop; light/dark/forced colors | All three width-control targets and SVG centers, actual artwork/viewBox centers, Clear/Hide label-to-icon vertical centers, outward-right Hide and inward-left Show arrow geometry, hide/show state transitions, and browser health. |
+| `app/scripts/study-workspace-interaction-test.mjs` | Desktop, intermediate, mobile, light/dark, forced colors, and reduced motion | Width switching/persistence/storage failure, semantic reader anchors, independent scroll ownership, contained tools, lifecycle/history/selection preservation, Clear behavior with browser-owned Reader navigation availability, the 320px pane minimum and smaller-container fallback, exact 773px title containment, 280–760px Study-panel sweeps, per-word geometry, focus order/clipping, responsive bounds, and browser-error/overflow checks. |
+| `app/scripts/study-header-artwork-interaction-test.mjs` | Edge desktop; light/dark/forced colors | One cycle control across three modes, the actual 320px pane, and SVG centers, actual artwork/viewBox centers, Clear/Hide label-to-icon vertical centers, outward-right Hide and inward-left Show arrow geometry, hide/show state transitions, and browser health. |
 | `app/scripts/portrait-workspace-interaction-test.mjs` | Exact 960×2600 and constrained 960×1200 portrait desktop | Header composition, measured sticky-workspace bounds, compact control accessibility, independent Study scrolling, Hide/Show context preservation, book-picker containment/reachability, and browser health. |
 | `app/scripts/physical-pack-interaction-test.mjs` | Edge desktop, portrait, narrow, mobile-width, mobile-device, light/dark, and reduced motion | Distribution-aware fallback and strict `incompatible_version`; real persisted incompatible active records; compatible rollback recovery; simultaneous update/rollback state and actions after reload; update and rollback context preservation; storage plans; plan/cancel; install/offline reads; delayed `startup_verifying` live transition; action suppression; mounted-node-only updates; corruption/repair; invalid rollback loss; removal fallback; exact reader/detail context; containment; and zero console/page/request/HTTP errors. |
 | `app/scripts/feature-profile-interaction-test.mjs` | Edge desktop plus deterministic disabled-feature viewport | Stable default/UI/Search/recovery access and expanded diagnostics without capability mutation controls or technical summary clutter; data-neutral diagnostics; historical known/unknown disabled capability preference preservation through version-3 import/export/reload; Lab full summary and usable persisted Disable/Restore controls, open by default with study stores and installed-pack IDs preserved; separate user/notification/physical namespaces, shared-origin Cache Storage cleanup/startup isolation, version-3 legacy-job and 605-event poll merge/replace preservation and malformed-import neutrality after reload, retired UI absence, bidirectional isolation across reloads, unknown-profile fallback, disabled-control/data-request ownership, Reader preservation, and browser health. |

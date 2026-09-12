@@ -9,7 +9,7 @@ The browser and Tauri use the same `app/index.html` and stylesheet order:
 | 3 | `styles-shell.css` | App header, translation/book/chapter pickers, app grid and bounded Detail pane/content. |
 | 4 | `styles-workspace.css` | Study header, width cycle, title/mode and Clear/Hide controls. |
 | 5 | `styles-reader.css` | Reader rows, chapter controls, inline Strong tokens, footnote markers and Reader navigation. |
-| 6 | `styles-study.css` | Language Study/alignment cards, transliteration, marks and data summaries. |
+| 6 | `styles-study.css` | Language Study/alignment cards, transliteration, marks, data summaries and footnote scripture. |
 | 7 | `styles-context.css` | Context tabs, panel navigation, Study Marks triggers and contained Meaning surfaces. |
 
 Base primitives precede their components. Visual tokens precede their consumers.
