@@ -66,9 +66,7 @@ function findStrongReference(refs, label, language = "") {
 }
 
 export function strongReferenceDisplayLabel(ref, label = ref?.label || ref?.strong_code || "Strong's") {
-  const code = String(ref?.strong_code || "").toUpperCase();
-  const value = String(label || "").trim();
-  return code === "G1" && normalizedReferenceLabel(value) === "a" ? "a-" : value;
+  return String(label || "").trim();
 }
 
 export function createStrongReferenceControl(ref, { label = ref?.label || ref?.strong_code || "Strong's", onActivate } = {}) {
