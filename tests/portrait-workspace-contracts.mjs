@@ -33,41 +33,34 @@ assert(
   "Portrait chapter-action labels must appear only when the measured reader pane can keep one action row.",
 );
 
-const widthButtons = index.match(/<button[\s\S]*?data-study-workspace-width-mode="(?:compact|standard|expanded)"[\s\S]*?<\/button>/g) || [];
-assert.equal(widthButtons.length, 3, "The workspace must retain exactly three width controls.");
-const widthExpectations = [
-  { mode: "compact", title: "Compact study workspace" },
-  { mode: "standard", title: "Standard study workspace" },
-  { mode: "expanded", title: "Expanded study workspace" },
-];
-for (const [buttonIndex, expectation] of widthExpectations.entries()) {
-  const button = widthButtons[buttonIndex];
+const widthCycle = index.match(/<button[\s\S]*?id="studyWorkspaceWidthCycle"[\s\S]*?<\/button>/)?.[0] || "";
+assert(widthCycle, "The workspace must expose one Study width cycle control.");
+assert.equal((index.match(/data-study-workspace-width-cycle/g) || []).length, 1, "The workspace must retain exactly one width cycle control.");
+assert(
+  /data-study-workspace-width-mode="standard"/.test(widthCycle) &&
+    /data-study-workspace-width-current="standard"/.test(widthCycle) &&
+    /data-study-workspace-width-next="expanded"/.test(widthCycle) &&
+    /aria-label="Study workspace width: Standard\. Change to Expanded\."/.test(widthCycle) &&
+    /title="Study workspace width: Standard \(click for Expanded\)"/.test(widthCycle) &&
+    !/aria-pressed=/.test(widthCycle),
+  "The single width cycle must declare truthful Standard-to-Expanded startup state without radio-button semantics.",
+);
+for (const mode of ["compact", "standard", "expanded"]) {
   assert(
-    new RegExp(`aria-label="Use ${expectation.mode} study workspace"`).test(button),
-    `${expectation.mode} width control needs an accessible name.`,
-  );
-  assert(
-    button.includes(`title="${expectation.title}"`),
-    `${expectation.mode} width control needs an accurate tooltip.`,
-  );
-  assert(
-    new RegExp(`data-width-artwork="${expectation.mode}"[\\s\\S]*?class="study-workspace-width-symbol"`).test(button),
-    `${expectation.mode} width control must render deterministic SVG artwork.`,
-  );
-  assert(
-    /class="study-workspace-width-artwork"/.test(button),
-    `${expectation.mode} width control must expose measurable artwork geometry.`,
+    new RegExp(`study-workspace-width-divider-${mode}`).test(widthCycle),
+    `${mode} must have deterministic right-pane divider artwork inside the one width control.`,
   );
 }
 assert(
-  !index.includes("study-workspace-width-reset-symbol") && !index.includes(">↺</"),
-  "Standard width must not depend on a font reset glyph.",
+  /class="study-workspace-width-frame"/.test(widthCycle) &&
+    /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*0;/.test(css) &&
+    /\.study-workspace-width-symbol\s*{[\s\S]*?display:\s*block;[\s\S]*?width:\s*18px;[\s\S]*?height:\s*16px;[\s\S]*?fill:\s*none;[\s\S]*?stroke:\s*currentColor;[\s\S]*?stroke-width:\s*1\.7;/.test(css) &&
+    /\.study-workspace-width-cycle\[data-study-workspace-width-current="compact"\][\s\S]*?study-workspace-width-divider-compact[\s\S]*?\.study-workspace-width-cycle\[data-study-workspace-width-current="standard"\][\s\S]*?study-workspace-width-divider-standard[\s\S]*?\.study-workspace-width-cycle\[data-study-workspace-width-current="expanded"\][\s\S]*?study-workspace-width-divider-expanded/.test(css),
+  "The single width control must use a centered stateful right-pane icon inside one 32px target.",
 );
 assert(
-  /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*0;/.test(css) &&
-    /\.study-workspace-width-symbol\s*{[\s\S]*?display:\s*block;[\s\S]*?width:\s*14px;[\s\S]*?height:\s*14px;[\s\S]*?fill:\s*none;[\s\S]*?stroke:\s*currentColor;[\s\S]*?stroke-width:\s*2;/.test(css) &&
-    /\.study-workspace-width-symbol \.study-workspace-width-artwork\s*{[\s\S]*?vector-effect:\s*non-scaling-stroke;/.test(css),
-  "All width controls must use one centered deterministic SVG construction inside equal 32px targets.",
+  !index.includes("study-workspace-width-reset-symbol") && !index.includes(">↺</") && !index.includes(">−</") && !index.includes(">+</"),
+  "Study width must not fall back to reset/minus/plus font glyphs.",
 );
 assert(
   /id="clearDetail"[\s\S]*?<span class="detail-header-icon-label">Clear<\/span>[\s\S]*?<svg/.test(index) &&
