@@ -31,18 +31,32 @@
 
 .study-workspace-width-symbol {
   display: block;
-  flex: 0 0 14px;
-  width: 14px;
-  height: 14px;
+  flex: 0 0 18px;
+  width: 18px;
+  height: 16px;
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 2;
+  stroke-width: 1.7;
 }
 
-.study-workspace-width-symbol .study-workspace-width-artwork {
+.study-workspace-width-frame,
+.study-workspace-width-divider {
   vector-effect: non-scaling-stroke;
+}
+
+.study-workspace-width-divider {
+  display: none;
+}
+
+.study-workspace-width-cycle[data-study-workspace-width-current="compact"]
+  .study-workspace-width-divider-compact,
+.study-workspace-width-cycle[data-study-workspace-width-current="standard"]
+  .study-workspace-width-divider-standard,
+.study-workspace-width-cycle[data-study-workspace-width-current="expanded"]
+  .study-workspace-width-divider-expanded {
+  display: block;
 }
 
 .detail-header-actions {
