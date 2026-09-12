@@ -47,6 +47,34 @@ async function waitForEntry(page, code) {
     Boolean(document.querySelector("#detailContent .lexical-summary")), code);
 }
 
+async function visibleTooltipSnapshot(target) {
+  await target.page().waitForFunction(() => Boolean(document.querySelector(".language-tooltip-layer:not([hidden])")));
+  return target.evaluate((node) => {
+    const layer = document.querySelector(".language-tooltip-layer:not([hidden])");
+    const rect = layer?.getBoundingClientRect();
+    const expected = node.dataset.layerTooltip || node.dataset.tooltip || "";
+    return {
+      visible: Boolean(layer && rect),
+      expected,
+      text: layer?.textContent || "",
+      left: rect?.left ?? -1,
+      right: rect?.right ?? -1,
+      top: rect?.top ?? -1,
+      bottom: rect?.bottom ?? -1,
+      viewportWidth: innerWidth,
+      viewportHeight: innerHeight,
+    };
+  });
+}
+
+function assertViewportContainedTooltip(snapshot, label) {
+  assert(snapshot.visible && snapshot.expected && snapshot.text === snapshot.expected,
+    `${label}: fixed Strong tooltip content is missing or stale: ${JSON.stringify(snapshot)}`);
+  assert(snapshot.left >= 9.5 && snapshot.right <= snapshot.viewportWidth - 9.5 &&
+    snapshot.top >= 9.5 && snapshot.bottom <= snapshot.viewportHeight - 9.5,
+  `${label}: fixed Strong tooltip escaped the viewport: ${JSON.stringify(snapshot)}`);
+}
+
 async function checkLexicalReferences(page, url) {
   await page.goto(`${url}/#/read/bsb/john/4/18`, { waitUntil: "load" });
   const trueToken = page.locator('.verse-row[data-verse="18"] .strong-token[data-strong-code="G227"]').first();
@@ -64,6 +92,25 @@ async function checkLexicalReferences(page, url) {
   await prefix.press("Enter");
   await waitForEntry(page, "G1");
   assert(page.url() === route, "Opening the lexical prefix must not navigate the Reader");
+
+  // Owner review caught G4571 `se` being matched inside the English word
+  // `second` in G4771's Word origin. Exercise that real occurrence and also
+  // keep its Reader preview inside the viewport near the left edge.
+  await page.goto(`${url}/#/read/bsb/john/4/22`, { waitUntil: "load" });
+  const youToken = page.locator('.verse-row[data-verse="22"] .strong-token[data-strong-code="G4771"]').first();
+  await youToken.waitFor({ state: "visible" });
+  await youToken.hover();
+  const youPreview = await visibleTooltipSnapshot(youToken);
+  assert(/G4771/.test(youPreview.text), `John 4:22 Reader preview must identify G4771: ${JSON.stringify(youPreview)}`);
+  assertViewportContainedTooltip(youPreview, "John 4:22 G4771");
+  await youToken.click();
+  await waitForEntry(page, "G4771");
+  const pronounOrigin = page.locator("#detailContent .word-origin-value");
+  assert.equal((await pronounOrigin.innerText()).replace(/\s+/g, " ").trim(),
+    "The person pronoun of the second person singular",
+    "G4771 Word origin must preserve the source prose exactly");
+  assert.equal(await pronounOrigin.locator("button").count(), 0,
+    "G4771 Word origin must not turn `se` inside `second` or absent related forms into links");
 
   // Open an actual G4151 occurrence rather than a synthetic dictionary entry.
   await page.goto(`${url}/#/read/bsb/john/4/24`, { waitUntil: "load" });
@@ -139,7 +186,8 @@ async function checkWrappedTokenFragments(page, url, viewport) {
     await page.evaluate((theme) => { document.documentElement.dataset.theme = theme === "light" ? "light" : "dark"; }, mode);
     await page.emulateMedia({ forcedColors: mode === "forced-colors" ? "active" : "none", reducedMotion: "reduce" });
     await token.hover();
-    assert(await token.evaluate((node) => getComputedStyle(node, "::after").display !== "none"), `${mode}: pointer tooltip was disabled`);
+    const pointerPreview = await visibleTooltipSnapshot(token);
+    assertViewportContainedTooltip(pointerPreview, `${viewport.width}/${mode} pointer`);
     await page.keyboard.press("Tab");
     await token.focus();
     const result = await token.evaluate((node, maxWidth) => {
@@ -183,10 +231,15 @@ async function checkWrappedTokenFragments(page, url, viewport) {
       const source = document.querySelector('.verse-row[data-verse="3"] .strong-token[data-strong-code="G3021"]');
       const relevantStyles = (element) => Object.fromEntries(["font", "whiteSpace", "wordBreak", "overflowWrap", "textWrap", "paddingInline", "marginInline", "userSelect"].map((key) => [key, getComputedStyle(element)[key]]));
       const matchingCascade = JSON.stringify(relevantStyles(source)) === JSON.stringify(relevantStyles(node));
+      const layer = document.querySelector(".language-tooltip-layer:not([hidden])");
+      const tooltipRect = layer?.getBoundingClientRect();
+      const expectedTooltip = node.dataset.layerTooltip || node.dataset.tooltip || "";
+      const keyboardTooltip = node.matches(":focus-visible") && Boolean(layer) && layer.textContent === expectedTooltip &&
+        tooltipRect.left >= 9.5 && tooltipRect.right <= innerWidth - 9.5 && tooltipRect.top >= 9.5 && tooltipRect.bottom <= innerHeight - 9.5;
       return {
         widths, failures, wrapsNaturally, geometry, matchingCascade, font: style.font, fonts: document.fonts.status, unchanged: before === host.textContent,
         selectableText: range.toString(), label: node.textContent,
-        keyboardTooltip: node.matches(":focus-visible") && getComputedStyle(node, "::after").display !== "none",
+        keyboardTooltip,
         focusVisible: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0,
       };
     }, Math.min(viewport.width - 40, 940));
@@ -194,13 +247,14 @@ async function checkWrappedTokenFragments(page, url, viewport) {
     assert(result.wrapsNaturally, `${viewport.width}/${mode}: multi-word Strong spans must still wrap naturally: ${JSON.stringify(result)}`);
     assert(result.matchingCascade, `${viewport.width}/${mode}: fixture and Reader token styles differ`);
     assert(result.unchanged && result.selectableText === result.label && result.label.trim(), "Wrapping must preserve selectable scripture text");
-    assert(result.keyboardTooltip && result.focusVisible, `${viewport.width}/${mode}: keyboard preview or focus indication was disabled`);
+    assert(result.keyboardTooltip && result.focusVisible, `${viewport.width}/${mode}: keyboard preview, viewport containment, or focus indication failed`);
     if (process.env.BIBLEAPP_UI_EVIDENCE_DIR) {
       mkdirSync(process.env.BIBLEAPP_UI_EVIDENCE_DIR, { recursive: true });
       await page.screenshot({ path: path.join(process.env.BIBLEAPP_UI_EVIDENCE_DIR, `strong-wrap-${viewport.width}-${mode}.png`) });
     }
     results.push({ viewport: viewport.width, mode, widths: result.widths, wrapWidth: result.geometry.wrapWidth, label: result.label });
   }
+  await page.mouse.move(0, 0);
   await page.evaluate(() => document.querySelector("#strong-wrap-fixture").remove());
   await page.emulateMedia({ forcedColors: "none", reducedMotion: "no-preference" });
   return results;
@@ -261,7 +315,7 @@ async function main() {
       }
     }
     assert(errors.length === 0, `Strong preview regressions reported browser errors: ${JSON.stringify(errors)}`);
-    console.log(JSON.stringify({ status: "ok", browser: browser.version(), hydratedPreview: true, lexicalReferences: true, wrapping }, null, 2));
+    console.log(JSON.stringify({ status: "ok", browser: browser.version(), hydratedPreview: true, lexicalReferences: true, viewportContainedReaderPreview: true, originBoundaryMatching: true, wrapping }, null, 2));
   } finally {
     await browser.close();
     await new Promise((resolveClose) => server.close(resolveClose));
