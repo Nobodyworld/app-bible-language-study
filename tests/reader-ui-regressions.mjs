@@ -37,8 +37,12 @@ assert(
   "Strong's source words and their hydrated language spans must retain the narrow accent and forced-colors treatment.",
 );
 assert(
-  /button\[data-study-workspace-width-mode="compact"\][\s\S]*?\.study-workspace-width-symbol::before,[\s\S]*?button\[data-study-workspace-width-mode="expanded"\][\s\S]*?\.study-workspace-width-symbol::after/.test(portraitCss),
-  "Compact and Expanded workspace controls must use CSS-drawn centered strokes.",
+  /data-width-artwork="compact"[\s\S]*?class="study-workspace-width-symbol"/.test(index) &&
+    /data-width-artwork="standard"[\s\S]*?class="study-workspace-width-symbol"/.test(index) &&
+    /data-width-artwork="expanded"[\s\S]*?class="study-workspace-width-symbol"/.test(index) &&
+    /\.study-workspace-width-symbol\s*{[\s\S]*?fill:\s*none;[\s\S]*?stroke:\s*currentColor;[\s\S]*?stroke-width:\s*2;/.test(portraitCss) &&
+    !/study-workspace-width-reset-symbol|>↺</.test(index),
+  "Workspace width controls must use one deterministic SVG artwork system without a font-glyph fallback.",
 );
 
 const chapterTools = index.match(/<div class="chapter-actions"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/)?.[0] || "";
