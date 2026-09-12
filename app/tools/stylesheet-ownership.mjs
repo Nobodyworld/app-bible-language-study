@@ -1,5 +1,5 @@
 import { readFile } from "node:fs/promises";
-import { fileURLToPath, pathToFileURL } from "node:url";
+import { pathToFileURL } from "node:url";
 import path from "node:path";
 
 // Small CSS scanner for the project's plain CSS. Quotes, comments and function
@@ -68,6 +68,52 @@ export function stylesheetInventory(sheets) {
   });
   const overlaps = [...owners].filter(([,entries])=>new Set(entries.map(e=>e.file)).size>1).map(([selector, entries])=>({selector,entries}));
   return { files, ruleCount:files.reduce((n,f)=>n+f.rules,0), importantCount:files.reduce((n,f)=>n+f.important,0), overlapCount:overlaps.length, overlaps };
+}
+
+export const STYLE_LOAD_ORDER = Object.freeze([
+  "styles.css", "styles-polish.css", "styles-shell.css", "styles-workspace.css",
+  "styles-reader.css", "styles-study.css", "styles-context.css",
+]);
+
+// Nested context controls own their own geometry, even inside a Reader/Study
+// ancestor. Conditional variants belong in the same component file.
+const COMPONENT_OWNERS = [
+  ["styles-context.css", /\.(?:panel-context|verse-context|detail-context|detail-nav|detail-floating|word-meaning|scope-mark|study-marks-trigger)/],
+  ["styles-workspace.css", /study-workspace-width|\.detail-header|\.detail-title-block|\.detail-mode-status/],
+  ["styles-shell.css", /\.(?:app-shell|app-header|brand|home-button|theme-toggle|theme-option|theme-switch|header-status|reader-control|reader-picker|book-picker|chapter-picker|detail-pane\b|detail-content|detail-work-area)/],
+  ["styles-reader.css", /\.(?:reader-pane|reader-nav|verse-(?:row|body|line|number|actions|text|content|study)|strong-token|reader-text-segment|fn-marker|reader-target-badges|reader-context|chapter-(?:title|heading|content|stepper|nav|toolbar|actions|info|tools)|action-group|toolbar-button)/],
+  ["styles-study.css", /\.(?:translation-(?:alignment|token|rendering)|alignment-|workspace-map|study-(?:mark|data)-|manage-labels|storage-details|technical-details|language-breakdown|mark-(?:list|pill|glyph)|original-language-|interlinear-|transliteration-symbol)/],
+];
+const STRUCTURE = /^(?:display|position|inset(?:-.+)?|top|right|bottom|left|float|clear|z-index|(?:min-|max-)?(?:width|height|inline-size|block-size)|(?:grid|flex|align|justify|place|gap|row-gap|column-gap|padding|margin|overflow|container|contain|box-sizing|vertical-align)(?:-.+)?)$/;
+
+export function ownershipViolations(sheets) {
+  const violations = [];
+  for (const sheet of sheets) for (const rule of cssRules(sheet.source)) {
+    const structural = rule.declarations.filter(d => STRUCTURE.test(d.property));
+    if (sheet.name === "styles-polish.css" && rule.declarations.some(d => !d.property.startsWith("--"))) {
+      violations.push(`${sheet.name}: visual tokens only (${rule.selector})`);
+    }
+    if (!structural.length) continue;
+    for (const selector of rule.selectors) {
+      // Excluded classes do not establish ownership of a generic element rule.
+      const target = selector.replace(/:not\([^)]*\)/g, "");
+      const owner = COMPONENT_OWNERS.find(([, pattern]) => pattern.test(target))?.[0];
+      if (owner && owner !== sheet.name) violations.push(`${sheet.name}: ${selector} structure belongs to ${owner} (${rule.contexts.join(" > ") || "base"})`);
+    }
+  }
+  for (const overlap of stylesheetInventory(sheets).overlaps) {
+    // Shared root selectors set disjoint token families. A property collision
+    // there is still an error; no broad theme/responsive exception is allowed.
+    const seen = new Map();
+    for (const entry of overlap.entries) for (const property of entry.properties) {
+      const previous = seen.get(property);
+      if (previous && previous !== entry.file && (STRUCTURE.test(property) || property.startsWith("--"))) {
+        violations.push(`${overlap.selector}: ${property} crosses ${previous} / ${entry.file}`);
+      }
+      seen.set(property, entry.file);
+    }
+  }
+  return [...new Set(violations)];
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href) {

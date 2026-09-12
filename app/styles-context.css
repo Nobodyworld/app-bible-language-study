@@ -1,43 +1,44 @@
 /* Context controls and Meaning surfaces, including their responsive states. */
+
 :root[data-theme="dark"] .detail-nav-arrow {
-  background: var(--panel) !important;
-  border-color: rgba(78, 205, 193, 0.16) !important;
+  background: var(--panel);
+  border-color: rgba(78, 205, 193, 0.16);
 }
 
 :root[data-theme="dark"] .detail-nav-arrow:hover,
 :root[data-theme="dark"] .detail-nav-arrow:focus-visible {
-  background: rgba(39, 38, 31, 0.94) !important;
+  background: rgba(39, 38, 31, 0.94);
 }
 
 :root[data-theme="dark"] .verse-context-tab {
-  border: 0 !important;
-  background: transparent !important;
-  color: var(--muted) !important;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
 }
 
 :root[data-theme="dark"] .verse-context-tab:hover,
 :root[data-theme="dark"] .verse-context-tab:focus-visible,
 :root[data-theme="dark"] .verse-context-tab.active,
 :root[data-theme="dark"] .verse-context-tab.active:disabled {
-  border: 0 !important;
-  background: rgba(148, 163, 184, 0.14) !important;
-  color: var(--text) !important;
-  box-shadow: none !important;
+  border: 0;
+  background: rgba(148, 163, 184, 0.14);
+  color: var(--text);
+  box-shadow: none;
 }
 
 :root[data-theme="dark"] .verse-context-favorite-button {
-  border-width: 1px !important;
+  border-width: 1px;
 }
 
 :root[data-theme="dark"] .verse-context-favorite-button {
-  background: transparent !important;
-  border-color: var(--line) !important;
-  color: var(--muted) !important;
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
 }
 
 :root[data-theme="dark"] .verse-context-favorite-button.active {
-  border-color: #fbbf24 !important;
-  color: #fbbf24 !important;
+  border-color: #fbbf24;
+  color: #fbbf24;
 }
 
 .panel-context-navigation :is(button, [role="tab"]) {
@@ -362,14 +363,14 @@ html[data-theme="light"] .word-meaning-option,
 html[data-theme="light"] .word-meaning-save,
 :root[data-theme="dark"] .word-meaning-cancel,
 html[data-theme="light"] .word-meaning-cancel {
-  border-width: 1px !important;
+  border-width: 1px;
 }
 
 :root[data-theme="dark"] .word-meaning-menu,
 html[data-theme="light"] .word-meaning-menu {
-  background: var(--panel) !important;
-  border-color: var(--line) !important;
-  color: var(--text) !important;
+  background: var(--panel);
+  border-color: var(--line);
+  color: var(--text);
 }
 
 .detail-context {

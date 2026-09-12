@@ -60,10 +60,6 @@
   min-width: 0;
 }
 
-.study-workspace-width-controls {
-  grid-template-columns: auto repeat(3, minmax(0, 1fr));
-}
-
 .study-workspace-width-label {
   padding-inline-end: 3px;
   color: var(--muted);
@@ -453,7 +449,7 @@
 :root[data-theme="dark"] .study-workspace-width-controls button,
 :root[data-theme="dark"] .detail-header-icon-button,
 :root[data-theme="dark"] .study-workspace-show-button {
-  border-width: 1px !important;
+  border-width: 1px;
 }
 
 @media (forced-colors: active) {

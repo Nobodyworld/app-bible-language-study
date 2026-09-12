@@ -1,4 +1,52 @@
-/* Component structure, state and responsive rules in cascade order. */
+/* Context controls and Meaning surfaces, including their responsive states. */
+.theme-option {
+  display: grid;
+  place-items: center;
+  width: 18px;
+  color: var(--muted);
+  line-height: 1;
+  transition: color 160ms ease, transform 160ms ease;
+}
+
+.theme-switch-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-alt);
+}
+
+.theme-switch-thumb {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--accent);
+  box-shadow: var(--shadow-sm);
+  transition: transform 180ms ease;
+}
+
+.home-button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.home-button:hover,
+.home-button:focus-visible {
+  color: inherit;
+}
+
+@media (max-width: 640px) {
+.home-button {
+    min-height: 44px;
+  }
+}
 
 .app-header {
   position: sticky;
@@ -16,7 +64,7 @@
 }
 
 @media (prefers-color-scheme: dark) {
-  .app-header {
+.app-header {
     background: var(--bg);
   }
 }
@@ -282,7 +330,7 @@
 }
 
 @media (max-width: 1280px) {
-  .app-shell {
+.app-shell {
     gap: 12px;
     width: calc(100% - 24px);
     margin: 12px auto;
@@ -290,7 +338,7 @@
 }
 
 @media (max-width: 768px) {
-  .app-shell {
+.app-shell {
     grid-template-columns: 1fr;
     gap: 8px;
   }
@@ -320,7 +368,7 @@
 }
 
 @media (max-width: 768px) {
-  .detail-pane {
+.detail-pane {
     position: fixed;
     right: 0;
     top: 0;
@@ -388,7 +436,7 @@
 }
 
 @media (max-width: 960px) {
-  .app-header {
+.app-header {
     display: grid;
     grid-template-areas: "brand theme"
         "controls controls"
@@ -400,59 +448,59 @@
 }
 
 @media (max-width: 960px) {
-  .brand {
+.brand {
     grid-area: brand;
     min-width: 0;
   }
 }
 
 @media (max-width: 960px) {
-  .reader-controls {
+.reader-controls {
     grid-area: controls;
   }
 }
 
 @media (max-width: 960px) {
-  .header-status {
+.header-status {
     grid-area: status;
     justify-self: start;
   }
 }
 
 @media (max-width: 960px) {
-  .theme-toggle-button {
+.theme-toggle-button {
     grid-area: theme;
   }
 }
 
 @media (max-width: 960px) {
-  .reader-controls {
+.reader-controls {
     justify-content: stretch;
   }
 }
 
 @media (max-width: 960px) {
-  .reader-control {
+.reader-control {
     flex: 1 1 160px;
   }
 }
 
 @media (max-width: 960px) {
-  .reader-controls select {
+.reader-controls select {
     width: 100%;
     max-width: none;
   }
 }
 
 @media (max-width: 960px) {
-  .reader-picker-button {
+.reader-picker-button {
     width: 100%;
     max-width: none;
   }
 }
 
 @media (max-width: 960px) {
-  .book-picker-panel {
+.book-picker-panel {
     left: 50%;
     transform: translateX(-50%);
     grid-template-columns: 1fr;
@@ -461,7 +509,7 @@
 }
 
 @media (max-width: 960px) {
-  .book-picker-column {
+.book-picker-column {
     max-height: min(260px, calc(50dvh - 80px));
     border-right: 0;
     border-bottom: 1px solid var(--line);
@@ -469,20 +517,20 @@
 }
 
 @media (max-width: 960px) {
-  .book-picker-column:last-child {
+.book-picker-column:last-child {
     border-bottom: 0;
   }
 }
 
 @media (max-width: 960px) {
-  .chapter-picker-panel {
+.chapter-picker-panel {
     left: 50%;
     transform: translateX(-50%);
   }
 }
 
 @media (max-width: 640px) {
-  .app-header {
+.app-header {
     grid-template-areas: "brand compact-status theme"
         "controls controls controls"
         "status status status";
@@ -493,7 +541,7 @@
 }
 
 @media (max-width: 640px) {
-  .brand {
+.brand {
     justify-self: stretch;
     width: auto;
     max-width: none;
@@ -502,20 +550,20 @@
 }
 
 @media (max-width: 640px) {
-  .brand > div {
+.brand > div {
     min-width: 0;
   }
 }
 
 @media (max-width: 640px) {
-  .brand h1 {
+.brand h1 {
     font-size: 18px;
     white-space: nowrap;
   }
 }
 
 @media (max-width: 640px) {
-  .reader-controls {
+.reader-controls {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
     width: 100%;
@@ -524,7 +572,7 @@
 }
 
 @media (max-width: 640px) {
-  .reader-control {
+.reader-control {
     display: grid;
     min-width: 0;
     gap: 3px;
@@ -533,15 +581,15 @@
 }
 
 @media (max-width: 640px) {
-  .reader-control-label,
-  .reader-control-label-line {
+.reader-control-label,
+.reader-control-label-line {
     min-width: 0;
     white-space: nowrap;
   }
 }
 
 @media (max-width: 640px) {
-  .reader-control-status:not([hidden]) {
+.reader-control-status:not([hidden]) {
     grid-area: compact-status;
     display: inline-block;
     align-self: center;
@@ -560,8 +608,8 @@
 }
 
 @media (max-width: 640px) {
-  .reader-controls select,
-  .reader-picker-button {
+.reader-controls select,
+.reader-picker-button {
     width: 100%;
     min-width: 0;
     height: 44px;
@@ -570,14 +618,14 @@
 }
 
 @media (max-width: 640px) {
-  .reader-picker-button {
+.reader-picker-button {
     gap: 5px;
     padding-inline: 8px;
   }
 }
 
 @media (max-width: 640px) {
-  .header-status[data-status-state="loaded"] {
+.header-status[data-status-state="loaded"] {
     position: absolute;
     width: 1px;
     height: 1px;
@@ -592,7 +640,7 @@
 }
 
 @media (max-width: 640px) {
-  .header-status:not([data-status-state="loaded"]) {
+.header-status:not([data-status-state="loaded"]) {
     max-width: 100%;
     text-align: left;
     white-space: normal;
@@ -600,20 +648,20 @@
 }
 
 @media (max-width: 640px) {
-  .book-picker-panel[data-positioned="true"] .book-picker-column {
+.book-picker-panel[data-positioned="true"] .book-picker-column {
     max-height: min(260px, calc(var(--reader-picker-available-height, 520px) * 0.5));
   }
 }
 
 @media (max-width: 640px) {
-  .app-shell {
+.app-shell {
     width: 100%;
     margin: 0;
   }
 }
 
 @media (max-width: 640px) {
-  .detail-pane {
+.detail-pane {
     border-left: 0;
     border-right: 0;
     border-radius: 0;
@@ -621,7 +669,7 @@
 }
 
 @media (max-width: 240px) {
-  .app-header {
+.app-header {
     grid-template-areas: "brand brand"
         "compact-status theme"
         "controls controls"
@@ -633,26 +681,26 @@
 }
 
 @media (max-width: 240px) {
-  .brand {
+.brand {
     gap: 8px;
   }
 }
 
 @media (max-width: 240px) {
-  .brand-mark {
+.brand-mark {
     flex: 0 0 40px;
   }
 }
 
 :root[data-theme="dark"] .app-header {
-  background: var(--bg) !important;
-  border-color: var(--line) !important;
+  background: var(--bg);
+  border-color: var(--line);
 }
 
 html[data-theme="light"] .app-header {
-  background: var(--bg) !important;
-  border-color: var(--line) !important;
-  color: var(--text) !important;
+  background: var(--bg);
+  border-color: var(--line);
+  color: var(--text);
 }
 
 .app-header {
@@ -695,7 +743,7 @@ html[data-theme="light"] .app-header {
 }
 
 @media (min-width: 769px) {
-  .detail-pane {
+.detail-pane {
     top: calc(var(--app-header-block-size) + 12px);
     height: calc(100dvh - var(--app-header-block-size) - 24px);
     max-height: calc(100dvh - var(--app-header-block-size) - 24px);
@@ -703,7 +751,7 @@ html[data-theme="light"] .app-header {
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .app-header {
+.app-header {
     display: grid;
     grid-template-areas: "brand status . theme"
         "controls controls controls controls";
@@ -715,7 +763,7 @@ html[data-theme="light"] .app-header {
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .brand {
+.brand {
     grid-area: brand;
     justify-self: start;
     width: max-content;
@@ -726,14 +774,14 @@ html[data-theme="light"] .app-header {
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .brand h1 {
+.brand h1 {
     font-size: 18px;
     white-space: nowrap;
   }
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .header-status {
+.header-status {
     grid-area: status;
     align-self: center;
     justify-self: start;
@@ -741,7 +789,7 @@ html[data-theme="light"] .app-header {
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .reader-controls {
+.reader-controls {
     grid-area: controls;
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -752,28 +800,28 @@ html[data-theme="light"] .app-header {
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .reader-control {
+.reader-control {
     min-width: 0;
   }
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .reader-controls select,
-  .reader-picker-button {
+.reader-controls select,
+.reader-picker-button {
     width: 100%;
     max-width: none;
   }
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .theme-toggle-button {
+.theme-toggle-button {
     grid-area: theme;
     justify-self: end;
   }
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .book-picker-panel {
+.book-picker-panel {
     grid-template-columns: repeat(2, minmax(0, 1fr));
     width: min(560px, calc(100vw - 24px));
     max-width: calc(100vw - 24px);
@@ -783,7 +831,7 @@ html[data-theme="light"] .app-header {
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .book-picker-column {
+.book-picker-column {
     min-height: 0;
     max-height: calc(100dvh - var(--app-header-block-size) - 24px);
     border-right: 1px solid var(--line);
@@ -792,7 +840,7 @@ html[data-theme="light"] .app-header {
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .book-picker-panel[data-positioned="true"] .book-picker-column {
+.book-picker-panel[data-positioned="true"] .book-picker-column {
     max-height: var(
         --reader-picker-available-height,
         calc(100dvh - var(--app-header-block-size) - 24px)
@@ -801,13 +849,13 @@ html[data-theme="light"] .app-header {
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .book-picker-column:last-child {
+.book-picker-column:last-child {
     border-right: 0;
   }
 }
 
 @media (min-width: 769px) and (max-width: 1100px) {
-  .book-picker-list {
+.book-picker-list {
     min-height: 0;
     overflow-y: auto;
     overscroll-behavior-y: contain;
@@ -816,13 +864,17 @@ html[data-theme="light"] .app-header {
 }
 
 @media (min-width: 769px) {
-  :root[data-study-workspace-hidden="true"] .app-shell {
+:root[data-study-workspace-hidden="true"] .app-shell {
     grid-template-columns: minmax(0, 1fr);
   }
 }
 
 @media (min-width: 769px) {
-  :root[data-study-workspace-hidden="true"] .detail-pane {
+:root[data-study-workspace-hidden="true"] .detail-pane {
     display: none;
   }
+}
+
+:root {
+  --app-header-block-size: 76px;
 }

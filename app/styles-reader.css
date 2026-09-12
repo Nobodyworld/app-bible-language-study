@@ -1,4 +1,90 @@
 /* Context controls and Meaning surfaces, including their responsive states. */
+.chapter-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: flex-start;
+  gap: 5px;
+  flex-wrap: wrap;
+  max-width: min(760px, 100%);
+}
+
+.verse-study-button {
+  display: inline-grid;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  min-height: 28px;
+  margin-top: 2px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--accent-dark);
+  font-size: 16px;
+  font-weight: 800;
+  line-height: 1;
+  opacity: 0;
+  visibility: hidden;
+  transition: all 140ms ease;
+}
+
+.verse-study-button:hover,
+.verse-study-button:focus-visible {
+  border-color: rgba(37, 99, 95, 0.22);
+  background: rgba(37, 99, 95, 0.1);
+  opacity: 1;
+  outline: none;
+  transform: scale(1.05);
+}
+
+.verse-study-button[data-unavailable="true"] {
+  color: var(--unavailable);
+}
+
+.verse-study-button[data-unavailable="true"]:hover,
+.verse-study-button[data-unavailable="true"]:focus-visible {
+  border-color: rgba(120, 113, 108, 0.26);
+  background: rgba(120, 113, 108, 0.1);
+}
+
+@media (hover: none) {
+.verse-study-button {
+    border-color: rgba(37, 99, 95, 0.16);
+    background: rgba(255, 255, 255, 0.68);
+    opacity: 0.85;
+    visibility: visible;
+    width: 32px;
+    min-width: 32px;
+    height: 32px;
+    min-height: 32px;
+  }
+}
+
+@media (max-width: 960px) {
+.chapter-actions {
+    justify-content: flex-start;
+    max-width: none;
+    width: 100%;
+  }
+}
+
+@media (max-width: 640px) {
+.chapter-actions {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}
+
+:root[data-theme="dark"] .verse-study-button {
+  border-width: 1px;
+}
+
+html[data-theme="light"] .verse-study-button {
+  border-width: 1px;
+}
+
 .reader-nav-arrow {
   position: relative;
   display: grid;
@@ -127,56 +213,56 @@
 }
 
 :root[data-theme="dark"] .reader-nav-arrow {
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: var(--accent-dark) !important;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent-dark);
 }
 
 :root[data-theme="dark"] .reader-nav-arrow::before {
-  background: rgba(26, 26, 24, 0.48) !important;
+  background: rgba(26, 26, 24, 0.48);
 }
 
 :root[data-theme="dark"] .reader-nav-arrow:hover,
 :root[data-theme="dark"] .reader-nav-arrow:focus-visible {
-  border: 0 !important;
-  background: transparent !important;
+  border: 0;
+  background: transparent;
 }
 
 :root[data-theme="dark"] .reader-nav-arrow:hover::before,
 :root[data-theme="dark"] .reader-nav-arrow:focus-visible::before {
-  background: rgba(39, 38, 31, 0.94) !important;
+  background: rgba(39, 38, 31, 0.94);
 }
 
 :root[data-theme="dark"] .reader-nav-arrow {
-  border-color: var(--line) !important;
-  background: rgba(39, 38, 31, 0.88) !important;
-  color: var(--muted) !important;
+  border-color: var(--line);
+  background: rgba(39, 38, 31, 0.88);
+  color: var(--muted);
 }
 
 :root[data-theme="dark"] .reader-nav-arrow:hover,
 :root[data-theme="dark"] .reader-nav-arrow:focus-visible {
-  background: var(--panel-alt) !important;
-  color: var(--text) !important;
-  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.18) !important;
+  background: var(--panel-alt);
+  color: var(--text);
+  box-shadow: 0 0 0 2px rgba(148, 163, 184, 0.18);
 }
 
 html[data-theme="light"] .reader-nav-arrow,
 html[data-theme="light"] .reader-nav-arrow:hover,
 html[data-theme="light"] .reader-nav-arrow:focus-visible {
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: var(--accent-dark) !important;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: var(--accent-dark);
 }
 
 html[data-theme="light"] .reader-nav-arrow::before {
-  background: rgba(255, 255, 255, 0.84) !important;
+  background: rgba(255, 255, 255, 0.84);
 }
 
 html[data-theme="light"] .reader-nav-arrow:hover::before,
 html[data-theme="light"] .reader-nav-arrow:focus-visible::before {
-  background: rgba(255, 255, 255, 0.94) !important;
+  background: rgba(255, 255, 255, 0.94);
 }
 
 @media (forced-colors: active) {
@@ -934,49 +1020,49 @@ html[data-theme="light"] .reader-nav-arrow:focus-visible::before {
 }
 
 :root[data-theme="dark"] .action-group {
-  border-color: var(--line) !important;
-  background: rgba(39, 38, 31, 0.72) !important;
+  border-color: var(--line);
+  background: rgba(39, 38, 31, 0.72);
 }
 
 :root[data-theme="dark"] .toolbar-button {
-  border: 0 !important;
-  background: transparent !important;
-  color: var(--muted) !important;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
 }
 
 :root[data-theme="dark"] .toolbar-button:hover,
 :root[data-theme="dark"] .toolbar-button:focus-visible,
 :root[data-theme="dark"] .toolbar-button.primary-tool {
-  border: 0 !important;
-  background: rgba(148, 163, 184, 0.1) !important;
-  color: var(--text) !important;
-  box-shadow: none !important;
+  border: 0;
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--text);
+  box-shadow: none;
 }
 
 :root[data-theme="dark"] .verse-number {
-  border-width: 1px !important;
+  border-width: 1px;
 }
 
 :root[data-theme="dark"] .fn-marker {
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: #9eafff !important;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #9eafff;
 }
 
 :root[data-theme="dark"] .fn-marker:hover {
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: #c5ceff !important;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #c5ceff;
 }
 
 :root[data-theme="dark"] .fn-marker:focus-visible {
-  border: 0 !important;
-  outline: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: #f0f2ff !important;
+  border: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: #f0f2ff;
   text-decoration: underline;
 }
 
@@ -985,48 +1071,48 @@ html[data-theme="light"] .reader-nav-arrow:focus-visible::before {
 }
 
 :root[data-theme="dark"] .reader-context-verse {
-  background: rgba(148, 163, 184, 0.08) !important;
+  background: rgba(148, 163, 184, 0.08);
   box-shadow:
     inset 2px 0 0 rgba(148, 163, 184, 0.62),
-    0 0 0 1px rgba(148, 163, 184, 0.16) !important;
+    0 0 0 1px rgba(148, 163, 184, 0.16);
 }
 
 :root[data-theme="dark"] .reader-context-phrase-verse {
-  background: rgba(148, 163, 184, 0.08) !important;
+  background: rgba(148, 163, 184, 0.08);
   box-shadow:
     inset 2px 0 0 rgba(148, 163, 184, 0.62),
-    0 0 0 1px rgba(148, 163, 184, 0.16) !important;
+    0 0 0 1px rgba(148, 163, 184, 0.16);
 }
 
 :root[data-theme="dark"] .reader-context-word {
-  background: rgba(180, 145, 92, 0.18) !important;
-  outline-color: rgba(180, 145, 92, 0.42) !important;
+  background: rgba(180, 145, 92, 0.18);
+  outline-color: rgba(180, 145, 92, 0.42);
 }
 
 html[data-theme="light"] .verse-number {
-  border-width: 1px !important;
+  border-width: 1px;
 }
 
 html[data-theme="light"] .fn-marker {
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: #2347fb !important;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #2347fb;
 }
 
 html[data-theme="light"] .fn-marker:hover {
-  border: 0 !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: #1232c8 !important;
+  border: 0;
+  background: transparent;
+  box-shadow: none;
+  color: #1232c8;
 }
 
 html[data-theme="light"] .fn-marker:focus-visible {
-  border: 0 !important;
-  outline: none !important;
-  background: transparent !important;
-  box-shadow: none !important;
-  color: #0b238f !important;
+  border: 0;
+  outline: none;
+  background: transparent;
+  box-shadow: none;
+  color: #0b238f;
   text-decoration: underline;
 }
 
@@ -1035,8 +1121,8 @@ html[data-theme="light"] .fn-marker:focus-visible::before {
 }
 
 :root[data-theme="dark"] .reader-context-phrase {
-  background: rgba(180, 145, 92, 0.18) !important;
-  outline-color: rgba(180, 145, 92, 0.42) !important;
+  background: rgba(180, 145, 92, 0.18);
+  outline-color: rgba(180, 145, 92, 0.42);
 }
 
 @media (min-width: 641px) and (max-width: 960px) {

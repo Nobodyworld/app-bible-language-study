@@ -1,8 +1,0 @@
-:root {
-  --app-header-block-size: 76px;
-}
-
-@media (min-width: 769px) {
-
-  /* The 320px border-box Compact pane has a 318px query content box. */
-}

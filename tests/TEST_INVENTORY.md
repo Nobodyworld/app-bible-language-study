@@ -26,6 +26,15 @@ remove, or reclassify a maintained test.
 
 ## Focused Aliases
 
+`tests/stylesheet-ownership.mjs` runs in `test:static`. It verifies the shared
+stylesheet load/staging order, component structural ownership, conditional
+contexts and deliberate ownership-violation negative controls. See
+`docs/STYLESHEET_OWNERSHIP.md` for responsibilities and comparable measurements.
+The Strong-preview browser suite measures actual font-ready wrapping widths,
+checks padding-only fragments and preserves text selection and keyboard previews.
+Study-header rendered coverage measures the actual 320px border-box pane, all
+three modes and the smaller-container fallback; viewport reflow is not browser zoom.
+
 These maintained aliases expose narrower checks without changing the suite
 composition above:
 

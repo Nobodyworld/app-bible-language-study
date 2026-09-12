@@ -8,7 +8,7 @@ const sources = Object.fromEntries(await Promise.all(
   [
     ["index", "../app/index.html"],
     ["css", "../app/styles.css"],
-    ["portraitCss", "../app/styles-portrait.css"],
+    ["portraitCss", "../app/styles-workspace.css"],
     ["contextCss", "../app/styles-context.css"],
     ["app", "../app/app.js"],
     ["activeWord", "../app/src/active-word-context.js"],

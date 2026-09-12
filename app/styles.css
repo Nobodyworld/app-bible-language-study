@@ -28,6 +28,7 @@
 /* Prefer dark mode colors if OS prefers dark and no explicit theme is set */
 
 /* Explicit light mode with attribute - default state */
+
 :root[data-theme="light"] {
   color-scheme: light;
   --bg: #f4f4f1;
@@ -55,7 +56,11 @@
 }
 
 /* Explicit dark mode with attribute - overrides everything */
+
 :root[data-theme="dark"] {
+  --control-surface: var(--bg-elevated);
+  --control-border: var(--accent);
+  --control-hover: var(--panel);
   color-scheme: dark;
   --bg: #1a1a18;
   --panel: #27261f;
@@ -83,7 +88,8 @@
 
 /* Fallback for OS dark preference when no explicit data-theme is set */
 @media (prefers-color-scheme: dark) {
-  :root:not([data-theme]) {
+
+:root:not([data-theme]) {
     color-scheme: dark;
     --bg: #1a1a18;
     --panel: #27261f;
@@ -111,57 +117,6 @@
 }
 
 /* Manual theme override with data-theme attribute */
-[data-theme="light"] {
-  color-scheme: light;
-  --bg: #f4f4f1;
-  --panel: #ffffff;
-  --panel-alt: #f8f8f5;
-  --text: #202124;
-  --muted: #696f78;
-  --line: #d8d8d1;
-  --border-subtle: #e7e5e0;
-  --bg-elevated: #fafaf8;
-  --accent: #25635f;
-  --accent-dark: #174744;
-  --red-letter: #9d2f2f;
-  --token: #fde047;
-  --search-match-bg: #fde047;
-  --search-match-fg: #202124;
-  --strong-fg: #27863a;
-  --success: #059669;
-  --warning: #d97706;
-  --error: #dc2626;
-  --info: #0284c7;
-  --unavailable: #78716c;
-  --shadow: 0 12px 30px rgba(33, 36, 38, 0.08);
-  --shadow-sm: 0 4px 12px rgba(16, 24, 40, 0.06);
-}
-
-[data-theme="dark"] {
-  color-scheme: dark;
-  --bg: #1a1a18;
-  --panel: #27261f;
-  --panel-alt: #2d2c26;
-  --text: #f4f4f1;
-  --muted: #a3a3a0;
-  --line: #3d3d38;
-  --border-subtle: #4d4c46;
-  --bg-elevated: #32312a;
-  --accent: #4ecdc1;
-  --accent-dark: #70e8d9;
-  --red-letter: #f87171;
-  --token: #fbbf24;
-  --search-match-bg: #fbbf24;
-  --search-match-fg: #1a1a18;
-  --strong-fg: #86efac;
-  --success: #10b981;
-  --warning: #f59e0b;
-  --error: #ef4444;
-  --info: #3b82f6;
-  --unavailable: #a8a29e;
-  --shadow: 0 12px 30px rgba(0, 0, 0, 0.3);
-  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.2);
-}
 
 * {
   box-sizing: border-box;
@@ -193,8 +148,8 @@ select {
 }
 
 button {
-  border: 2px solid var(--line);
-  background: var(--panel);
+  border: 2px solid var(--control-border, var(--line));
+  background: var(--control-surface, var(--panel));
   color: var(--text);
   min-height: 36px;
   padding: 0 12px;
@@ -207,7 +162,7 @@ button {
 button:hover,
 button:focus-visible {
   border-color: var(--accent);
-  background: var(--bg-elevated);
+  background: var(--control-hover, var(--bg-elevated));
   color: var(--text);
   box-shadow: 0 0 0 3px rgba(78, 205, 193, 0.15);
   outline: 3px solid var(--accent);
@@ -221,51 +176,6 @@ button:active {
 button:disabled {
   cursor: not-allowed;
   opacity: 0.45;
-}
-
-
-
-.theme-option {
-  display: grid;
-  place-items: center;
-  width: 18px;
-  color: var(--muted);
-  line-height: 1;
-  transition: color 160ms ease, transform 160ms ease;
-}
-
-.theme-switch-track {
-  position: relative;
-  width: 36px;
-  height: 20px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
-  background: var(--panel-alt);
-}
-
-.theme-switch-thumb {
-  position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 50%;
-  background: var(--accent);
-  box-shadow: var(--shadow-sm);
-  transition: transform 180ms ease;
-}
-
-.home-button {
-  min-height: 0;
-  padding: 0;
-  border: 0;
-  background: transparent;
-  text-align: left;
-}
-
-.home-button:hover,
-.home-button:focus-visible {
-  color: inherit;
 }
 
 .profile-identity {
@@ -378,22 +288,9 @@ button:disabled {
   pointer-events: none;
 }
 
-
-
 .profile-identity[hidden] {
   display: none;
 }
-
-.chapter-actions {
-  display: flex;
-  justify-content: flex-end;
-  align-items: flex-start;
-  gap: 5px;
-  flex-wrap: wrap;
-  max-width: min(760px, 100%);
-}
-
-
 
 .toolbar-icon {
   display: inline-grid;
@@ -503,27 +400,6 @@ button:disabled {
   outline-offset: -2px;
 }
 
-.verse-study-button {
-  display: inline-grid;
-  place-items: center;
-  width: 28px;
-  min-width: 28px;
-  height: 28px;
-  min-height: 28px;
-  margin-top: 2px;
-  padding: 0;
-  border: 1px solid transparent;
-  border-radius: 6px;
-  background: transparent;
-  color: var(--accent-dark);
-  font-size: 16px;
-  font-weight: 800;
-  line-height: 1;
-  opacity: 0;
-  visibility: hidden;
-  transition: all 140ms ease;
-}
-
 .verse-favorite-button {
   display: inline-grid;
   place-items: center;
@@ -557,40 +433,10 @@ button:disabled {
   visibility: visible;
 }
 
-.verse-study-button:hover,
-.verse-study-button:focus-visible {
-  border-color: rgba(37, 99, 95, 0.22);
-  background: rgba(37, 99, 95, 0.1);
-  opacity: 1;
-  outline: none;
-  transform: scale(1.05);
-}
-
-.verse-study-button[data-unavailable="true"] {
-  color: var(--unavailable);
-}
-
-.verse-study-button[data-unavailable="true"]:hover,
-.verse-study-button[data-unavailable="true"]:focus-visible {
-  border-color: rgba(120, 113, 108, 0.26);
-  background: rgba(120, 113, 108, 0.1);
-}
-
 @media (hover: none) {
   .verse-favorite-button {
     opacity: 0.58;
     visibility: visible;
-  }
-
-  .verse-study-button {
-    border-color: rgba(37, 99, 95, 0.16);
-    background: rgba(255, 255, 255, 0.68);
-    opacity: 0.85;
-    visibility: visible;
-    width: 32px;
-    min-width: 32px;
-    height: 32px;
-    min-height: 32px;
   }
 }
 
@@ -2685,29 +2531,7 @@ button.user-data-summary-item {
   color: #9d2f2f;
 }
 
-@media (max-width: 960px) {
 
-  .chapter-actions {
-    justify-content: flex-start;
-    max-width: none;
-    width: 100%;
-  }
-}
-
-
-
-@media (max-width: 640px) {
-
-  .home-button {
-    min-height: 44px;
-  }
-
-  .chapter-actions {
-    display: grid;
-    grid-template-columns: 1fr;
-    gap: 4px;
-  }
-}
 
 
 
@@ -2774,16 +2598,17 @@ button:focus-visible,
 /* Dark mode CSS overrides for hardcoded colors */
 
 /* Override all white backgrounds */
+
 :root[data-theme="dark"] {
-  background: var(--bg) !important;
-  color: var(--text) !important;
+  background: var(--bg);
+  color: var(--text);
 }
 
 :root[data-theme="dark"] html,
 :root[data-theme="dark"] body,
 :root[data-theme="dark"] main {
-  background: var(--bg) !important;
-  color: var(--text) !important;
+  background: var(--bg);
+  color: var(--text);
 }
 
 :root[data-theme="dark"] .chapter-modal,
@@ -2791,41 +2616,41 @@ button:focus-visible,
 :root[data-theme="dark"] .popover,
 :root[data-theme="dark"] .dropdown-menu,
 :root[data-theme="dark"] .context-menu {
-  background: var(--panel) !important;
-  border: 1px solid var(--line) !important;
-  color: var(--text) !important;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
 }
 
 :root[data-theme="dark"] .detail-section {
-  background: var(--panel) !important;
-  border: 1px solid var(--line) !important;
+  background: var(--panel);
+  border: 1px solid var(--line);
 }
 
 :root[data-theme="dark"] .verse-reference,
 :root[data-theme="dark"] .chapter-verse,
 :root[data-theme="dark"] .verse-highlight {
-  background: rgba(78, 205, 193, 0.08) !important;
-  color: var(--text) !important;
+  background: rgba(78, 205, 193, 0.08);
+  color: var(--text);
 }
 
 :root[data-theme="dark"] .token-highlight {
-  background: rgba(251, 191, 36, 0.12) !important;
+  background: rgba(251, 191, 36, 0.12);
 }
 
 :root[data-theme="dark"] .strong-sticky-summary {
-  background: transparent !important;
-  border-bottom: 1px solid var(--line) !important;
-  color: var(--text) !important;
+  background: transparent;
+  border-bottom: 1px solid var(--line);
+  color: var(--text);
 }
 
 :root[data-theme="dark"] .parallel-verse {
-  background: var(--panel-alt) !important;
-  border-color: var(--line) !important;
+  background: var(--panel-alt);
+  border-color: var(--line);
 }
 
 :root[data-theme="dark"] .parallel-verse.active {
-  background: rgba(148, 163, 184, 0.12) !important;
-  border-color: rgba(148, 163, 184, 0.42) !important;
+  background: rgba(148, 163, 184, 0.12);
+  border-color: rgba(148, 163, 184, 0.42);
 }
 
 :root[data-theme="dark"] input[type="text"],
@@ -2834,9 +2659,9 @@ button:focus-visible,
 :root[data-theme="dark"] input[type="password"],
 :root[data-theme="dark"] textarea,
 :root[data-theme="dark"] select {
-  background: var(--panel) !important;
-  color: var(--text) !important;
-  border-color: var(--line) !important;
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--line);
 }
 
 :root[data-theme="dark"] input[type="text"]:focus,
@@ -2845,60 +2670,48 @@ button:focus-visible,
 :root[data-theme="dark"] input[type="password"]:focus,
 :root[data-theme="dark"] textarea:focus,
 :root[data-theme="dark"] select:focus {
-  background: var(--bg-elevated) !important;
-  border-color: var(--accent) !important;
-  color: var(--text) !important;
+  background: var(--bg-elevated);
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 :root[data-theme="dark"] .search-result-item,
 :root[data-theme="dark"] .outline-item,
 :root[data-theme="dark"] .list-item {
-  background: rgba(78, 205, 193, 0.08) !important;
-  border-color: var(--line) !important;
-  color: var(--text) !important;
+  background: rgba(78, 205, 193, 0.08);
+  border-color: var(--line);
+  color: var(--text);
 }
 
 :root[data-theme="dark"] .list-item:hover {
-  background: rgba(78, 205, 193, 0.12) !important;
+  background: rgba(78, 205, 193, 0.12);
 }
 
 :root[data-theme="dark"] .tag-badge,
 :root[data-theme="dark"] .verse-tag {
-  background: rgba(78, 205, 193, 0.15) !important;
-  color: var(--text) !important;
+  background: rgba(78, 205, 193, 0.15);
+  color: var(--text);
 }
 
 :root[data-theme="dark"] .button-group button {
-  background: var(--bg) !important;
-  color: var(--text) !important;
-  border-color: var(--line) !important;
+  background: var(--bg);
+  color: var(--text);
+  border-color: var(--line);
 }
 
 :root[data-theme="dark"] .button-group button:hover {
-  background: var(--bg-elevated) !important;
-  border-color: var(--accent) !important;
+  background: var(--bg-elevated);
+  border-color: var(--accent);
 }
 
 /* Ensure all text is visible */
-:root[data-theme="dark"] h1,
-:root[data-theme="dark"] h2,
-:root[data-theme="dark"] h3,
-:root[data-theme="dark"] h4,
-:root[data-theme="dark"] h5,
-:root[data-theme="dark"] h6,
-:root[data-theme="dark"] p,
-:root[data-theme="dark"] span,
-:root[data-theme="dark"] a,
-:root[data-theme="dark"] label {
-  color: var(--text) !important;
-}
 
 :root[data-theme="dark"] a {
-  color: var(--accent) !important;
+  color: var(--accent);
 }
 
 :root[data-theme="dark"] a:visited {
-  color: var(--accent-dark) !important;
+  color: var(--accent-dark);
 }
 
 /* Ensure box-sizing for all buttons to prevent border overflow */
@@ -2907,114 +2720,72 @@ button {
 }
 
 /* Dark mode button styling - only for main buttons, exclude small inline buttons */
-:root[data-theme="dark"]
-  button:not(.verse-study-button):not(.verse-number):not(
-    .verse-number-menu
-  ):not(.link-button):not(.compact-link):not(.toolbar-button):not(
-    .verse-context-tab
-  ):not(.parallel-verse):not(.fn-marker):not(.reader-picker-button):not(
-    .reader-picker-option
-  ):not(.tag-picker-option):not(.tag-editor-toggle):not(.tag-picker-manage):not(
-    .target-tag-picker-trigger
-  ) {
-  background: var(--bg-elevated) !important;
-  color: var(--text) !important;
-  border-color: var(--accent) !important;
-  border-width: 2px !important;
-}
-
-:root[data-theme="dark"]
-  button:not(.verse-study-button):not(.verse-number):not(
-    .verse-number-menu
-  ):not(.link-button):not(.compact-link):not(.toolbar-button):not(
-    .verse-context-tab
-  ):not(.parallel-verse):not(.fn-marker):not(.reader-picker-button):not(
-    .reader-picker-option
-  ):not(.tag-picker-option):not(.tag-editor-toggle):not(.tag-picker-manage):not(
-    .target-tag-picker-trigger
-  ):hover,
-:root[data-theme="dark"]
-  button:not(.verse-study-button):not(.verse-number):not(
-    .verse-number-menu
-  ):not(.link-button):not(.compact-link):not(.toolbar-button):not(
-    .verse-context-tab
-  ):not(.parallel-verse):not(.fn-marker):not(.reader-picker-button):not(
-    .reader-picker-option
-  ):not(.tag-picker-option):not(.tag-editor-toggle):not(.tag-picker-manage):not(
-    .target-tag-picker-trigger
-  ):focus-visible {
-  background: var(--panel) !important;
-  border-color: var(--accent) !important;
-  color: var(--text) !important;
-  box-shadow: 0 0 0 3px rgba(78, 205, 193, 0.25) !important;
-}
 
 :root[data-theme="dark"] button:disabled {
-  opacity: 0.45 !important;
-  cursor: not-allowed !important;
+  opacity: 0.45;
+  cursor: not-allowed;
 }
 
 /* Small button overrides for dark mode */
 
-:root[data-theme="dark"] .verse-study-button,
 :root[data-theme="dark"] .verse-favorite-button,
 :root[data-theme="dark"] .scope-favorite-button,
 :root[data-theme="dark"] .token-favorite-button,
 :root[data-theme="dark"] .token-tag-button {
-  border-width: 1px !important;
+  border-width: 1px;
 }
 
 :root[data-theme="dark"] .verse-favorite-button,
 :root[data-theme="dark"] .scope-favorite-button {
-  border-color: var(--line) !important;
+  border-color: var(--line);
 }
 
 :root[data-theme="dark"] .verse-favorite-button {
-  border-color: transparent !important;
-  background: transparent !important;
-  color: var(--muted) !important;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
 }
 
 :root[data-theme="dark"] .verse-favorite-button:hover,
 :root[data-theme="dark"] .verse-favorite-button:focus-visible {
-  border-color: #fbbf24 !important;
-  background: rgba(251, 191, 36, 0.1) !important;
-  color: #fbbf24 !important;
+  border-color: #fbbf24;
+  background: rgba(251, 191, 36, 0.1);
+  color: #fbbf24;
 }
 
 :root[data-theme="dark"] .verse-favorite-button.active,
 :root[data-theme="dark"] .scope-favorite-button.active {
-  border-color: #fbbf24 !important;
+  border-color: #fbbf24;
 }
 
 :root[data-theme="dark"] .scope-favorite-button .scope-favorite-label,
 :root[data-theme="dark"] .scope-favorite-button.active .scope-favorite-label {
-  color: var(--text) !important;
+  color: var(--text);
 }
 
 :root[data-theme="dark"] .scope-favorite-button.active .scope-favorite-star,
 :root[data-theme="dark"] .scope-favorite-button:hover .scope-favorite-star,
 :root[data-theme="dark"] .scope-favorite-button:focus-visible .scope-favorite-star {
-  color: #fbbf24 !important;
+  color: #fbbf24;
 }
 
 :root[data-theme="dark"] .token-favorite-button,
 :root[data-theme="dark"] .token-tag-button,
 :root[data-theme="dark"] .target-tag-badge {
-  background: transparent !important;
-  border-color: var(--line) !important;
-  color: var(--muted) !important;
+  background: transparent;
+  border-color: var(--line);
+  color: var(--muted);
 }
 
 :root[data-theme="dark"] .token-favorite-button.active {
-  border-color: #fbbf24 !important;
-  color: #fbbf24 !important;
+  border-color: #fbbf24;
+  color: #fbbf24;
 }
 
 :root[data-theme="dark"] .target-tag-badge {
-  border-color: var(--tag-color) !important;
-  background: rgba(148, 163, 184, 0.1) !important;
-  color: var(--tag-color) !important;
+  border-color: var(--tag-color);
+  background: rgba(148, 163, 184, 0.1);
+  color: var(--tag-color);
 }
 
 :root[data-theme="dark"] .selection-action-menu {
@@ -3032,7 +2803,7 @@ button {
 }
 
 :root[data-theme="dark"] .footnote-detail-marker {
-  color: #9eafff !important;
+  color: #9eafff;
 }
 
 :root[data-theme="dark"] .tagged-text-span {
@@ -3041,128 +2812,66 @@ button {
 }
 
 /* Dark mode link-button and context highlighting */
+
 :root[data-theme="dark"] .link-button {
-  color: var(--accent-dark) !important;
+  color: var(--accent-dark);
 }
 
 :root[data-theme="dark"] .link-button[data-verse]:hover,
 :root[data-theme="dark"] .link-button[data-verse]:focus-visible {
-  color: var(--accent) !important;
-  opacity: 0.9 !important;
+  color: var(--accent);
+  opacity: 0.9;
 }
 
 :root[data-theme="dark"] .detail-tool-button:hover,
 :root[data-theme="dark"] .detail-tool-button:focus-visible,
 :root[data-theme="dark"] .detail-tool-button[aria-pressed="true"] {
-  background: rgba(78, 205, 193, 0.14) !important;
-  border-color: var(--accent) !important;
-  color: var(--text) !important;
+  background: rgba(78, 205, 193, 0.14);
+  border-color: var(--accent);
+  color: var(--text);
 }
 
 :root[data-theme="dark"] .gematria-total,
 :root[data-theme="dark"] .verse-gematria-total,
 :root[data-theme="dark"] .mark-study {
-  background: var(--bg-elevated) !important;
-  border-color: var(--line) !important;
+  background: var(--bg-elevated);
+  border-color: var(--line);
 }
 
 :root[data-theme="dark"] .gematria-total span,
 :root[data-theme="dark"] .verse-gematria-total small,
 :root[data-theme="dark"] .letter-value {
-  color: var(--muted) !important;
+  color: var(--muted);
 }
 
 :root[data-theme="dark"] .mark-study-word,
 :root[data-theme="dark"] .letter-name {
-  color: var(--accent-dark) !important;
+  color: var(--accent-dark);
 }
 
 /* Light mode explicit overrides - ensure light theme colors display */
-:root[data-theme="light"] {
-  color-scheme: light !important;
-  --bg: #f4f4f1 !important;
-  --panel: #ffffff !important;
-  --panel-alt: #f8f8f5 !important;
-  --text: #202124 !important;
-  --muted: #696f78 !important;
-  --line: #d8d8d1 !important;
-  --border-subtle: #e7e5e0 !important;
-  --bg-elevated: #fafaf8 !important;
-  --accent: #25635f !important;
-  --accent-dark: #174744 !important;
-  --red-letter: #9d2f2f !important;
-  --token: #fde047 !important;
-  --strong-fg: #27863a !important;
-  --success: #059669 !important;
-  --warning: #d97706 !important;
-  --error: #dc2626 !important;
-  --info: #0284c7 !important;
-  --unavailable: #78716c !important;
-  --shadow: 0 12px 30px rgba(33, 36, 38, 0.08) !important;
-  --shadow-sm: 0 4px 12px rgba(16, 24, 40, 0.06) !important;
-}
-
-html[data-theme="light"]
-  button:not(.verse-study-button):not(.verse-number):not(
-    .verse-number-menu
-  ):not(.link-button):not(.compact-link):not(.fn-marker):not(
-    .reader-picker-button
-  ):not(.reader-picker-option):not(.tag-picker-option):not(
-    .tag-editor-toggle
-  ):not(.tag-picker-manage):not(.target-tag-picker-trigger) {
-  background: var(--panel) !important;
-  color: var(--text) !important;
-  border-color: var(--line) !important;
-  border-width: 2px !important;
-}
-
-html[data-theme="light"]
-  button:not(.verse-study-button):not(.verse-number):not(
-    .verse-number-menu
-  ):not(.link-button):not(.compact-link):not(.fn-marker):not(
-    .reader-picker-button
-  ):not(.reader-picker-option):not(.tag-picker-option):not(
-    .tag-editor-toggle
-  ):not(.tag-picker-manage):not(.target-tag-picker-trigger):hover,
-html[data-theme="light"]
-  button:not(.verse-study-button):not(.verse-number):not(
-    .verse-number-menu
-  ):not(.link-button):not(.compact-link):not(.fn-marker):not(
-    .reader-picker-button
-  ):not(.reader-picker-option):not(.tag-picker-option):not(
-    .tag-editor-toggle
-  ):not(.tag-picker-manage):not(.target-tag-picker-trigger):focus-visible {
-  background: var(--bg-elevated) !important;
-  border-color: var(--accent) !important;
-  color: var(--text) !important;
-  box-shadow: 0 0 0 3px rgba(37, 99, 95, 0.15) !important;
-}
 
 /* Small button overrides for light mode */
-
-html[data-theme="light"] .verse-study-button {
-  border-width: 1px !important;
-}
 
 html[data-theme="light"] input[type="text"],
 html[data-theme="light"] input[type="search"],
 html[data-theme="light"] textarea,
 html[data-theme="light"] select {
-  background: var(--panel) !important;
-  color: var(--text) !important;
-  border-color: var(--line) !important;
+  background: var(--panel);
+  color: var(--text);
+  border-color: var(--line);
 }
 
 html[data-theme="light"] .chapter-modal,
 html[data-theme="light"] .modal,
 html[data-theme="light"] .popover {
-  background: var(--panel) !important;
-  border: 1px solid var(--line) !important;
-  color: var(--text) !important;
+  background: var(--panel);
+  border: 1px solid var(--line);
+  color: var(--text);
 }
 
 html[data-theme="light"] a {
-  color: var(--accent) !important;
+  color: var(--accent);
 }
 
 html[data-theme="light"] h1,
@@ -3171,24 +2880,25 @@ html[data-theme="light"] h3,
 html[data-theme="light"] h4,
 html[data-theme="light"] h5,
 html[data-theme="light"] h6 {
-  color: var(--text) !important;
+  color: var(--text);
 }
 
 html[data-theme="light"] .footnote-detail-marker {
-  color: #2347fb !important;
+  color: #2347fb;
 }
 
 /* Keep the compact personal-meaning controls aligned with tag actions across themes. */
 
 /* Strong's source-language polish: preserve full hit targets while refining
    their inner artwork, and keep the lexical source word distinctly accented. */
+
 :root[data-theme="dark"] .strong-source-word,
 :root[data-theme="dark"] .strong-source-word .language-word-hover,
 :root[data-theme="dark"] .strong-source-word .language-letter-hover,
 html[data-theme="light"] .strong-source-word,
 html[data-theme="light"] .strong-source-word .language-word-hover,
 html[data-theme="light"] .strong-source-word .language-letter-hover {
-  color: var(--accent-dark) !important;
+  color: var(--accent-dark);
 }
 
 :root[data-theme="dark"] .hebrew-rtl-note,
@@ -3197,10 +2907,10 @@ html[data-theme="light"] .hebrew-rtl-note,
 :root[data-theme="dark"] .hebrew-rtl-note:focus-visible,
 html[data-theme="light"] .hebrew-rtl-note:hover,
 html[data-theme="light"] .hebrew-rtl-note:focus-visible {
-  border: 0 !important;
-  background: transparent !important;
-  color: var(--accent-dark) !important;
-  box-shadow: none !important;
+  border: 0;
+  background: transparent;
+  color: var(--accent-dark);
+  box-shadow: none;
 }
 
 @media (forced-colors: active) {

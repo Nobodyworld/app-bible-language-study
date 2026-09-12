@@ -23,7 +23,6 @@ const ROOT_RUNTIME_FILES = new Set([
   "app/styles-workspace.css",
   "app/styles-context.css",
   "app/styles-polish.css",
-  "app/styles-portrait.css",
 ]);
 const APP_RUNTIME_PREFIXES = Object.freeze([
   "app/data/",
@@ -47,7 +46,6 @@ const REQUIRED_ASSETS = Object.freeze([
   "styles-workspace.css",
   "styles-context.css",
   "styles-polish.css",
-  "styles-portrait.css",
   "src/platform/application-platform.js",
   "src/platform/tauri-bridge.js",
   "src/platform/tauri-platform.js",
