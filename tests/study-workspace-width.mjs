@@ -6,19 +6,26 @@ import { PANEL_MODES } from "../app/src/ui-contracts.js";
 import {
   STUDY_WORKSPACE_WIDTH_DEFAULT,
   STUDY_WORKSPACE_WIDTH_MODES,
+  STUDY_WORKSPACE_WIDTH_SEQUENCE,
   STUDY_WORKSPACE_WIDTH_STORAGE_KEY,
   applyStudyWorkspaceWidth,
   initializeStudyWorkspaceWidth,
+  nextStudyWorkspaceWidth,
   normalizeStudyWorkspaceWidth,
   readStudyWorkspaceWidth,
   writeStudyWorkspaceWidth,
 } from "../app/src/study-workspace-width.js";
 
 assert.deepEqual(Object.values(STUDY_WORKSPACE_WIDTH_MODES), ["compact", "standard", "expanded"]);
+assert.deepEqual(STUDY_WORKSPACE_WIDTH_SEQUENCE, ["compact", "standard", "expanded"]);
 assert.equal(STUDY_WORKSPACE_WIDTH_DEFAULT, "standard");
 Object.values(STUDY_WORKSPACE_WIDTH_MODES).forEach((mode) => {
   assert.equal(normalizeStudyWorkspaceWidth(mode), mode);
 });
+assert.equal(nextStudyWorkspaceWidth("compact"), "standard");
+assert.equal(nextStudyWorkspaceWidth("standard"), "expanded");
+assert.equal(nextStudyWorkspaceWidth("expanded"), "compact");
+assert.equal(nextStudyWorkspaceWidth("unsupported"), "expanded", "invalid state must normalize to Standard before cycling");
 
 for (const malformed of [undefined, null, false, 0, "", "wide", " standard ", {}, []]) {
   assert.equal(
@@ -99,28 +106,75 @@ function button(mode) {
   };
 }
 
-const controls = [button("compact"), button("standard"), button("expanded")];
+const legacyControls = [button("compact"), button("standard"), button("expanded")];
 const root = { dataset: {} };
-assert.equal(applyStudyWorkspaceWidth(root, "expanded", controls), "expanded");
+assert.equal(applyStudyWorkspaceWidth(root, "expanded", legacyControls), "expanded");
 assert.equal(root.dataset.studyWorkspaceWidth, "expanded");
 assert.deepEqual(
-  controls.map((control) => control.attributes.get("aria-pressed")),
+  legacyControls.map((control) => control.attributes.get("aria-pressed")),
   ["false", "false", "true"],
-  "only the active width button may expose aria-pressed=true",
+  "legacy fixed-mode controls must still expose one active pressed state",
 );
 
+function cycleButton() {
+  const attributes = new Map([
+    ["data-study-workspace-width-cycle", ""],
+    ["data-study-workspace-width-mode", "standard"],
+    ["aria-pressed", "true"],
+  ]);
+  const dataset = {
+    studyWorkspaceWidthCycle: "",
+    studyWorkspaceWidthMode: "standard",
+  };
+  return {
+    dataset,
+    attributes,
+    getAttribute(name) {
+      return attributes.get(name) ?? null;
+    },
+    hasAttribute(name) {
+      return attributes.has(name);
+    },
+    removeAttribute(name) {
+      attributes.delete(name);
+      if (name === "aria-pressed") delete dataset.ariaPressed;
+    },
+    setAttribute(name, value) {
+      const text = String(value);
+      attributes.set(name, text);
+      if (name === "data-study-workspace-width-mode") dataset.studyWorkspaceWidthMode = text;
+      if (name === "data-study-workspace-width-current") dataset.studyWorkspaceWidthCurrent = text;
+      if (name === "data-study-workspace-width-next") dataset.studyWorkspaceWidthNext = text;
+    },
+  };
+}
+
+const cycle = cycleButton();
+assert.equal(applyStudyWorkspaceWidth(root, "expanded", [cycle]), "expanded");
+assert.equal(root.dataset.studyWorkspaceWidth, "expanded");
+assert.equal(cycle.dataset.studyWorkspaceWidthMode, "expanded");
+assert.equal(cycle.dataset.studyWorkspaceWidthCurrent, "expanded");
+assert.equal(cycle.dataset.studyWorkspaceWidthNext, "compact");
+assert.equal(cycle.attributes.has("aria-pressed"), false, "the cycle button must not expose radio-style pressed state");
+assert.equal(cycle.attributes.get("aria-label"), "Study workspace width: Expanded. Change to Compact.");
+assert.equal(cycle.attributes.get("title"), "Study workspace width: Expanded (click for Compact)");
+
 const initializedStorage = memoryStorage([[STUDY_WORKSPACE_WIDTH_STORAGE_KEY, "compact"]]);
-assert.equal(initializeStudyWorkspaceWidth({ root, storage: initializedStorage, controls }), "compact");
+assert.equal(initializeStudyWorkspaceWidth({ root, storage: initializedStorage, controls: [cycle] }), "compact");
 assert.equal(root.dataset.studyWorkspaceWidth, "compact");
-assert.deepEqual(controls.map((control) => control.attributes.get("aria-pressed")), ["true", "false", "false"]);
+assert.equal(cycle.dataset.studyWorkspaceWidthCurrent, "compact");
+assert.equal(cycle.dataset.studyWorkspaceWidthNext, "standard");
+assert.equal(cycle.dataset.studyWorkspaceWidthMode, "compact");
 
 console.log(
   JSON.stringify(
     {
       status: "ok",
       modes: Object.values(STUDY_WORKSPACE_WIDTH_MODES),
+      sequence: STUDY_WORKSPACE_WIDTH_SEQUENCE,
       defaultMode: STUDY_WORKSPACE_WIDTH_DEFAULT,
       storageKey: STUDY_WORKSPACE_WIDTH_STORAGE_KEY,
+      controlModel: "single-cycle",
     },
     null,
     2,
