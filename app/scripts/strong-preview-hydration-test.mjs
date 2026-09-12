@@ -94,11 +94,11 @@ async function checkLexicalReferences(page, url) {
   await waitForEntry(page, "G227");
   const route = page.url();
   const origin = page.locator("#detailContent .word-origin-value");
-  assert(/From a- \(as a negative particle\) and lanthano/.test(await origin.innerText()), "G227 must distinguish the lexical a- from the ordinary article in its explanation");
-  const prefix = origin.getByRole("button", { name: "Open Strong's a-, G1", exact: true });
+  assert(/From a \(as a negative particle\) and lanthano/.test(await origin.innerText()), "G227 must preserve the source wording while distinguishing the lexical a from the ordinary article in its explanation");
+  const prefix = origin.getByRole("button", { name: "Open Strong's a, G1", exact: true });
   assert(await prefix.count() === 1 && await origin.locator("button").count() === 2, "G227 must link its two origin words, not the article in '(as a negative particle)'");
   await prefix.focus();
-  await page.waitForFunction(() => document.querySelector('.strong-origin-link[aria-label="Open Strong\'s a-, G1"]')?.dataset.previewReady === "true");
+  await page.waitForFunction(() => document.querySelector('.strong-origin-link[aria-label="Open Strong\'s a, G1"]')?.dataset.previewReady === "true");
   assert(/G1/.test(await prefix.getAttribute("data-tooltip")), "G1 must hydrate through the existing reference control");
   await prefix.press("Enter");
   await waitForEntry(page, "G1");
