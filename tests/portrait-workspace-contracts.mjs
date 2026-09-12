@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { cssRules } from "../app/tools/stylesheet-ownership.mjs";
 import { readAppStyles } from "./helpers/app-styles.mjs";
 import { readFile } from "node:fs/promises";
 
@@ -170,7 +171,12 @@ assert(
 );
 
 assert(
-  /@media\s*\(hover:\s*none\),\s*\(pointer:\s*coarse\)\s*{[\s\S]*?\.fn-marker::before\s*{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;[\s\S]*?\.verse-number\s*{[\s\S]*?width:\s*40px;[\s\S]*?min-height:\s*44px;[\s\S]*?\.reference-hover::before\s*{[\s\S]*?height:\s*44px;/.test(readerCss),
+  [[".fn-marker::before", {width: "44px", height: "44px"}],
+    [".verse-number", {width: "40px", "min-height": "44px"}],
+    [".presentation-block .cross-links .reference-hover::before", {height: "44px"}]].every(([selector, properties]) =>
+    cssRules(readerCss).some(rule => rule.selectors.includes(selector) &&
+      rule.contexts.includes("@media (hover: none), (pointer: coarse)") &&
+      Object.entries(properties).every(([property, value]) => rule.declarations.some(d => d.property === property && d.value === value)))),
   "Portrait touch layouts must retain the enlarged inline reader targets without changing the reader columns.",
 );
 

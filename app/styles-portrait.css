@@ -2,55 +2,7 @@
   --app-header-block-size: 76px;
 }
 
-.panel-context-navigation .word-meaning-trigger {
-  min-height: 34px;
-  padding: 5px 10px;
-  border: 0 !important;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-.panel-context-navigation .word-meaning-trigger[aria-expanded="false"] {
-  border: 0 !important;
-  background: transparent !important;
-  color: var(--muted) !important;
-  box-shadow: none !important;
-}
-
-.panel-context-navigation .word-meaning-trigger:hover,
-.panel-context-navigation .word-meaning-trigger:focus-visible,
-.panel-context-navigation .word-meaning-trigger[aria-expanded="true"] {
-  border: 0 !important;
-  background: rgba(37, 99, 95, 0.12) !important;
-  color: var(--accent-dark) !important;
-  box-shadow: none !important;
-}
-
 @media (min-width: 769px) {
 
   /* The 320px border-box Compact pane has a 318px query content box. */
-}
-
-
-
-@media (max-width: 768px) {
-
-  .detail-nav-arrow {
-    width: 44px;
-    height: 44px;
-    min-width: 44px;
-    min-height: 44px;
-  }
-
-  .detail-floating-nav {
-    min-height: 56px;
-    padding-top: 6px;
-  }
-
-  .panel-context-navigation .word-meaning-trigger {
-    min-height: 44px;
-    padding: 8px 12px;
-  }
 }
