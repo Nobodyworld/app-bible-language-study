@@ -150,13 +150,7 @@
   display: none;
 }
 
-@media (min-width: 769px) and (max-width: 960px) {
-  .detail-pane {
-    top: 184px;
-    height: calc(100dvh - 196px);
-    max-height: calc(100dvh - 196px);
-  }
-}
+
 
 @media (max-width: 640px) {
   .detail-context {

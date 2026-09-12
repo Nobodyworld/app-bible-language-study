@@ -102,7 +102,7 @@ assert(
   "Only the established mobile breakpoint may collapse the shell or hide width controls.",
 );
 assert(
-  /\.reader-pane,[\s\S]*?\.detail-pane\s*{[\s\S]*?min-width:\s*0/.test(sources.css) &&
+  ["reader-pane", "detail-pane"].every(name => new RegExp(`\\.${name}\\s*\\{[^}]*min-width:\\s*0`).test(sources.css)) &&
     /\.detail-pane\s*{[\s\S]*?position:\s*sticky;[\s\S]*?height:\s*calc\(100dvh - 88px\);[\s\S]*?overflow-y:\s*hidden/.test(sources.css) &&
     /\.detail-content\s*{[\s\S]*?min-height:\s*0;[\s\S]*?overflow-x:\s*hidden;[\s\S]*?overflow-y:\s*auto;[\s\S]*?overscroll-behavior-y:\s*contain/.test(sources.css),
   "The bounded pane and #detailContent must own an independent, horizontal-safe scroll region.",

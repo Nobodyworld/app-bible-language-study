@@ -525,44 +525,12 @@
   }
 }
 
-.app-header {
-  background: var(--ui-header-surface);
-  box-shadow: 0 1px 0 rgba(16, 24, 40, 0.04);
-}
-
-.brand-mark {
-  border-radius: 10px;
-  box-shadow: var(--ui-control-shadow);
-}
-
-.reader-control-label,
-.reader-control-label-line {
-  font-weight: 800;
-  letter-spacing: 0.015em;
-}
-
-.reader-controls select,
-.reader-picker-button,
-.theme-toggle-button,
-.header-status,
 .chapter-stepper,
 .action-group {
   box-shadow: var(--ui-control-shadow);
 }
 
-.reader-controls select:hover,
-.reader-picker-button:hover {
-  border-color: var(--accent);
-}
-
-.reader-controls select:focus-visible {
-  border-color: var(--accent);
-  outline: 3px solid var(--accent);
-  outline-offset: 2px;
-}
-
-.reader-pane,
-.detail-pane {
+.reader-pane {
   border-radius: 12px;
   box-shadow: var(--ui-panel-shadow);
 }

@@ -1,4 +1,4 @@
-/* Primary component owner; responsive and state rules remain with their component. */
+/* Component structure, state and responsive rules in cascade order. */
 
 :root[data-study-workspace-width="compact"] {
   --study-workspace-inline-size: clamp(320px, 25vw, 420px);
@@ -30,6 +30,18 @@
   }
 }
 
+.detail-header {
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line);
+}
+
+.detail-header {
+  display: grid;
+  align-items: stretch;
+  gap: 10px;
+}
+
 .detail-header-main {
   display: flex;
   align-items: center;
@@ -46,6 +58,26 @@
 
 .detail-header-main h2 {
   min-width: 0;
+}
+
+.study-workspace-width-controls {
+  grid-template-columns: auto repeat(3, minmax(0, 1fr));
+}
+
+.study-workspace-width-label {
+  padding-inline-end: 3px;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+}
+
+.study-workspace-width-controls button {
+  border: 1px solid var(--line);
+  background: var(--panel);
+  color: var(--muted);
+  font-weight: 800;
 }
 
 .study-workspace-width-controls button:hover,
@@ -69,6 +101,11 @@
   }
 }
 
+.detail-header-actions {
+  display: flex;
+  align-items: center;
+}
+
 .detail-header-actions button:disabled {
   cursor: not-allowed;
   opacity: 0.48;
@@ -83,17 +120,10 @@
 }
 
 .detail-header {
-  justify-content: space-between;
-  padding: 16px 18px;
-  border-bottom: 1px solid var(--line);
-  display: grid;
-  align-items: stretch;
-  gap: 10px;
   background: linear-gradient(180deg, var(--panel-alt) 0%, var(--bg-elevated) 100%);
 }
 
 .study-workspace-width-controls {
-  grid-template-columns: auto repeat(3, minmax(0, 1fr));
   display: flex;
   align-items: center;
   justify-content: flex-start;
@@ -103,20 +133,10 @@
 }
 
 .study-workspace-width-label {
-  padding-inline-end: 3px;
-  color: var(--muted);
-  font-size: 11px;
-  font-weight: 800;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
   display: none;
 }
 
 .study-workspace-width-controls button {
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--muted);
-  font-weight: 800;
   display: inline-grid;
   flex: 0 0 32px;
   place-items: center;
@@ -161,8 +181,6 @@
 }
 
 .detail-header-actions {
-  display: flex;
-  align-items: center;
   flex: 0 0 auto;
   gap: 3px;
 }
@@ -342,18 +360,6 @@
       grid-row: 1;
       justify-self: end;
     }
-  }
-}
-
-@media (min-width: 769px) {
-  :root[data-study-workspace-hidden="true"] .app-shell {
-    grid-template-columns: minmax(0, 1fr);
-  }
-}
-
-@media (min-width: 769px) {
-  :root[data-study-workspace-hidden="true"] .detail-pane {
-    display: none;
   }
 }
 
