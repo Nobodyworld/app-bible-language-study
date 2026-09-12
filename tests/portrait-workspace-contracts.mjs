@@ -36,9 +36,9 @@ assert(
 const widthButtons = index.match(/<button[\s\S]*?data-study-workspace-width-mode="(?:compact|standard|expanded)"[\s\S]*?<\/button>/g) || [];
 assert.equal(widthButtons.length, 3, "The workspace must retain exactly three width controls.");
 const widthExpectations = [
-  { mode: "compact", symbol: "−", title: "Compact study workspace" },
-  { mode: "standard", symbol: "↺", title: "Standard study workspace" },
-  { mode: "expanded", symbol: "+", title: "Expanded study workspace" },
+  { mode: "compact", title: "Compact study workspace" },
+  { mode: "standard", title: "Standard study workspace" },
+  { mode: "expanded", title: "Expanded study workspace" },
 ];
 for (const [buttonIndex, expectation] of widthExpectations.entries()) {
   const button = widthButtons[buttonIndex];
@@ -51,24 +51,34 @@ for (const [buttonIndex, expectation] of widthExpectations.entries()) {
     `${expectation.mode} width control needs an accurate tooltip.`,
   );
   assert(
-    /class="study-workspace-width-symbol(?: [^"]*)?"/.test(button),
-    `${expectation.mode} width control must render its compact symbol.`,
+    new RegExp(`data-width-artwork="${expectation.mode}"[\\s\\S]*?class="study-workspace-width-symbol"`).test(button),
+    `${expectation.mode} width control must render deterministic SVG artwork.`,
   );
   assert(
-    button.includes(`>${expectation.symbol}</span>`),
-    `${expectation.mode} width control renders the wrong symbol.`,
+    /class="study-workspace-width-artwork"/.test(button),
+    `${expectation.mode} width control must expose measurable artwork geometry.`,
   );
 }
 assert(
-  /data-study-workspace-width-mode="compact"[\s\S]*?>−<\/span>[\s\S]*?data-study-workspace-width-mode="standard"[\s\S]*?>↺<\/span>[\s\S]*?data-study-workspace-width-mode="expanded"[\s\S]*?>\+<\/span>/.test(index),
-  "Width presets must read left-to-right as narrower, Standard reset, then wider.",
+  !index.includes("study-workspace-width-reset-symbol") && !index.includes(">↺</"),
+  "Standard width must not depend on a font reset glyph.",
 );
 assert(
   /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*0;/.test(css) &&
-    /button\[data-study-workspace-width-mode="compact"\][\s\S]*?\.study-workspace-width-symbol::before,[\s\S]*?button\[data-study-workspace-width-mode="expanded"\][\s\S]*?\.study-workspace-width-symbol::after\s*{[\s\S]*?grid-area:\s*1 \/ 1;[\s\S]*?width:\s*10px;[\s\S]*?height:\s*2px;/.test(css) &&
-    /button\[data-study-workspace-width-mode="expanded"\][\s\S]*?\.study-workspace-width-symbol::after\s*{[\s\S]*?width:\s*2px;[\s\S]*?height:\s*10px;/.test(css) &&
-    /\.study-workspace-width-reset-symbol\s*{[\s\S]*?font-size:\s*14px;/.test(css),
-  "Width controls must use compact 32px targets with centered Compact and Expanded strokes and an unchanged Standard reset glyph.",
+    /\.study-workspace-width-symbol\s*{[\s\S]*?display:\s*block;[\s\S]*?width:\s*14px;[\s\S]*?height:\s*14px;[\s\S]*?fill:\s*none;[\s\S]*?stroke:\s*currentColor;[\s\S]*?stroke-width:\s*2;/.test(css) &&
+    /\.study-workspace-width-symbol \.study-workspace-width-artwork\s*{[\s\S]*?vector-effect:\s*non-scaling-stroke;/.test(css),
+  "All width controls must use one centered deterministic SVG construction inside equal 32px targets.",
+);
+assert(
+  /id="clearDetail"[\s\S]*?<span class="detail-header-icon-label">Clear<\/span>[\s\S]*?<svg/.test(index) &&
+    /id="hideStudyWorkspace"[\s\S]*?<span id="hideStudyWorkspaceLabel" class="detail-header-icon-label">Hide<\/span>[\s\S]*?<svg/.test(index) &&
+    /\.detail-header-icon-label\s*{[\s\S]*?display:\s*inline-flex;[\s\S]*?align-items:\s*center;[\s\S]*?min-height:\s*14px;[\s\S]*?line-height:\s*1;/.test(css),
+  "Clear and Hide must expose explicit label boxes aligned with their SVG artwork.",
+);
+assert(
+  /id="hideStudyWorkspace"[\s\S]*?data-workspace-direction="collapse-right"[\s\S]*?class="study-workspace-panel-arrow-shaft" d="M10 12H18"[\s\S]*?class="study-workspace-panel-arrow-head" d="M15 9l3 3-3 3"/.test(index) &&
+    /id="showStudyWorkspace"[\s\S]*?data-workspace-direction="restore-left"[\s\S]*?class="study-workspace-panel-arrow-shaft" d="M18 12H10"[\s\S]*?class="study-workspace-panel-arrow-head" d="M13 9l-3 3 3 3"/.test(index),
+  "Right-side Hide must point outward/right and Show must point inward/left.",
 );
 assert(
   /@media\s*\(min-width:\s*769px\)[\s\S]*?\.detail-header\s*{[\s\S]*?--study-header-layout-band:\s*narrow;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?\.detail-header-main\s*{\s*display:\s*contents;/.test(css) &&
@@ -170,4 +180,4 @@ assert(
   "Portrait touch layouts must retain the enlarged inline reader targets without changing the reader columns.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 24 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 27 }, null, 2));
