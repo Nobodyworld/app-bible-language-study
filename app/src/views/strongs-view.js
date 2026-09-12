@@ -229,38 +229,57 @@ function createTransliterationValue(value) {
   return node;
 }
 
+const ORIGIN_REFERENCE_CHAR = /[\p{L}\p{M}\p{N}'’\-]/u;
+
+function findOriginReference(text, label) {
+  const source = String(text || "");
+  const needle = String(label || "").trim();
+  if (!needle) return -1;
+  const haystack = source.toLocaleLowerCase("en-US");
+  const loweredNeedle = needle.toLocaleLowerCase("en-US");
+  let offset = 0;
+  while (offset <= haystack.length - loweredNeedle.length) {
+    const index = haystack.indexOf(loweredNeedle, offset);
+    if (index < 0) return -1;
+    const before = index > 0 ? source[index - 1] : "";
+    const after = source[index + needle.length] || "";
+    if (!ORIGIN_REFERENCE_CHAR.test(before) && !ORIGIN_REFERENCE_CHAR.test(after)) return index;
+    offset = index + Math.max(1, loweredNeedle.length);
+  }
+  return -1;
+}
+
 function createOriginValue(entry, openStrongCode) {
-  if (!entry?.word_origin && !entry?.word_origin_refs?.length) return null;
+  if (!entry?.word_origin) return null;
   const wrap = document.createElement("span");
   wrap.className = "word-origin-value";
-  const refs = entry.word_origin_refs || [];
-  const createOriginLink = (ref) => {
-    const label = ref.label || ref.original_word || ref.strong_code || "Origin word";
-    const button = createStrongReferenceControl(ref, {
-      label,
+  const source = String(entry.word_origin);
+  const matches = (entry.word_origin_refs || [])
+    .map((ref) => {
+      const label = String(ref.label || ref.original_word || "").trim();
+      const start = findOriginReference(source, label);
+      return start < 0 ? null : { ref, label, start, end: start + label.length };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.start - right.start || right.label.length - left.label.length);
+
+  let cursor = 0;
+  for (const match of matches) {
+    if (match.start < cursor) continue;
+    if (match.start > cursor) wrap.append(textNode(source.slice(cursor, match.start)));
+    const button = createStrongReferenceControl(match.ref, {
+      label: match.label,
       onActivate: (item) => openStrongCode(item.strong_code, item.language),
     });
-    button.classList.add("strong-origin-link");
-    return button;
-  };
-
-  let remaining = String(entry.word_origin || "");
-  const extraLinks = [];
-  refs.forEach((ref) => {
-    const label = String(ref.label || ref.original_word || "").trim();
-    const index = label ? remaining.toLowerCase().indexOf(label.toLowerCase()) : -1;
-    if (index >= 0) {
-      wrap.append(textNode(remaining.slice(0, index)), createOriginLink(ref));
-      remaining = remaining.slice(index + label.length);
-      return;
+    if (button) {
+      button.classList.add("strong-origin-link");
+      wrap.append(button);
+    } else {
+      wrap.append(textNode(source.slice(match.start, match.end)));
     }
-    extraLinks.push(createOriginLink(ref));
-  });
-  if (remaining) wrap.append(textNode(remaining));
-  extraLinks.forEach((link) => {
-    if (wrap.childNodes.length) wrap.append(textNode(" "));
-    wrap.append(link);
-  });
+    cursor = match.end;
+  }
+  if (cursor < source.length) wrap.append(textNode(source.slice(cursor)));
   return wrap;
 }
 
