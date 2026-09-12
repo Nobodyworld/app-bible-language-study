@@ -64,7 +64,22 @@ jobs:
         run: npm ci
 
       - name: Run desktop browser acceptance
-        run: npm run test:browser
+        shell: pwsh
+        run: |
+          # Temporary bounded diagnostics: preserve the actual acceptance exit code.
+          $PSNativeCommandUseErrorActionPreference = $false
+          $log = Join-Path $env:RUNNER_TEMP 'desktop-browser-acceptance.log'
+          npm run test:browser *> $log
+          $result = $LASTEXITCODE
+          Get-Content -LiteralPath $log -Tail 80 | ForEach-Object {
+            $line = [string]$_
+            if ($line.Length -gt 1200) {
+              Write-Output ($line.Substring(0, 1000) + ' ... [diagnostic line truncated] ... ' + $line.Substring($line.Length - 200))
+            } else {
+              Write-Output $line
+            }
+          }
+          exit $result
 
       - name: Run mobile browser acceptance
         run: npm run test:browser:mobile
