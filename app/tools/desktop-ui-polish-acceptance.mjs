@@ -95,7 +95,7 @@ export async function checkDesktopUiPolish(client, runRoot) {
   assert.deepEqual(await client.execute(stateScript),opened);
   await client.executeAsync(`
     const done=arguments[arguments.length-1];
-    Promise.all([import('./src/views/reference-view.js'),import('./src/data-service.js?v=pr13-live-qa-20260711e')]).then(async([v,d])=>{
+    Promise.all([import('/src/views/reference-view.js'),import('/src/data-service.js?v=pr13-live-qa-20260711e')]).then(async([v,d])=>{
       const ctx={state:{translationId:'bsb',manifest:await d.loadManifest()},goToLocation(){throw Error('Unexpected navigation');}};
       v.createReferenceViews(ctx).showFootnote({marker:'a',text:'See Revelation 7:1–17.'},'Range fixture');done(true);
     }).catch(error=>done({error:error.message}));

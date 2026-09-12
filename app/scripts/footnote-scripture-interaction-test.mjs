@@ -26,8 +26,8 @@ async function show(page, text) {
   // Synthetic footnote wording uses the real view, domain loader and datasets.
   // The actual Psalm 23:1 marker is exercised separately with pointer/keyboard.
   await page.evaluate(async text => {
-    const {createReferenceViews} = await import("./src/views/reference-view.js");
-    const {loadManifest} = await import("./src/data-service.js?v=pr13-live-qa-20260711e");
+    const {createReferenceViews} = await import("/src/views/reference-view.js");
+    const {loadManifest} = await import("/src/data-service.js?v=pr13-live-qa-20260711e");
     const state={manifest:await loadManifest(), get translationId(){return document.querySelector("#translationSelect").value;}};
     const views=createReferenceViews({state, goToLocation(){throw new Error("Hydration must not navigate");}});
     views.showFootnote({marker:"a",text},"Test footnote");
@@ -103,7 +103,7 @@ try {
   // Delay both success and failure across a new panel selection and translation.
   for(const failure of [false,true]) for(const change of ["panel","translation"]){
     await ready(page);
-    await page.evaluate(async()=>{(await import("./src/data-service.js?v=pr13-live-qa-20260711e")).invalidatePhysicalPackData();});
+    await page.evaluate(async()=>{(await import("/src/data-service.js?v=pr13-live-qa-20260711e")).invalidatePhysicalPackData();});
     let release, entered;
     const gate=new Promise(resolve=>{release=resolve;}), seen=new Promise(resolve=>{entered=resolve;});
     const pattern="**/data/verses/bsb/revelation.json";
@@ -122,7 +122,7 @@ try {
   }
   await ready(page);
   for(const status of [404,503]) {
-    await page.evaluate(async()=>{(await import("./src/data-service.js?v=pr13-live-qa-20260711e")).invalidatePhysicalPackData();});
+    await page.evaluate(async()=>{(await import("/src/data-service.js?v=pr13-live-qa-20260711e")).invalidatePhysicalPackData();});
     await page.route("**/data/verses/bsb/revelation.json",route=>route.fulfill({status,body:"{}"}));
     await show(page,"See Revelation 7:17.");
     await page.locator(`.footnote-scripture-entry[data-status="${status===404?"unavailable":"error"}"]`).waitFor();
@@ -132,7 +132,7 @@ try {
   }
   // RTL direction uses the existing WLC dataset, without adding a Reader version.
   await page.evaluate(async book=>{
-    const {createReferenceViews}=await import("./src/views/reference-view.js");
+    const {createReferenceViews}=await import("/src/views/reference-view.js");
     const views=createReferenceViews({state:{translationId:"wlc",manifest:{books:[book.book],translations:[book.translation]}},goToLocation(){throw Error("Unexpected navigation");}});
     views.showFootnote({marker:"a",text:"See Genesis 1:1."},"Direction fixture");
   },hebrew);await loaded(page);
