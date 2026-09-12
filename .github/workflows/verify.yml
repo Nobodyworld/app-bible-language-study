@@ -64,33 +64,7 @@ jobs:
         run: npm ci
 
       - name: Run desktop browser acceptance
-        shell: pwsh
-        run: |
-          # Temporary instrumentation adds failure details only; assertions are unchanged.
-          @'
-          import { readFileSync, writeFileSync } from 'node:fs';
-          const path = 'app/scripts/strong-preview-hydration-test.mjs';
-          let source = readFileSync(path, 'utf8');
-          const marker = '        keyboardTooltip,';
-          if (source.split(marker).length !== 2) throw new Error('Diagnostic return marker must be unique');
-          source = source.replace(marker, marker + '\n        keyboardState: { active: document.activeElement === node, focusVisible: node.matches(":focus-visible"), layerVisible: Boolean(layer), text: layer?.textContent || "", expected: expectedTooltip, rect: tooltipRect ? { left: tooltipRect.left, right: tooltipRect.right, top: tooltipRect.top, bottom: tooltipRect.bottom } : null, outlineStyle: style.outlineStyle, outlineWidth: style.outlineWidth },');
-          source = source.replace('or focus indication failed`', 'or focus indication failed: ${JSON.stringify(result.keyboardState)}`');
-          writeFileSync(path, source);
-          '@ | node --input-type=module
-          if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
-          $PSNativeCommandUseErrorActionPreference = $false
-          $log = Join-Path $env:RUNNER_TEMP 'desktop-browser-acceptance.log'
-          npm run test:browser *> $log
-          $result = $LASTEXITCODE
-          Get-Content -LiteralPath $log -Tail 30 | ForEach-Object {
-            $line = [string]$_
-            if ($line.Length -gt 2400) {
-              Write-Output ($line.Substring(0, 2100) + ' ... [diagnostic line truncated] ... ' + $line.Substring($line.Length - 300))
-            } else {
-              Write-Output $line
-            }
-          }
-          exit $result
+        run: npm run test:browser
 
       - name: Run mobile browser acceptance
         run: npm run test:browser:mobile
