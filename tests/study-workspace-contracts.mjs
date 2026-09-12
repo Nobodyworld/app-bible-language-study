@@ -38,9 +38,18 @@ assert(
 );
 assert(
   /id="studyWorkspaceWidthControls"[^>]*role="group"[^>]*aria-label="Study workspace width"/.test(sources.index) &&
-    (sources.index.match(/data-study-workspace-width-mode="(?:compact|standard|expanded)"/g) || []).length === 3 &&
-    (sources.index.match(/aria-pressed="true">Standard</g) || []).length === 1,
-  "The header must expose one labeled three-button pressed-state width group.",
+    (sources.index.match(/data-study-workspace-width-cycle/g) || []).length === 1 &&
+    /id="studyWorkspaceWidthCycle"[\s\S]*?data-study-workspace-width-mode="standard"[\s\S]*?data-study-workspace-width-current="standard"[\s\S]*?data-study-workspace-width-next="expanded"/.test(sources.index) &&
+    !/id="studyWorkspaceWidthCycle"[\s\S]{0,700}?aria-pressed=/.test(sources.index),
+  "The header must expose one stateful Study width cycle control rather than three pressed-state buttons.",
+);
+assert(
+  /STUDY_WORKSPACE_WIDTH_SEQUENCE/.test(sources.width) &&
+    /export function nextStudyWorkspaceWidth/.test(sources.width) &&
+    /data-study-workspace-width-current/.test(sources.width) &&
+    /data-study-workspace-width-next/.test(sources.width) &&
+    /isCycleControl\(control\)[\s\S]*?nextStudyWorkspaceWidth\(currentRootMode\(root\)\)/.test(sources.width),
+  "The width owner must cycle Compact → Standard → Expanded through the single control while exposing current and next state.",
 );
 assert(
   /id="detailWorkArea" class="detail-work-area"/.test(sources.index) &&
@@ -284,4 +293,4 @@ assert(
   "The completed workspace must retain reduced-motion suppression.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 41 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 42 }, null, 2));
