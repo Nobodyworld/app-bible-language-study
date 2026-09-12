@@ -36,8 +36,28 @@ function clamp(value, min, max) {
 
 function tooltipTarget(node) {
   return node?.closest?.(
-    ".language-letter-hover[data-tooltip], .letter-unit[data-tooltip], .transliteration-symbol[data-tooltip], .definition-tooltip[data-tooltip]",
+    ".language-letter-hover[data-tooltip], .letter-unit[data-tooltip], .transliteration-symbol[data-tooltip], .definition-tooltip[data-tooltip], .strong-token[data-tooltip]:not([data-suppress-tooltip]), .strong-token[data-layer-tooltip]:not([data-suppress-tooltip])",
   ) || null;
+}
+
+function tooltipText(target) {
+  return target?.dataset?.layerTooltip || target?.dataset?.tooltip || "";
+}
+
+function isReaderStrongTooltip(target) {
+  return Boolean(target?.classList?.contains("strong-token"));
+}
+
+function detachReaderStrongPseudoTooltip(target) {
+  if (!isReaderStrongTooltip(target) || !target.dataset.tooltip) return;
+  target.dataset.layerTooltip = target.dataset.tooltip;
+  delete target.dataset.tooltip;
+}
+
+function restoreReaderStrongPseudoTooltip(target) {
+  if (!isReaderStrongTooltip(target) || !target.dataset.layerTooltip) return;
+  target.dataset.tooltip = target.dataset.layerTooltip;
+  delete target.dataset.layerTooltip;
 }
 
 function ensureTooltipLayer() {
@@ -51,13 +71,15 @@ function ensureTooltipLayer() {
   document.body.append(tooltipLayer);
 
   function hideTooltip() {
+    const previousTarget = activeTooltipTarget;
     activeTooltipTarget = null;
     tooltipLayer.hidden = true;
     tooltipLayer.textContent = "";
+    restoreReaderStrongPseudoTooltip(previousTarget);
   }
 
   function positionTooltip(target) {
-    if (!target || tooltipLayer.hidden) return;
+    if (!target || !target.isConnected || tooltipLayer.hidden) return;
     const rect = target.getBoundingClientRect();
     const margin = 10;
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
@@ -82,12 +104,16 @@ function ensureTooltipLayer() {
   }
 
   function showTooltip(target) {
-    const text = target?.dataset?.tooltip;
+    const text = tooltipText(target);
     if (!text) {
       hideTooltip();
       return;
     }
+    if (activeTooltipTarget && activeTooltipTarget !== target) {
+      restoreReaderStrongPseudoTooltip(activeTooltipTarget);
+    }
     activeTooltipTarget = target;
+    detachReaderStrongPseudoTooltip(target);
     tooltipLayer.textContent = text;
     tooltipLayer.hidden = false;
     tooltipLayer.style.left = "0px";
@@ -133,6 +159,10 @@ function ensureTooltipLayer() {
     if (target?.classList.contains("transliteration-symbol")) {
       event.stopPropagation();
       showTooltip(target);
+      return;
+    }
+    if (isReaderStrongTooltip(activeTooltipTarget)) {
+      hideTooltip();
       return;
     }
     if (activeTooltipTarget?.classList.contains("transliteration-symbol")) hideTooltip();
@@ -285,3 +315,8 @@ export function setLanguageTextWithTooltips(node, text, language, options = {}) 
     });
   return true;
 }
+
+// This module is part of the statically imported Study surface. Install the
+// shared fixed layer once so Reader Strong tokens get viewport-safe previews
+// before any language-specific detail happens to initialize it.
+if (typeof document !== "undefined") ensureTooltipLayer();
