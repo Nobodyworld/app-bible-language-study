@@ -30,51 +30,19 @@
 }
 
 .study-workspace-width-symbol {
-  display: inline-grid;
-  place-items: center;
+  display: block;
+  flex: 0 0 14px;
   width: 14px;
   height: 14px;
-  color: currentColor;
-  font-size: 16px;
-  font-weight: 900;
-  line-height: 1;
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
-.study-workspace-width-controls
-  button[data-study-workspace-width-mode="compact"]
-  .study-workspace-width-symbol,
-.study-workspace-width-controls
-  button[data-study-workspace-width-mode="expanded"]
-  .study-workspace-width-symbol {
-  font-size: 0;
-}
-
-.study-workspace-width-controls
-  button[data-study-workspace-width-mode="compact"]
-  .study-workspace-width-symbol::before,
-.study-workspace-width-controls
-  button[data-study-workspace-width-mode="expanded"]
-  .study-workspace-width-symbol::before,
-.study-workspace-width-controls
-  button[data-study-workspace-width-mode="expanded"]
-  .study-workspace-width-symbol::after {
-  content: "";
-  grid-area: 1 / 1;
-  width: 10px;
-  height: 2px;
-  border-radius: 999px;
-  background: currentColor;
-}
-
-.study-workspace-width-controls
-  button[data-study-workspace-width-mode="expanded"]
-  .study-workspace-width-symbol::after {
-  width: 2px;
-  height: 10px;
-}
-
-.study-workspace-width-reset-symbol {
-  font-size: 14px;
+.study-workspace-width-symbol .study-workspace-width-artwork {
+  vector-effect: non-scaling-stroke;
 }
 
 .detail-header-actions {
@@ -86,7 +54,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: 4px;
+  gap: 5px;
   width: auto;
   min-width: 32px;
   height: 32px;
@@ -94,6 +62,13 @@
   padding: 0 7px;
   font-size: 11px;
   font-weight: 800;
+  line-height: 1;
+}
+
+.detail-header-icon-label {
+  display: inline-flex;
+  align-items: center;
+  min-height: 14px;
   line-height: 1;
 }
 
@@ -135,6 +110,8 @@
 }
 
 .detail-header-icon-button svg {
+  display: block;
+  flex: 0 0 14px;
   width: 14px;
   height: 14px;
   fill: none;
@@ -142,10 +119,10 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.9;
-  vector-effect: non-scaling-stroke;
 }
 
 .study-workspace-show-button svg {
+  display: block;
   width: 16px;
   height: 16px;
   fill: none;
@@ -153,6 +130,9 @@
   stroke-linecap: round;
   stroke-linejoin: round;
   stroke-width: 1.9;
+}
+
+.study-workspace-panel-icon * {
   vector-effect: non-scaling-stroke;
 }
 
@@ -480,21 +460,10 @@
     color: Highlight;
   }
 
-  .study-workspace-width-controls
-    button[data-study-workspace-width-mode="compact"]
-    .study-workspace-width-symbol::before,
-  .study-workspace-width-controls
-    button[data-study-workspace-width-mode="expanded"]
-    .study-workspace-width-symbol::before,
-  .study-workspace-width-controls
-    button[data-study-workspace-width-mode="expanded"]
-    .study-workspace-width-symbol::after {
-    background: currentColor;
-    forced-color-adjust: auto;
-  }
-
+  .study-workspace-width-symbol,
   .detail-header-icon-button svg,
   .study-workspace-show-button svg {
     stroke: ButtonText;
+    forced-color-adjust: auto;
   }
 }
