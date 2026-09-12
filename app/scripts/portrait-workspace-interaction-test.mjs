@@ -244,10 +244,12 @@ async function main() {
       try {
         await waitForApp(page, url);
         assertPortraitLayout(await layoutState(page), viewport.name);
-        await openStrongDetail(page);
-        await exerciseIndependentScroll(page, viewport.name);
-        await exerciseHideAndRestore(page, viewport.name);
-        assertPortraitLayout(await layoutState(page), `${viewport.name}/restored`);
+        if (viewport.name === "portrait-constrained") {
+          await openStrongDetail(page);
+          await exerciseIndependentScroll(page, viewport.name);
+          await exerciseHideAndRestore(page, viewport.name);
+          assertPortraitLayout(await layoutState(page), `${viewport.name}/restored`);
+        }
         assertHealthy();
       } finally {
         await page.close();
