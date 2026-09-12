@@ -68,6 +68,7 @@ async function visibleTooltipSnapshot(target) {
       visible: Boolean(layer && rect),
       expected,
       text: layer?.textContent || "",
+      transitionProperty: layer ? getComputedStyle(layer).transitionProperty : "",
       left: rect?.left ?? -1,
       right: rect?.right ?? -1,
       top: rect?.top ?? -1,
@@ -81,6 +82,8 @@ async function visibleTooltipSnapshot(target) {
 function assertViewportContainedTooltip(snapshot, label) {
   assert(snapshot.visible && snapshot.expected && snapshot.text === snapshot.expected,
     `${label}: fixed Strong tooltip content is missing or stale: ${JSON.stringify(snapshot)}`);
+  assert(snapshot.transitionProperty === "none",
+    `${label}: fixed Strong tooltip placement must not animate, including under reduced motion: ${JSON.stringify(snapshot)}`);
   assert(snapshot.left >= 9.5 && snapshot.right <= snapshot.viewportWidth - 9.5 &&
     snapshot.top >= 9.5 && snapshot.bottom <= snapshot.viewportHeight - 9.5,
   `${label}: fixed Strong tooltip escaped the viewport: ${JSON.stringify(snapshot)}`);
@@ -247,10 +250,22 @@ async function checkWrappedTokenFragments(page, url, viewport) {
       const expectedTooltip = node.dataset.layerTooltip || node.dataset.tooltip || "";
       const keyboardTooltip = node.matches(":focus-visible") && Boolean(layer) && layer.textContent === expectedTooltip &&
         tooltipRect.left >= 9.5 && tooltipRect.right <= innerWidth - 9.5 && tooltipRect.top >= 9.5 && tooltipRect.bottom <= innerHeight - 9.5;
+      const keyboardState = {
+        active: document.activeElement === node,
+        focusVisible: node.matches(":focus-visible"),
+        layerVisible: Boolean(layer),
+        text: layer?.textContent || "",
+        expected: expectedTooltip,
+        rect: tooltipRect ? rect(tooltipRect) : null,
+        transitionProperty: layer ? getComputedStyle(layer).transitionProperty : "",
+        outlineStyle: style.outlineStyle,
+        outlineWidth: style.outlineWidth,
+      };
       return {
         widths, failures, wrapsNaturally, geometry, matchingCascade, font: style.font, fonts: document.fonts.status, unchanged: before === host.textContent,
         selectableText: range.toString(), label: node.textContent,
         keyboardTooltip,
+        keyboardState,
         focusVisible: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0,
       };
     }, Math.min(viewport.width - 40, 940));
@@ -258,7 +273,8 @@ async function checkWrappedTokenFragments(page, url, viewport) {
     assert(result.wrapsNaturally, `${viewport.width}/${mode}: multi-word Strong spans must still wrap naturally: ${JSON.stringify(result)}`);
     assert(result.matchingCascade, `${viewport.width}/${mode}: fixture and Reader token styles differ`);
     assert(result.unchanged && result.selectableText === result.label && result.label.trim(), "Wrapping must preserve selectable scripture text");
-    assert(result.keyboardTooltip && result.focusVisible, `${viewport.width}/${mode}: keyboard preview, viewport containment, or focus indication failed`);
+    assert(result.keyboardState.transitionProperty === "none", `${viewport.width}/${mode}: keyboard tooltip placement must not animate: ${JSON.stringify(result.keyboardState)}`);
+    assert(result.keyboardTooltip && result.focusVisible, `${viewport.width}/${mode}: keyboard preview, viewport containment, or focus indication failed: ${JSON.stringify(result.keyboardState)}`);
     if (process.env.BIBLEAPP_UI_EVIDENCE_DIR) {
       mkdirSync(process.env.BIBLEAPP_UI_EVIDENCE_DIR, { recursive: true });
       await page.screenshot({ path: path.join(process.env.BIBLEAPP_UI_EVIDENCE_DIR, `strong-wrap-${viewport.width}-${mode}.png`) });
