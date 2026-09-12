@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { resolveStrongSeeSegments } from "../app/src/strong-reference-control.js";
+import { resolveStrongSeeSegments, strongReferenceDisplayLabel } from "../app/src/strong-reference-control.js";
 
 const refs = [
   { label: "philos", language: "greek", strong_code: "G5384" },
@@ -11,6 +11,7 @@ const refs = [
   { label: "boulomai", language: "greek", strong_code: "G1014" },
   { label: "nous", language: "greek", strong_code: "G3563" },
   { label: "tsbiyah", language: "hebrew", strong_code: "H6646" },
+  { label: "psuchē", transliteration: "psuchē", language: "greek", strong_code: "G5590" },
 ];
 const multiple = resolveStrongSeeSegments(
   "love.\nsee GREEK philos\nsee GREEK thumos\nsee GREEK agapao\nsee GREEK ethelo\nsee GREEK boulomai\nsee GREEK nous",
@@ -30,4 +31,11 @@ const unresolved = resolveStrongSeeSegments("before\nsee GREEK unknown\nafter", 
 assert.equal(unresolved.find((segment) => segment.label === "unknown")?.ref, null);
 assert.equal(unresolved.map((segment) => segment.text + (segment.label || "")).join(""), "before\nsee GREEK unknown\nafter");
 
-console.log(JSON.stringify({ status: "ok", assertions: 8 }, null, 2));
+const compare = resolveStrongSeeSegments("mind. Compare psuche.", refs);
+assert.equal(compare.find((segment) => segment.label === "psuche")?.ref?.strong_code, "G5590");
+assert.equal(compare.map((segment) => segment.text + (segment.label || "")).join(""), "mind. Compare psuche.");
+
+assert.equal(strongReferenceDisplayLabel({ strong_code: "G1", label: "a" }), "a-");
+assert.equal(strongReferenceDisplayLabel({ strong_code: "G25", label: "agapao" }), "agapao");
+
+console.log(JSON.stringify({ status: "ok", assertions: 12 }, null, 2));
