@@ -615,6 +615,14 @@
   text-wrap: pretty;
 }
 
+/* Inline padding plus the absolute tooltip can create a padding-only fragment
+   after a line-ending word in Chromium. Keep source text naturally wrappable;
+   do not hide fragments, disable tooltips, or make multi-word tokens nowrap. */
+.strong-token {
+  padding-inline: 0;
+  margin-inline: 0;
+}
+
 .manage-labels-panel,
 .storage-details-panel,
 .technical-details-panel,

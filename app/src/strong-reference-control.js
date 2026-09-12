@@ -1,7 +1,9 @@
 import { fetchLexiconEntry } from "./data-service.js?v=pr13-live-qa-20260711e";
 
 const SEE_REFERENCE_PATTERN = /see (GREEK|HEBREW) ([^\n]+)/gu;
-const COMPARE_REFERENCE_PATTERN = /\b(compare(?:\s+with)?\s+)([\p{L}\p{M}'’\-]+)/giu;
+const COMPARE_REFERENCE_PATTERN = /\bcompare(?:[ \t]+with)?[ \t]+/giu;
+const COMPARE_LABEL_PATTERN = /[\p{L}\p{M}\p{N}'’\-]+/uy;
+const COMPARE_SEPARATOR_PATTERN = /(?:[ \t]*,[ \t]*(?:and[ \t]+)?|[ \t]+and[ \t]+)/iuy;
 
 export function compactStrongDefinition(entry) {
   return (
@@ -33,6 +35,7 @@ function normalizedReferenceLabel(value) {
     .replace(/[).,;:]+$/g, "")
     .normalize("NFD")
     .replace(/\p{M}+/gu, "")
+    .replace(/’/gu, "'")
     .toLowerCase();
 }
 
@@ -51,11 +54,15 @@ function referenceLabels(ref) {
 
 function findStrongReference(refs, label, language = "") {
   const key = normalizedReferenceLabel(label);
-  if (!key) return null;
-  return refs.find((item) => {
+  if (!key || !Array.isArray(refs)) return null;
+  const candidates = refs.filter((item) => {
+    if (!/^[HG]\d+$/u.test(String(item?.strong_code || "").toUpperCase())) return false;
     if (language && item?.language !== language) return false;
     return referenceLabels(item).includes(key);
-  }) || null;
+  });
+  // Normalized aliases may collide. Never select the first of different destinations.
+  const destinations = new Set(candidates.map((item) => item.strong_code.toUpperCase()));
+  return destinations.size === 1 ? candidates[0] : null;
 }
 
 export function strongReferenceDisplayLabel(ref, label = ref?.label || ref?.strong_code || "Strong's") {
@@ -105,33 +112,33 @@ export function resolveStrongSeeSegments(text, refs = []) {
     const language = match[1].toLowerCase();
     const rawLabel = match[2].trim();
     const label = rawLabel.replace(/[).,;:]+$/g, "");
-    const labelOffset = match[0].lastIndexOf(match[2]);
-    const start = match.index + labelOffset;
-    matches.push({
-      start,
-      end: start + label.length,
-      prefixStart: match.index,
-      label,
-      language,
-      ref: findStrongReference(refs, label, language),
-    });
+    const leadingSpace = match[2].length - match[2].trimStart().length;
+    const start = match.index + match[0].lastIndexOf(match[2]) + leadingSpace;
+    matches.push({ start, end: start + label.length, label, language, ref: findStrongReference(refs, label, language) });
   }
   SEE_REFERENCE_PATTERN.lastIndex = 0;
 
   COMPARE_REFERENCE_PATTERN.lastIndex = 0;
   for (const match of value.matchAll(COMPARE_REFERENCE_PATTERN)) {
-    const label = match[2];
-    const start = match.index + match[1].length;
-    matches.push({
-      start,
-      end: start + label.length,
-      prefixStart: match.index,
-      label,
-      language: "",
-      ref: findStrongReference(refs, label),
-    });
+    let offset = match.index + match[0].length;
+    // Only explicit list separators extend a comparison. Ordinary following prose
+    // is not auto-linked merely because it contains a known transliteration.
+    while (offset < value.length) {
+      COMPARE_LABEL_PATTERN.lastIndex = offset;
+      const labelMatch = COMPARE_LABEL_PATTERN.exec(value);
+      if (!labelMatch) break;
+      const label = labelMatch[0];
+      const end = offset + label.length;
+      matches.push({ start: offset, end, label, language: "", ref: findStrongReference(refs, label) });
+      COMPARE_SEPARATOR_PATTERN.lastIndex = end;
+      const separator = COMPARE_SEPARATOR_PATTERN.exec(value);
+      if (!separator) break;
+      offset = end + separator[0].length;
+    }
   }
   COMPARE_REFERENCE_PATTERN.lastIndex = 0;
+  COMPARE_LABEL_PATTERN.lastIndex = 0;
+  COMPARE_SEPARATOR_PATTERN.lastIndex = 0;
 
   matches.sort((a, b) => a.start - b.start || a.end - b.end);
   const segments = [];
