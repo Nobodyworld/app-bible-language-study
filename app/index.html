@@ -155,23 +155,22 @@
             <div id="studyWorkspaceWidthControls" class="study-workspace-width-controls" role="group" aria-label="Study workspace width">
               <span class="study-workspace-width-label">Width</span>
               <button
+                id="studyWorkspaceWidthCycle"
+                class="study-workspace-width-cycle"
                 type="button"
-                data-study-workspace-width-mode="compact"
-                aria-label="Use compact study workspace"
-                title="Compact study workspace"
-                aria-pressed="false">Compact<svg data-width-artwork="compact" aria-hidden="true" class="study-workspace-width-symbol" viewBox="0 0 16 16"><path class="study-workspace-width-artwork" d="M4 8h8"></path></svg></button>
-              <button
-                type="button"
-                data-study-workspace-width-mode="standard"
-                aria-label="Use standard study workspace"
-                title="Standard study workspace"
-                aria-pressed="true">Standard<svg data-width-artwork="standard" aria-hidden="true" class="study-workspace-width-symbol" viewBox="0 0 16 16"><rect class="study-workspace-width-artwork" x="4" y="4" width="8" height="8" rx="1"></rect></svg></button>
-              <button
-                type="button"
-                data-study-workspace-width-mode="expanded"
-                aria-label="Use expanded study workspace"
-                title="Expanded study workspace"
-                aria-pressed="false">Expanded<svg data-width-artwork="expanded" aria-hidden="true" class="study-workspace-width-symbol" viewBox="0 0 16 16"><path class="study-workspace-width-artwork" d="M4 8h8M8 4v8"></path></svg></button>
+                data-study-workspace-width-cycle
+                data-study-workspace-width-current="standard"
+                data-study-workspace-width-next="expanded"
+                aria-label="Study workspace width: Standard. Change to Expanded."
+                title="Study workspace width: Standard (click for Expanded)"
+              >
+                <svg aria-hidden="true" class="study-workspace-width-symbol" viewBox="0 0 20 16">
+                  <rect class="study-workspace-width-frame" x="1.5" y="1.5" width="17" height="13" rx="2"></rect>
+                  <path class="study-workspace-width-divider study-workspace-width-divider-compact" d="M14.5 2v12"></path>
+                  <path class="study-workspace-width-divider study-workspace-width-divider-standard" d="M12 2v12"></path>
+                  <path class="study-workspace-width-divider study-workspace-width-divider-expanded" d="M9.5 2v12"></path>
+                </svg>
+              </button>
             </div>
             <div class="detail-header-actions">
               <button
