@@ -78,12 +78,11 @@ assert(
   "The Detail pane must be the single named inline-size authority for the Study workspace.",
 );
 assert(
-  /@container\s+study-workspace\s*\(min-width:\s*320px\)/.test(sources.portraitCss) &&
-    /@container\s+study-workspace\s*\(min-width:\s*420px\)/.test(sources.portraitCss) &&
+  /@container\s+study-workspace\s*\(min-width:\s*320px\)[\s\S]*?--study-header-layout-band:\s*wide[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto/.test(sources.portraitCss) &&
+    !/@container\s+study-workspace\s*\(min-width:\s*420px\)/.test(sources.portraitCss) &&
     /--study-header-layout-band:\s*narrow/.test(sources.portraitCss) &&
-    /--study-header-layout-band:\s*constrained/.test(sources.portraitCss) &&
-    /--study-header-layout-band:\s*wide/.test(sources.portraitCss),
-  "Desktop Study headers must expose measured narrow, constrained, and wide container bands.",
+    !/--study-header-layout-band:\s*constrained/.test(sources.portraitCss),
+  "Desktop Study headers must keep the one-row wide band from the 320px compact minimum, with stacked fallback only below it.",
 );
 assert(
   /\.detail-header\s+:is\(h2, button, \.detail-mode-status, \.study-workspace-width-label\),[\s\S]*?word-break:\s*normal;[\s\S]*?overflow-wrap:\s*normal;[\s\S]*?hyphens:\s*none;/.test(sources.css) &&
