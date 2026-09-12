@@ -33,7 +33,7 @@ assert(
   "Portrait chapter-action labels must appear only when the measured reader pane can keep one action row.",
 );
 
-const widthCycle = index.match(/<button[\s\S]*?id="studyWorkspaceWidthCycle"[\s\S]*?<\/button>/)?.[0] || "";
+const widthCycle = index.match(/<button\b(?=[^>]*\bid="studyWorkspaceWidthCycle")[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
 assert(widthCycle, "The workspace must expose one Study width cycle control.");
 assert.equal((index.match(/data-study-workspace-width-cycle/g) || []).length, 1, "The workspace must retain exactly one width cycle control.");
 assert(
