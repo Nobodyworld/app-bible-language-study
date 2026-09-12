@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { readAppStyles } from "./helpers/app-styles.mjs";
 import { readFile } from "node:fs/promises";
 
 const sources = Object.fromEntries(await Promise.all(
@@ -25,7 +26,7 @@ const sources = Object.fromEntries(await Promise.all(
     ["strongView", "../app/src/views/strongs-view.js"],
     ["interlinearView", "../app/src/views/interlinear-translation-view.js"],
     ["stores", "../app/src/stores.js"],
-  ].map(async ([name, path]) => [name, await readFile(new URL(path, import.meta.url), "utf8")]),
+  ].map(async ([name, path]) => [name, path.endsWith(".css") ? await readAppStyles() : await readFile(new URL(path, import.meta.url), "utf8")]),
 ));
 
 assert(
@@ -85,7 +86,7 @@ assert(
   "Desktop Study headers must keep the one-row wide band from the 320px compact minimum, with stacked fallback only below it.",
 );
 assert(
-  /\.detail-header\s+:is\(h2, button, \.detail-mode-status, \.study-workspace-width-label\),[\s\S]*?word-break:\s*normal;[\s\S]*?overflow-wrap:\s*normal;[\s\S]*?hyphens:\s*none;/.test(sources.css) &&
+  /\.detail-header\s+:is\(h2, button, \.detail-mode-status, \.study-workspace-width-label\)[\s\S]*?word-break:\s*normal;[\s\S]*?overflow-wrap:\s*normal;[\s\S]*?hyphens:\s*none;/.test(sources.css) &&
     !/\.detail-header-main h2\s*{[^}]*overflow-wrap:\s*anywhere/.test(sources.css) &&
     !/study-header-layout-band/.test(`${sources.app}\n${sources.width}\n${sources.portrait}`),
   "Study UI text must wrap only at normal boundaries and container-band ownership must remain CSS-only.",
@@ -284,7 +285,7 @@ assert.equal(
 assert(
   /\.word-meaning-menu\s*{[\s\S]*?position:\s*fixed/.test(sources.css) &&
     /\.word-meaning-contained\s*{[\s\S]*?display:\s*grid/.test(sources.css) &&
-    !/\.word-meaning-contained\s*{[\s\S]*?position:\s*fixed/.test(sources.css),
+    !/\.word-meaning-contained\s*{[^}]*position:\s*fixed/.test(sources.css),
   "The legacy default Meaning dialog may remain fixed, but contained Meaning must not be viewport-positioned.",
 );
 assert(

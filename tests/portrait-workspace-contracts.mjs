@@ -1,12 +1,13 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { readAppStyles } from "./helpers/app-styles.mjs";
 import { readFile } from "node:fs/promises";
 
 const [index, css, readerCss, runtime, pickerFlow, contextTabs] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
-  readFile(new URL("../app/styles-portrait.css", import.meta.url), "utf8"),
-  readFile(new URL("../app/styles.css", import.meta.url), "utf8"),
+  readAppStyles(),
+  readAppStyles(),
   readFile(new URL("../app/src/portrait-workspace.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/reader-picker-flow.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8"),

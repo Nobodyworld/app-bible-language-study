@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { readAppStyles } from "./helpers/app-styles.mjs";
 import { readFile } from "node:fs/promises";
 
 const [index, styles, flow, strongReferenceControl, app, interlinearView, emptyState, dom] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
-  readFile(new URL("../app/styles-polish.css", import.meta.url), "utf8"),
+  readAppStyles(),
   readFile(new URL("../app/src/original-language-study-flow.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/strong-reference-control.js", import.meta.url), "utf8"),
   readFile(new URL("../app/app.js", import.meta.url), "utf8"),

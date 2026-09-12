@@ -187,7 +187,9 @@ async function assertHeaderRow(page, label) {
     mkdirSync(process.env.BIBLEAPP_UI_EVIDENCE_DIR, { recursive:true });
     await page.screenshot({path:path.join(process.env.BIBLEAPP_UI_EVIDENCE_DIR, `header-${label}.png`)});
   }
-  assert(geometry.sameRow && geometry.contained && geometry.noOverlap, `${label}: Study title/mode/actions must fit one row: ${JSON.stringify(geometry)}`);
+  assert(geometry.contained, `${label}: Study controls must remain contained: ${JSON.stringify(geometry)}`);
+  assert(geometry.paneWidth >= 320 ? geometry.sameRow && geometry.noOverlap : !geometry.sameRow,
+    `${label}: Study header must use one row from 320px and stacked fallback below it: ${JSON.stringify(geometry)}`);
   return { label, paneWidth:geometry.paneWidth, contentWidth:geometry.contentWidth, headerHeight:geometry.headerHeight };
 }
 
@@ -253,6 +255,7 @@ async function main() {
     }
     // Force a genuinely smaller measured pane to protect the stacked fallback.
     await page.addStyleTag({content:':root { --study-workspace-inline-size: 290px !important; }'});
+    await page.waitForFunction(() => Math.abs(document.querySelector('.detail-pane').getBoundingClientRect().width - 290) < 0.1);
     assert.equal(await page.locator('.detail-header').evaluate(n=>getComputedStyle(n).getPropertyValue('--study-header-layout-band').trim()), "narrow");
     await page.locator('head style').last().evaluate(n=>n.remove());
 

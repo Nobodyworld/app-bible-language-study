@@ -567,8 +567,7 @@
   box-shadow: var(--ui-panel-shadow);
 }
 
-.chapter-title,
-.detail-header {
+.chapter-title {
   background: linear-gradient(180deg, var(--panel-alt) 0%, var(--bg-elevated) 100%);
 }
 
