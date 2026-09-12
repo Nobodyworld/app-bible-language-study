@@ -37,12 +37,14 @@ assert(
   "Strong's source words and their hydrated language spans must retain the narrow accent and forced-colors treatment.",
 );
 assert(
-  /data-width-artwork="compact"[\s\S]*?class="study-workspace-width-symbol"/.test(index) &&
-    /data-width-artwork="standard"[\s\S]*?class="study-workspace-width-symbol"/.test(index) &&
-    /data-width-artwork="expanded"[\s\S]*?class="study-workspace-width-symbol"/.test(index) &&
-    /\.study-workspace-width-symbol\s*{[\s\S]*?fill:\s*none;[\s\S]*?stroke:\s*currentColor;[\s\S]*?stroke-width:\s*2;/.test(portraitCss) &&
-    !/study-workspace-width-reset-symbol|>↺</.test(index),
-  "Workspace width controls must use one deterministic SVG artwork system without a font-glyph fallback.",
+  /id="studyWorkspaceWidthCycle"[\s\S]*?data-study-workspace-width-cycle[\s\S]*?class="study-workspace-width-symbol"/.test(index) &&
+    /study-workspace-width-divider-compact/.test(index) &&
+    /study-workspace-width-divider-standard/.test(index) &&
+    /study-workspace-width-divider-expanded/.test(index) &&
+    /\.study-workspace-width-cycle\[data-study-workspace-width-current="compact"\][\s\S]*?study-workspace-width-divider-compact[\s\S]*?\.study-workspace-width-cycle\[data-study-workspace-width-current="standard"\][\s\S]*?study-workspace-width-divider-standard[\s\S]*?\.study-workspace-width-cycle\[data-study-workspace-width-current="expanded"\][\s\S]*?study-workspace-width-divider-expanded/.test(portraitCss) &&
+    /\.study-workspace-width-symbol\s*{[\s\S]*?fill:\s*none;[\s\S]*?stroke:\s*currentColor;[\s\S]*?stroke-width:\s*1\.7;/.test(portraitCss) &&
+    !/study-workspace-width-reset-symbol|>↺|>−<|>\+</.test(index),
+  "Study workspace width must use one stateful right-pane SVG control without reset/minus/plus glyph fallbacks.",
 );
 
 const chapterTools = index.match(/<div class="chapter-actions"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/)?.[0] || "";
