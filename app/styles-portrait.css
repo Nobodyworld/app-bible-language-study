@@ -73,7 +73,7 @@
   min-width: 32px;
   height: 32px;
   min-height: 32px;
-  padding: 0 7px;
+  padding: 0 5px;
   font-size: 11px;
   font-weight: 800;
   line-height: 1;
@@ -186,8 +186,8 @@
     display: grid;
     grid-template-columns: minmax(0, 1fr);
     align-items: center;
-    gap: 6px;
-    padding: 10px 12px;
+    gap: 4px;
+    padding: 10px 8px;
   }
 
   .detail-header-main {
@@ -218,7 +218,8 @@
     justify-self: start;
   }
 
-  @container study-workspace (min-width: 320px) {
+  /* The 320px border-box Compact pane has a 318px query content box. */
+  @container study-workspace (min-width: 318px) {
     .detail-header {
       --study-header-layout-band: wide;
       grid-template-columns: minmax(0, 1fr) auto auto;
@@ -227,6 +228,7 @@
     .detail-title-block {
       grid-column: 1;
       grid-row: 1;
+      flex-wrap: nowrap;
     }
 
     .study-workspace-width-controls {

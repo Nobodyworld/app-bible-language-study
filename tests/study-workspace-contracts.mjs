@@ -78,7 +78,7 @@ assert(
   "The Detail pane must be the single named inline-size authority for the Study workspace.",
 );
 assert(
-  /@container\s+study-workspace\s*\(min-width:\s*320px\)[\s\S]*?--study-header-layout-band:\s*wide[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto/.test(sources.portraitCss) &&
+  /@container\s+study-workspace\s*\(min-width:\s*318px\)[\s\S]*?--study-header-layout-band:\s*wide[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto/.test(sources.portraitCss) &&
     !/@container\s+study-workspace\s*\(min-width:\s*420px\)/.test(sources.portraitCss) &&
     /--study-header-layout-band:\s*narrow/.test(sources.portraitCss) &&
     !/--study-header-layout-band:\s*constrained/.test(sources.portraitCss),

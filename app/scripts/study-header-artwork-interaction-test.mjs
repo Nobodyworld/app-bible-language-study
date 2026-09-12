@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import path from "node:path";
 import { chromium } from "playwright-core";
 import { startStaticAppServer } from "../tools/serve-app.mjs";
 
@@ -170,6 +171,26 @@ async function activateAndWait(page, activation, expectedMode) {
   return readGeometry(page);
 }
 
+async function assertHeaderRow(page, label) {
+  const geometry = await page.evaluate(() => {
+    const pane = document.querySelector('.detail-pane');
+    const header = document.querySelector('.detail-header');
+    const boxes = ['.detail-title-block h2', '.detail-mode-status', '#studyWorkspaceWidthCycle', '#clearDetail', '#hideStudyWorkspace']
+      .map(selector => { const r = document.querySelector(selector).getBoundingClientRect(); return { selector, left:r.left, right:r.right, top:r.top, bottom:r.bottom }; });
+    const r = header.getBoundingClientRect();
+    return { paneWidth:pane.getBoundingClientRect().width, contentWidth:pane.clientWidth, headerHeight:r.height,
+      sameRow: Math.min(...boxes.map(b=>b.bottom)) > Math.max(...boxes.map(b=>b.top)),
+      contained: boxes.every(b=>b.left>=r.left && b.right<=r.right),
+      noOverlap: boxes.slice(1).every((b,i)=>b.left>=boxes[i].right), boxes };
+  });
+  if (process.env.BIBLEAPP_UI_EVIDENCE_DIR) {
+    mkdirSync(process.env.BIBLEAPP_UI_EVIDENCE_DIR, { recursive:true });
+    await page.screenshot({path:path.join(process.env.BIBLEAPP_UI_EVIDENCE_DIR, `header-${label}.png`)});
+  }
+  assert(geometry.sameRow && geometry.contained && geometry.noOverlap, `${label}: Study title/mode/actions must fit one row: ${JSON.stringify(geometry)}`);
+  return { label, paneWidth:geometry.paneWidth, contentWidth:geometry.contentWidth, headerHeight:geometry.headerHeight };
+}
+
 async function main() {
   const { server, url } = await startStaticAppServer({ port: 0 });
   const browser = await chromium.launch({
@@ -196,6 +217,7 @@ async function main() {
 
     const compact = await activateAndWait(page, "enter", "compact");
     assertGeometry(compact, "enter/compact");
+    const rows = [await assertHeaderRow(page, "compact-320")];
     dividerCenters.compact = compact.cycle.dividerCenterX;
 
     const standard = await activateAndWait(page, "space", "standard");
@@ -209,13 +231,30 @@ async function main() {
     for (const theme of ["light", "dark"]) {
       await page.evaluate((value) => { document.documentElement.dataset.theme = value; }, theme);
       assertGeometry(await readGeometry(page), theme);
+      for (const mode of ["expanded", "compact", "standard"]) {
+        while ((await readGeometry(page)).rootMode !== mode) await activateAndWait(page, "click", expectedNext((await readGeometry(page)).rootMode));
+        rows.push(await assertHeaderRow(page, `${theme}-${mode}`));
+      }
     }
 
     await page.emulateMedia({ forcedColors: "active" });
     const forced = await readGeometry(page);
     assert(forced.forcedColors, "Forced-colors emulation did not activate");
     assertGeometry(forced, "forced-colors");
+    rows.push(await assertHeaderRow(page, "forced-colors"));
     await page.emulateMedia({ forcedColors: "none" });
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    for (const width of [900, 1600, 1280]) {
+      await page.setViewportSize({ width, height:800 });
+      while ((await readGeometry(page)).rootMode !== "compact") await activateAndWait(page, "space", expectedNext((await readGeometry(page)).rootMode));
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+      rows.push(await assertHeaderRow(page, `resize-${width}-compact`));
+    }
+    // Force a genuinely smaller measured pane to protect the stacked fallback.
+    await page.addStyleTag({content:':root { --study-workspace-inline-size: 290px !important; }'});
+    assert.equal(await page.locator('.detail-header').evaluate(n=>getComputedStyle(n).getPropertyValue('--study-header-layout-band').trim()), "narrow");
+    await page.locator('head style').last().evaluate(n=>n.remove());
 
     await page.locator("#hideStudyWorkspace").click();
     await page.waitForFunction(() => document.documentElement.dataset.studyWorkspaceHidden === "true" && !document.querySelector("#showStudyWorkspace")?.hidden);
@@ -223,7 +262,7 @@ async function main() {
     await page.waitForFunction(() => document.documentElement.dataset.studyWorkspaceHidden !== "true" && document.querySelector("#showStudyWorkspace")?.hidden);
 
     assertHealthy();
-    console.log(JSON.stringify({ status: "ok", themes: 3, widthControls: 1, widthStates: 3, actions: 2, directions: 2 }, null, 2));
+    console.log(JSON.stringify({ status: "ok", browser:browser.version(), themes: 3, widthControls: 1, widthStates: 3, actions: 2, directions: 2, rows, reflow:"viewport resizing; not browser zoom" }, null, 2));
   } finally {
     await browser.close();
     await new Promise((resolveClose) => server.close(resolveClose));
