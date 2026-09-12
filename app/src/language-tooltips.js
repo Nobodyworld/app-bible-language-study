@@ -66,6 +66,10 @@ function ensureTooltipLayer() {
 
   tooltipLayer = document.createElement("div");
   tooltipLayer.className = "language-tooltip-layer";
+  // Placement below is synchronous. The global reduced-motion duration must
+  // not turn its default transition-property:all into a move from (0, 0).
+  // Keep this with the inline geometry owned by this positioning controller.
+  tooltipLayer.style.transitionProperty = "none";
   tooltipLayer.setAttribute("role", "tooltip");
   tooltipLayer.hidden = true;
   document.body.append(tooltipLayer);
@@ -194,7 +198,7 @@ export function setTransliterationTextWithTooltips(node, text, options = {}) {
   node.dataset.transliterationConvention = "bundled-strongs-interlinear";
   node.setAttribute(
     "aria-description",
-    `${sourceLabel}. Scholarly transliteration is kept separate from phonetic spelling and is not exact pronunciation.`,
+    `${sourceLabel}; scholarly transliteration, not exact pronunciation.`,
   );
   node.title = `${sourceLabel}; scholarly transliteration, not exact pronunciation.`;
   node.replaceChildren();
