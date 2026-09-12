@@ -2,6 +2,7 @@ import { fetchLexiconEntry } from "./data-service.js?v=pr13-live-qa-20260711e";
 
 const SEE_REFERENCE_PATTERN = /see (GREEK|HEBREW) ([^\n]+)/gu;
 const COMPARE_REFERENCE_PATTERN = /\b(compare(?:\s+with)?\s+)([\p{L}\p{M}'’\-]+)/giu;
+const ORIGIN_TOKEN_PATTERN = /[\p{L}\p{M}\p{N}'’\-]+/gu;
 
 export function compactStrongDefinition(entry) {
   return (
@@ -62,6 +63,48 @@ export function strongReferenceDisplayLabel(ref, label = ref?.label || ref?.stro
   const code = String(ref?.strong_code || "").toUpperCase();
   const value = String(label || "").trim();
   return code === "G1" && normalizedReferenceLabel(value) === "a" ? "a-" : value;
+}
+
+function originReferenceLabels(ref) {
+  return [
+    ...referenceLabels(ref),
+    normalizedReferenceLabel(strongReferenceDisplayLabel(ref)),
+  ].filter(Boolean);
+}
+
+export function resolveStrongOriginSegments(text, refs = []) {
+  const value = String(text || "");
+  const matches = [];
+
+  ORIGIN_TOKEN_PATTERN.lastIndex = 0;
+  for (const match of value.matchAll(ORIGIN_TOKEN_PATTERN)) {
+    const label = match[0];
+    // A bare Latin letter in prose is too ambiguous to promote to a lexical link.
+    // This specifically keeps English articles such as the "a" in "From a ..."
+    // as prose while still allowing explicit affix forms such as "a-" or Greek script.
+    if (/^[A-Za-z]$/u.test(label)) continue;
+    const key = normalizedReferenceLabel(label);
+    const ref = refs.find((item) => originReferenceLabels(item).includes(key)) || null;
+    if (!ref) continue;
+    matches.push({ start: match.index, end: match.index + label.length, label, ref });
+  }
+  ORIGIN_TOKEN_PATTERN.lastIndex = 0;
+
+  const segments = [];
+  let cursor = 0;
+  for (const match of matches) {
+    if (match.start < cursor) continue;
+    if (match.start > cursor) segments.push({ text: value.slice(cursor, match.start) });
+    segments.push({
+      text: "",
+      label: match.label,
+      language: match.ref?.language || "",
+      ref: match.ref,
+    });
+    cursor = match.end;
+  }
+  if (cursor < value.length) segments.push({ text: value.slice(cursor) });
+  return segments;
 }
 
 export function createStrongReferenceControl(ref, { label = ref?.label || ref?.strong_code || "Strong's", onActivate } = {}) {
