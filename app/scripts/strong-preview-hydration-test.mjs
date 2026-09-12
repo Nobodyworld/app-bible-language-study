@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
-import { existsSync } from "node:fs";
+import { existsSync, mkdirSync } from "node:fs";
+import path from "node:path";
 import { chromium } from "playwright-core";
 import { startStaticAppServer } from "../tools/serve-app.mjs";
 
@@ -126,13 +127,17 @@ async function checkWrappedTokenFragments(page, url, viewport) {
   await page.setViewportSize(viewport);
   await page.goto(`${url}/#/read/bsb/mark/9/3`, { waitUntil: "load" });
   await page.waitForSelector('.verse-row[data-verse="3"] .strong-token[data-strong-code="G3021"]');
+  await page.evaluate(() => document.fonts.ready);
   // Clone the real rendered verse under the complete production cascade. Cloning
   // isolates geometry from hover-driven Study state without fabricating source text.
   await page.evaluate(() => {
     const source = document.querySelector('.verse-row[data-verse="3"] .verse-body');
     const host = document.createElement("div");
     host.id = "strong-wrap-fixture";
-    host.style.cssText = "position:fixed;left:20px;top:140px;z-index:10000;background:var(--panel);width:calc(100vw - 40px)";
+    // The global reduced-motion rule sets a tiny transition-duration on *.
+    // Without transition-property:none even this fixture's width animates, and
+    // a synchronous sweep reads its initial width for every sample.
+    host.style.cssText = "position:fixed;left:20px;top:140px;z-index:10000;background:var(--panel);width:calc(100vw - 40px);transition-property:none";
     const body = source.cloneNode(true);
     body.querySelectorAll("[data-suppress-tooltip]").forEach((node) => node.removeAttribute("data-suppress-tooltip"));
     host.append(body);
@@ -159,28 +164,52 @@ async function checkWrappedTokenFragments(page, url, viewport) {
             Math.min(text.bottom, fragment.bottom) - Math.max(text.top, fragment.top) > 0.1));
       };
       const failures = [];
+      const style = getComputedStyle(node);
+      const canvas = document.createElement("canvas");
+      const context = canvas.getContext("2d");
+      context.font = style.font;
+      const label = node.textContent;
+      const words = label.trim().split(/\s+/);
+      const longestWord = Math.max(...words.map((word) => context.measureText(word).width));
+      const fullWidth = context.measureText(label).width;
+      const wrapWidth = Math.ceil((longestWord + fullWidth) / 2);
+      const setWidth = (width) => {
+        host.style.width = `${width}px`;
+        const measured = host.getBoundingClientRect().width;
+        if (Math.abs(measured - width) > 0.1) throw new Error(`Fixture width ${measured} does not match requested ${width}; transition=${getComputedStyle(host).transition}`);
+      };
+      const rect = ({ x, y, width, height }) => ({ x, y, width, height });
       let widths = 0;
       // Fractional widths catch the padding-only line fragment missed by the
       // former screenshots and ordinary whole-viewport smoke tests.
-      for (let width = 220; width <= maxWidth; width += 0.25) {
-        host.style.width = `${width}px`;
+      for (let width = Math.ceil(longestWord + 1); width <= maxWidth; width += 0.25) {
+        setWidth(width);
         widths += 1;
-        if (orphanFragments().length) failures.push(width);
+        if (orphanFragments().length && failures.length < 3) failures.push({ width, elements: [...node.getClientRects()].map(rect), text: [...range.getClientRects()].map(rect) });
       }
-      host.style.width = "85px";
-      const wrapsNaturally = node.getClientRects().length > 1 && orphanFragments().length === 0;
-      host.style.width = `${maxWidth}px`;
+      setWidth(wrapWidth);
+      const wrapsNaturally = words.length > 1 && longestWord < wrapWidth && wrapWidth < fullWidth && node.getClientRects().length > 1 && orphanFragments().length === 0;
+      const geometry = { wrapWidth, longestWord, fullWidth, elements: [...node.getClientRects()].map(rect), text: [...range.getClientRects()].map(rect) };
+      const source = document.querySelector('.verse-row[data-verse="3"] .strong-token[data-strong-code="G3021"]');
+      const relevantStyles = (element) => Object.fromEntries(["font", "whiteSpace", "wordBreak", "overflowWrap", "textWrap", "paddingInline", "marginInline", "userSelect"].map((key) => [key, getComputedStyle(element)[key]]));
+      const matchingCascade = JSON.stringify(relevantStyles(source)) === JSON.stringify(relevantStyles(node));
       return {
-        widths, failures, wrapsNaturally, unchanged: before === host.textContent,
+        widths, failures, wrapsNaturally, geometry, matchingCascade, font: style.font, fonts: document.fonts.status, unchanged: before === host.textContent,
         selectableText: range.toString(), label: node.textContent,
         keyboardTooltip: node.matches(":focus-visible") && getComputedStyle(node, "::after").display !== "none",
+        focusVisible: style.outlineStyle !== "none" && parseFloat(style.outlineWidth) > 0,
       };
     }, Math.min(viewport.width - 40, 940));
-    assert(result.failures.length === 0, `${viewport.width}/${mode}: padding-only Strong fragments at widths ${result.failures.slice(0, 10)}`);
-    assert(result.wrapsNaturally, `${viewport.width}/${mode}: multi-word Strong spans must still wrap naturally`);
+    assert(result.failures.length === 0, `${viewport.width}/${mode}: padding-only Strong fragments: ${JSON.stringify(result)}`);
+    assert(result.wrapsNaturally, `${viewport.width}/${mode}: multi-word Strong spans must still wrap naturally: ${JSON.stringify(result)}`);
+    assert(result.matchingCascade, `${viewport.width}/${mode}: fixture and Reader token styles differ`);
     assert(result.unchanged && result.selectableText === result.label && result.label.trim(), "Wrapping must preserve selectable scripture text");
-    assert(result.keyboardTooltip, `${viewport.width}/${mode}: keyboard tooltip was disabled`);
-    results.push({ viewport: viewport.width, mode, widths: result.widths });
+    assert(result.keyboardTooltip && result.focusVisible, `${viewport.width}/${mode}: keyboard preview or focus indication was disabled`);
+    if (process.env.BIBLEAPP_UI_EVIDENCE_DIR) {
+      mkdirSync(process.env.BIBLEAPP_UI_EVIDENCE_DIR, { recursive: true });
+      await page.screenshot({ path: path.join(process.env.BIBLEAPP_UI_EVIDENCE_DIR, `strong-wrap-${viewport.width}-${mode}.png`) });
+    }
+    results.push({ viewport: viewport.width, mode, widths: result.widths, wrapWidth: result.geometry.wrapWidth, label: result.label });
   }
   await page.evaluate(() => document.querySelector("#strong-wrap-fixture").remove());
   await page.emulateMedia({ forcedColors: "none", reducedMotion: "no-preference" });
@@ -239,7 +268,7 @@ async function main() {
       }
     }
     assert(errors.length === 0, `Strong preview regressions reported browser errors: ${JSON.stringify(errors)}`);
-    console.log(JSON.stringify({ status: "ok", hydratedPreview: true, lexicalReferences: true, wrapping }, null, 2));
+    console.log(JSON.stringify({ status: "ok", browser: browser.version(), hydratedPreview: true, lexicalReferences: true, wrapping }, null, 2));
   } finally {
     await browser.close();
     await new Promise((resolveClose) => server.close(resolveClose));
