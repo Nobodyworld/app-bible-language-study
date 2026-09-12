@@ -55,7 +55,7 @@ export async function checkDesktopUiPolish(client, runRoot) {
   await activate(client,'.verse-row[data-verse="18"] .strong-token[data-strong-code="G227"]');
   await client.waitFor("return document.querySelector('#detailContent .strong-code')?.textContent==='G227' && Boolean(document.querySelector('.word-origin-value .strong-inline-link[aria-label$=\"G1\"]')); ");
   assert.equal(await client.execute("return document.querySelector('.word-origin-value').querySelectorAll('button').length;"),2);
-  assert.match(await client.execute("return document.querySelector('.word-origin-value').textContent;"),/a- \(as a negative particle\)/);
+  assert.match(await client.execute("return document.querySelector('.word-origin-value').textContent;"),/^From a \(as a negative particle\) and lanthano/);
   await shot("g227-prefix");
   await activate(client,'.word-origin-value .strong-inline-link[aria-label$="G1"]',"\uE007");
   await client.waitFor("return document.querySelector('#detailContent .strong-code')?.textContent==='G1';");
