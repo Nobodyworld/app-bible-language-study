@@ -14,6 +14,7 @@ async function activate(client, selector, key = null) {
   await client.request("POST", `/session/${client.sessionId}/element/${id}/${key ? "value" : "click"}`, key ? {text:key,value:[key]} : {});
 }
 async function hover(client, selector) {
+  await client.execute("document.querySelector(arguments[0]).scrollIntoView({block:'center',inline:'nearest'}); return true;",[selector]);
   const node=await element(client,selector);
   await client.request("POST",`/session/${client.sessionId}/actions`,{actions:[{type:"pointer",id:"polish-pointer",parameters:{pointerType:"mouse"},actions:[{type:"pointerMove",duration:100,origin:node,x:0,y:0}]}]});
 }
@@ -60,11 +61,11 @@ export async function checkDesktopUiPolish(client, runRoot) {
   await client.waitFor("return document.querySelector('#detailContent .strong-code')?.textContent==='G1';");
   await route(client,"#/read/bsb/john/4/24",'.verse-row[data-verse="24"] .strong-token[data-strong-code="G4151"]');
   await activate(client,'.verse-row[data-verse="24"] .strong-token[data-strong-code="G4151"]');
-  await client.waitFor("return Boolean(document.querySelector('#detailContent .strong-inline-link[aria-label$=\"G5590\"]'));");
-  await hover(client,'#detailContent .strong-inline-link[aria-label$="G5590"]');
-  await client.waitFor("const n=document.querySelector('#detailContent .strong-inline-link[aria-label$=\"G5590\"]'); const t=document.querySelector('.language-tooltip-layer:not([hidden])'); return n?.dataset.previewReady==='true' && t?.textContent===n.dataset.tooltip;");
+  await client.waitFor("return Boolean(document.querySelector('#detailContent .concordance-text .strong-inline-link[aria-label$=\"G5590\"]'));");
+  await hover(client,'#detailContent .concordance-text .strong-inline-link[aria-label$="G5590"]');
+  await client.waitFor("const n=document.querySelector('#detailContent .concordance-text .strong-inline-link[aria-label$=\"G5590\"]'); const t=document.querySelector('.language-tooltip-layer:not([hidden])'); return n?.dataset.previewReady==='true' && t?.textContent===n.dataset.tooltip;");
   await shot("g4151-compare-preview");
-  await activate(client,'#detailContent .strong-inline-link[aria-label$="G5590"]');
+  await activate(client,'#detailContent .concordance-text .strong-inline-link[aria-label$="G5590"]');
   await client.waitFor("return document.querySelector('#detailContent .strong-code')?.textContent==='G5590';");
   assert.equal(await client.execute("return location.hash;"),"#/read/bsb/john/4/24");
   await route(client,"#/read/bsb/mark/9/3",'.verse-row[data-verse="3"] .strong-token[data-strong-code="G3021"]');

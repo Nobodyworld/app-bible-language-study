@@ -1292,3 +1292,11 @@ html[data-theme="light"] .fn-marker:focus-visible::before {
     transition: none;
   }
 }
+.toolbar-button.mobile-detail-launcher {
+  display: none;
+}
+@media (max-width: 768px) {
+  .toolbar-button.mobile-detail-launcher {
+    display: inline-flex;
+  }
+}

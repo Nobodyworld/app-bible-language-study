@@ -667,16 +667,6 @@ button:disabled {
   background: rgba(37, 99, 95, 0.14);
 }
 
-.mobile-detail-launcher {
-  display: none;
-}
-
-@media (max-width: 768px) {
-  .mobile-detail-launcher {
-    display: inline-flex;
-  }
-}
-
 .detail-workspace {
   flex: 1 1 auto;
   min-width: 0;

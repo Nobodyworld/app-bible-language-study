@@ -20,6 +20,25 @@ export function splitCss(value, delimiter = ",") {
 }
 
 export function cssRules(source, contexts = [], offset = 0) {
+  // Replace comments with equal-length whitespace before scanning so an inline
+  // selector comment cannot hide its owner or change source offsets. Quoted
+  // comment-like text is ordinary CSS data and must remain intact.
+  let sanitized = "", sourceQuote = "";
+  for (let i = 0; i < source.length; i += 1) {
+    const c = source[i];
+    if (sourceQuote) {
+      sanitized += c;
+      if (c === "\\") sanitized += source[++i] || "";
+      else if (c === sourceQuote) sourceQuote = "";
+    } else if (c === '"' || c === "'") { sourceQuote = c; sanitized += c; }
+    else if (c === "/" && source[i + 1] === "*") {
+      const end = source.indexOf("*/", i + 2);
+      if (end < 0) throw new Error("Unbalanced CSS comment");
+      sanitized += source.slice(i, end + 2).replace(/[^\r\n]/g, " ");
+      i = end + 1;
+    } else sanitized += c;
+  }
+  source = sanitized;
   const rules = [];
   let start = 0, open = -1, depth = 0, quote = "", comment = false;
   for (let i = 0; i < source.length; i += 1) {
@@ -35,7 +54,7 @@ export function cssRules(source, contexts = [], offset = 0) {
       if (/^@(media|container|supports|layer)\b/.test(selector)) {
         rules.push(...cssRules(body, [...contexts, selector], offset + open + 1));
       } else if (!selector.startsWith("@")) {
-        const declarations = splitCss(body.replace(/\/\*[\s\S]*?\*\//g, ""), ";").map(value => {
+        const declarations = splitCss(body, ";").map(value => {
           const colon = value.indexOf(":");
           return { property:value.slice(0, colon).trim(), value:value.slice(colon + 1).trim() };
         });
@@ -81,7 +100,7 @@ const COMPONENT_OWNERS = [
   ["styles-context.css", /\.(?:panel-context|verse-context|detail-context|detail-nav|detail-floating|word-meaning|scope-mark|study-marks-trigger)/],
   ["styles-workspace.css", /study-workspace-width|\.detail-header|\.detail-title-block|\.detail-mode-status/],
   ["styles-shell.css", /\.(?:app-shell|app-header|brand|home-button|theme-toggle|theme-option|theme-switch|header-status|reader-control|reader-picker|book-picker|chapter-picker|detail-pane\b|detail-content|detail-work-area)/],
-  ["styles-reader.css", /\.(?:reader-pane|reader-nav|verse-(?:row|body|line|number|actions|text|content|study)|strong-token|reader-text-segment|fn-marker|reader-target-badges|reader-context|chapter-(?:title|heading|content|stepper|nav|toolbar|actions|info|tools)|action-group|toolbar-button)/],
+  ["styles-reader.css", /\.(?:mobile-detail-launcher|reader-pane|reader-nav|verse-(?:row|body|line|number|actions|text|content|study)|strong-token|reader-text-segment|fn-marker|reader-target-badges|reader-context|chapter-(?:title|heading|content|stepper|nav|toolbar|actions|info|tools)|action-group|toolbar-button)/],
   ["styles-study.css", /\.(?:footnote-scripture|translation-(?:alignment|token|rendering)|alignment-|workspace-map|study-(?:mark|data)-|manage-labels|storage-details|technical-details|language-breakdown|mark-(?:list|pill|glyph)|original-language-|interlinear-|transliteration-symbol)/],
 ];
 const STRUCTURE = /^(?:display|position|inset(?:-.+)?|top|right|bottom|left|float|clear|z-index|(?:min-|max-)?(?:width|height|inline-size|block-size)|(?:grid|flex|align|justify|place|gap|row-gap|column-gap|padding|margin|overflow|container|contain|box-sizing|vertical-align)(?:-.+)?)$/;
