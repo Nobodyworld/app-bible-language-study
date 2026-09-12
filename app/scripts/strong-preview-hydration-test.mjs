@@ -48,7 +48,14 @@ async function waitForEntry(page, code) {
 }
 
 async function visibleTooltipSnapshot(target) {
-  await target.page().waitForFunction(() => Boolean(document.querySelector(".language-tooltip-layer:not([hidden])")));
+  await target.evaluate(async () => {
+    const deadline = performance.now() + 15000;
+    while (performance.now() < deadline) {
+      if (document.querySelector(".language-tooltip-layer:not([hidden])")) return;
+      await new Promise((resolveFrame) => requestAnimationFrame(resolveFrame));
+    }
+    throw new Error("Timed out waiting for the fixed tooltip layer.");
+  });
   return target.evaluate((node) => {
     const layer = document.querySelector(".language-tooltip-layer:not([hidden])");
     const rect = layer?.getBoundingClientRect();
