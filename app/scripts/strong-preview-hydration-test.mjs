@@ -8,6 +8,10 @@ import { startStaticAppServer } from "../tools/serve-app.mjs";
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
+assert.equal = (actual, expected, message) => assert(
+  actual === expected,
+  `${message}: expected ${JSON.stringify(expected)}, received ${JSON.stringify(actual)}`,
+);
 
 function delay(ms) {
   return new Promise((resolveDelay) => setTimeout(resolveDelay, ms));
