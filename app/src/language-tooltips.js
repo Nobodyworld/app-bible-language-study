@@ -198,7 +198,7 @@ export function setTransliterationTextWithTooltips(node, text, options = {}) {
   node.dataset.transliterationConvention = "bundled-strongs-interlinear";
   node.setAttribute(
     "aria-description",
-    `${sourceLabel}; scholarly transliteration, not exact pronunciation.`,
+    `${sourceLabel}. Scholarly transliteration is kept separate from phonetic spelling and is not exact pronunciation.`,
   );
   node.title = `${sourceLabel}; scholarly transliteration, not exact pronunciation.`;
   node.replaceChildren();
