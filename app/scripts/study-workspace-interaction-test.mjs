@@ -180,7 +180,6 @@ async function main() {
     const initial = await workspaceState(page);
     assertCycleState(initial, "standard", "default");
     assert.equal(initial.localStorageMode, null, "Default Standard width should not require a stored preference");
-    assert.equal(document === undefined, false, "unreachable");
 
     const widthByMode = { standard: initial.detailRect?.width ?? 0 };
     const expanded = await activateCycle(page, "click", "expanded");
