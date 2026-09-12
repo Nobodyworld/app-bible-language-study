@@ -34,21 +34,11 @@ async function waitFor(page, predicate, timeoutMs = 15000) {
 }
 
 async function click(page, selector) {
-  await page.evaluate((targetSelector) => {
-    const target = document.querySelector(targetSelector);
-    if (!target) throw new Error(`Target not found: ${targetSelector}`);
-    target.scrollIntoView({ block: "center", inline: "nearest" });
-    target.click();
-  }, selector);
+  await page.locator(selector).first().click();
 }
 
 async function clickButtonByText(page, text) {
-  await page.evaluate((label) => {
-    const target = [...document.querySelectorAll("button")].find((button) => button.textContent.trim() === label);
-    if (!target) throw new Error(`Button not found: ${label}`);
-    target.scrollIntoView({ block: "center", inline: "nearest" });
-    target.click();
-  }, text);
+  await page.locator("button").filter({hasText:new RegExp(`^${text}$`)}).first().click();
 }
 
 async function waitForEntry(page, code) {
@@ -236,11 +226,14 @@ async function main() {
     await waitFor(page, () => [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Int"));
     await clickButtonByText(page, "Int");
     await waitFor(page, () => Boolean(document.querySelector(".original-language-related-link")));
-    const related = page.locator(".original-language-related-link").first();
+    // Lazy enhancement can insert earlier superscription links after this
+    // interaction. Keep the identity actually hovered instead of rereading first().
+    const relatedLabel = await page.locator(".original-language-related-link").first().getAttribute("aria-label");
+    const related = page.getByRole("button", {name:relatedLabel,exact:true}).first();
     await related.hover();
-    await waitFor(page, () => document.querySelector(".original-language-related-link")?.dataset.previewReady === "true");
-    const preview = await page.evaluate(() => {
-      const link = document.querySelector(".original-language-related-link");
+    await page.waitForFunction(label => [...document.querySelectorAll(".original-language-related-link")]
+      .some(node => node.getAttribute("aria-label") === label && node.dataset.previewReady === "true"), relatedLabel);
+    const preview = await related.evaluate((link) => {
       const layer = document.querySelector(".language-tooltip-layer:not([hidden])");
       const panel = document.querySelector(".detail-pane");
       const tooltipRect = layer?.getBoundingClientRect();
