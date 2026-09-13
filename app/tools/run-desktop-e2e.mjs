@@ -8,6 +8,7 @@ import { createServer } from "node:net";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { ensureDesktopWebDriverTooling } from "./desktop-webdriver-tooling.mjs";
+import { checkDesktopUiPolish } from "./desktop-ui-polish-acceptance.mjs";
 
 const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const BINARY = process.env.BIBLEAPP_E2E_APPLICATION
@@ -346,6 +347,7 @@ driver.stderr.on("data", (chunk) => { process.stderr.write(chunk); void driverLo
 
 const client = new WebDriverClient(driverPort);
 let targetId;
+let uiPolish;
 try {
   await client.waitReady();
   await client.createSession(BINARY);
@@ -365,6 +367,7 @@ try {
   await checkRetiredJobUi(client);
   await client.execute("document.querySelector('.diagnostic-section').scrollIntoView({block:'start'}); return true;");
   await client.screenshot(path.join(runRoot, "poll-compatibility.png"));
+  uiPolish = await checkDesktopUiPolish(client, runRoot);
   await client.closeSession();
 } finally {
   await client.closeSession();
@@ -379,6 +382,7 @@ if (!SKIP_BUILD) {
 }
 console.log(JSON.stringify({
   desktop_e2e: "PASS",
+  ui_polish: uiPolish,
   application_mode: SKIP_BUILD ? "supplied" : "debug-build",
   profile_id: PROFILE_ID,
   driver: "tauri-driver",

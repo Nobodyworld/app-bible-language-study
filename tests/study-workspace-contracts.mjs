@@ -1,13 +1,14 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { readAppStyles } from "./helpers/app-styles.mjs";
 import { readFile } from "node:fs/promises";
 
 const sources = Object.fromEntries(await Promise.all(
   [
     ["index", "../app/index.html"],
     ["css", "../app/styles.css"],
-    ["portraitCss", "../app/styles-portrait.css"],
+    ["portraitCss", "../app/styles-workspace.css"],
     ["contextCss", "../app/styles-context.css"],
     ["app", "../app/app.js"],
     ["activeWord", "../app/src/active-word-context.js"],
@@ -25,7 +26,7 @@ const sources = Object.fromEntries(await Promise.all(
     ["strongView", "../app/src/views/strongs-view.js"],
     ["interlinearView", "../app/src/views/interlinear-translation-view.js"],
     ["stores", "../app/src/stores.js"],
-  ].map(async ([name, path]) => [name, await readFile(new URL(path, import.meta.url), "utf8")]),
+  ].map(async ([name, path]) => [name, path.endsWith(".css") ? await readAppStyles() : await readFile(new URL(path, import.meta.url), "utf8")]),
 ));
 
 assert(
@@ -38,9 +39,18 @@ assert(
 );
 assert(
   /id="studyWorkspaceWidthControls"[^>]*role="group"[^>]*aria-label="Study workspace width"/.test(sources.index) &&
-    (sources.index.match(/data-study-workspace-width-mode="(?:compact|standard|expanded)"/g) || []).length === 3 &&
-    (sources.index.match(/aria-pressed="true">Standard</g) || []).length === 1,
-  "The header must expose one labeled three-button pressed-state width group.",
+    (sources.index.match(/data-study-workspace-width-cycle/g) || []).length === 1 &&
+    /id="studyWorkspaceWidthCycle"[\s\S]*?data-study-workspace-width-mode="standard"[\s\S]*?data-study-workspace-width-current="standard"[\s\S]*?data-study-workspace-width-next="expanded"/.test(sources.index) &&
+    !/id="studyWorkspaceWidthCycle"[\s\S]{0,700}?aria-pressed=/.test(sources.index),
+  "The header must expose one stateful Study width cycle control rather than three pressed-state buttons.",
+);
+assert(
+  /STUDY_WORKSPACE_WIDTH_SEQUENCE/.test(sources.width) &&
+    /export function nextStudyWorkspaceWidth/.test(sources.width) &&
+    /data-study-workspace-width-current/.test(sources.width) &&
+    /data-study-workspace-width-next/.test(sources.width) &&
+    /isCycleControl\(control\)[\s\S]*?nextStudyWorkspaceWidth\(currentRootMode\(root\)\)/.test(sources.width),
+  "The width owner must cycle Compact → Standard → Expanded through the single control while exposing current and next state.",
 );
 assert(
   /id="detailWorkArea" class="detail-work-area"/.test(sources.index) &&
@@ -69,15 +79,14 @@ assert(
   "The Detail pane must be the single named inline-size authority for the Study workspace.",
 );
 assert(
-  /@container\s+study-workspace\s*\(min-width:\s*320px\)/.test(sources.portraitCss) &&
-    /@container\s+study-workspace\s*\(min-width:\s*420px\)/.test(sources.portraitCss) &&
+  /@container\s+study-workspace\s*\(min-width:\s*318px\)[\s\S]*?--study-header-layout-band:\s*wide[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto/.test(sources.portraitCss) &&
+    !/@container\s+study-workspace\s*\(min-width:\s*420px\)/.test(sources.portraitCss) &&
     /--study-header-layout-band:\s*narrow/.test(sources.portraitCss) &&
-    /--study-header-layout-band:\s*constrained/.test(sources.portraitCss) &&
-    /--study-header-layout-band:\s*wide/.test(sources.portraitCss),
-  "Desktop Study headers must expose measured narrow, constrained, and wide container bands.",
+    !/--study-header-layout-band:\s*constrained/.test(sources.portraitCss),
+  "Desktop Study headers must keep the one-row wide band from the 320px compact minimum, with stacked fallback only below it.",
 );
 assert(
-  /\.detail-header\s+:is\(h2, button, \.detail-mode-status, \.study-workspace-width-label\),[\s\S]*?word-break:\s*normal;[\s\S]*?overflow-wrap:\s*normal;[\s\S]*?hyphens:\s*none;/.test(sources.css) &&
+  /\.detail-header\s+:is\(h2, button, \.detail-mode-status, \.study-workspace-width-label\)[\s\S]*?word-break:\s*normal;[\s\S]*?overflow-wrap:\s*normal;[\s\S]*?hyphens:\s*none;/.test(sources.css) &&
     !/\.detail-header-main h2\s*{[^}]*overflow-wrap:\s*anywhere/.test(sources.css) &&
     !/study-header-layout-band/.test(`${sources.app}\n${sources.width}\n${sources.portrait}`),
   "Study UI text must wrap only at normal boundaries and container-band ownership must remain CSS-only.",
@@ -93,7 +102,7 @@ assert(
   "Only the established mobile breakpoint may collapse the shell or hide width controls.",
 );
 assert(
-  /\.reader-pane,[\s\S]*?\.detail-pane\s*{[\s\S]*?min-width:\s*0/.test(sources.css) &&
+  ["reader-pane", "detail-pane"].every(name => new RegExp(`\\.${name}\\s*\\{[^}]*min-width:\\s*0`).test(sources.css)) &&
     /\.detail-pane\s*{[\s\S]*?position:\s*sticky;[\s\S]*?height:\s*calc\(100dvh - 88px\);[\s\S]*?overflow-y:\s*hidden/.test(sources.css) &&
     /\.detail-content\s*{[\s\S]*?min-height:\s*0;[\s\S]*?overflow-x:\s*hidden;[\s\S]*?overflow-y:\s*auto;[\s\S]*?overscroll-behavior-y:\s*contain/.test(sources.css),
   "The bounded pane and #detailContent must own an independent, horizontal-safe scroll region.",
@@ -276,7 +285,7 @@ assert.equal(
 assert(
   /\.word-meaning-menu\s*{[\s\S]*?position:\s*fixed/.test(sources.css) &&
     /\.word-meaning-contained\s*{[\s\S]*?display:\s*grid/.test(sources.css) &&
-    !/\.word-meaning-contained\s*{[\s\S]*?position:\s*fixed/.test(sources.css),
+    !/\.word-meaning-contained\s*{[^}]*position:\s*fixed/.test(sources.css),
   "The legacy default Meaning dialog may remain fixed, but contained Meaning must not be viewport-positioned.",
 );
 assert(
@@ -284,4 +293,4 @@ assert(
   "The completed workspace must retain reduced-motion suppression.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 41 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 42 }, null, 2));

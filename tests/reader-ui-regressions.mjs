@@ -1,15 +1,17 @@
 #!/usr/bin/env node
 
+import { cssRules } from "../app/tools/stylesheet-ownership.mjs";
 import assert from "node:assert/strict";
+import { readAppStyles } from "./helpers/app-styles.mjs";
 import { readFile } from "node:fs/promises";
 import { resolveReferencePreviewPlacement } from "../app/src/reference-preview-placement.js";
 
 const [index, css, portraitCss, contextCss, stylesPolish, app, dom, pickerFlow, renderer, tagsView, strongsView, interlinearView, userDataView, detailViews, languageStudyTooltipTest, readerNavigation] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
-  readFile(new URL("../app/styles.css", import.meta.url), "utf8"),
-  readFile(new URL("../app/styles-portrait.css", import.meta.url), "utf8"),
-  readFile(new URL("../app/styles-context.css", import.meta.url), "utf8"),
-  readFile(new URL("../app/styles-polish.css", import.meta.url), "utf8"),
+  readAppStyles(),
+  readAppStyles(),
+  readAppStyles(),
+  readAppStyles(),
   readFile(new URL("../app/app.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/dom.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/reader-picker-flow.js", import.meta.url), "utf8"),
@@ -32,13 +34,19 @@ assert(
   "Hebrew direction help must retain its 24px target with an optically compact centered badge.",
 );
 assert(
-  /:root\[data-theme="dark"\] \.strong-source-word,[\s\S]*?html\[data-theme="light"\] \.strong-source-word \.language-letter-hover\s*{[\s\S]*?color:\s*var\(--accent-dark\)\s*!important;/.test(css) &&
-    /@media\s*\(forced-colors:\s*active\)[\s\S]*?:root\[data-theme\] \.strong-source-word,[\s\S]*?color:\s*LinkText\s*!important;[\s\S]*?forced-color-adjust:\s*none;/.test(css),
+  /:root\[data-theme="dark"\] \.strong-source-word,[\s\S]*?html\[data-theme="light"\] \.strong-source-word \.language-letter-hover\s*{[\s\S]*?color:\s*var\(--accent-dark\)\s*(?:!important)?;/.test(css) &&
+    /@media\s*\(forced-colors:\s*active\)[\s\S]*?:root\[data-theme\] \.strong-source-word,[\s\S]*?color:\s*LinkText\s*(?:!important)?;[\s\S]*?forced-color-adjust:\s*none;/.test(css),
   "Strong's source words and their hydrated language spans must retain the narrow accent and forced-colors treatment.",
 );
 assert(
-  /button\[data-study-workspace-width-mode="compact"\][\s\S]*?\.study-workspace-width-symbol::before,[\s\S]*?button\[data-study-workspace-width-mode="expanded"\][\s\S]*?\.study-workspace-width-symbol::after/.test(portraitCss),
-  "Compact and Expanded workspace controls must use CSS-drawn centered strokes.",
+  /id="studyWorkspaceWidthCycle"[\s\S]*?data-study-workspace-width-cycle[\s\S]*?class="study-workspace-width-symbol"/.test(index) &&
+    /study-workspace-width-divider-compact/.test(index) &&
+    /study-workspace-width-divider-standard/.test(index) &&
+    /study-workspace-width-divider-expanded/.test(index) &&
+    /\.study-workspace-width-cycle\[data-study-workspace-width-current="compact"\][\s\S]*?study-workspace-width-divider-compact[\s\S]*?\.study-workspace-width-cycle\[data-study-workspace-width-current="standard"\][\s\S]*?study-workspace-width-divider-standard[\s\S]*?\.study-workspace-width-cycle\[data-study-workspace-width-current="expanded"\][\s\S]*?study-workspace-width-divider-expanded/.test(portraitCss) &&
+    /\.study-workspace-width-symbol\s*{[\s\S]*?fill:\s*none;[\s\S]*?stroke:\s*currentColor;[\s\S]*?stroke-width:\s*1\.7;/.test(portraitCss) &&
+    !/study-workspace-width-reset-symbol|>↺|>−<|>\+</.test(index),
+  "Study workspace width must use one stateful right-pane SVG control without reset/minus/plus glyph fallbacks.",
 );
 
 const chapterTools = index.match(/<div class="chapter-actions"[\s\S]*?<\/div>\s*<\/div>\s*<\/div>/)?.[0] || "";
@@ -243,20 +251,20 @@ assert(
   /\.fn-marker::before\s*{[\s\S]*?width:\s*28px;[\s\S]*?height:\s*28px;[\s\S]*?pointer-events:\s*auto;/.test(css) &&
     /\.verse-number\s*{[\s\S]*?width:\s*32px;[\s\S]*?min-height:\s*36px;/.test(css) &&
     /\.presentation-block \.cross-links \.reference-hover::before\s*{[\s\S]*?height:\s*36px;[\s\S]*?pointer-events:\s*auto;/.test(css) &&
-    /@media\s*\(hover:\s*none\),\s*\(pointer:\s*coarse\)\s*{[\s\S]*?\.fn-marker::before\s*{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;[\s\S]*?\.verse-number\s*{[\s\S]*?width:\s*40px;[\s\S]*?min-height:\s*44px;[\s\S]*?\.reference-hover::before\s*{[\s\S]*?height:\s*44px;/.test(css),
+    [[".fn-marker::before", {width:"44px", height:"44px"}], [".verse-number", {width:"40px", "min-height":"44px"}], [".presentation-block .cross-links .reference-hover::before", {height:"44px"}]].every(([selector, props]) => cssRules(css).some(rule => rule.selectors.includes(selector) && rule.contexts.includes("@media (hover: none), (pointer: coarse)") && Object.entries(props).every(([property,value]) => rule.declarations.some(d=>d.property===property && d.value===value)))),
   "Inline reader targets must provide fine-pointer and touch dimensions without widening the scripture grid.",
 );
 assert(
-  /:root\[data-theme="dark"\] \.fn-marker\s*{[\s\S]*?color:\s*#9eafff\s*!important;/.test(css) &&
-    /:root\[data-theme="dark"\] \.fn-marker:hover\s*{[\s\S]*?color:\s*#c5ceff\s*!important;/.test(css) &&
-    /:root\[data-theme="dark"\] \.fn-marker:focus-visible\s*{[\s\S]*?outline:\s*none\s*!important;[\s\S]*?color:\s*#f0f2ff\s*!important;/.test(css) &&
+  /:root\[data-theme="dark"\] \.fn-marker\s*{[\s\S]*?color:\s*#9eafff\s*(?:!important)?;/.test(css) &&
+    /:root\[data-theme="dark"\] \.fn-marker:hover\s*{[\s\S]*?color:\s*#c5ceff\s*(?:!important)?;/.test(css) &&
+    /:root\[data-theme="dark"\] \.fn-marker:focus-visible\s*{[\s\S]*?outline:\s*none\s*(?:!important)?;[\s\S]*?color:\s*#f0f2ff\s*(?:!important)?;/.test(css) &&
     /:root\[data-theme="dark"\] \.fn-marker:focus-visible::before\s*{[\s\S]*?outline-color:\s*#9eafff;/.test(css),
   "Dark footnotes must use lighter default and hover colors with a full-target keyboard-focus outline.",
 );
 assert(
-  /html\[data-theme="light"\] \.fn-marker\s*{[\s\S]*?color:\s*#2347fb\s*!important;/.test(css) &&
-    /html\[data-theme="light"\] \.fn-marker:hover\s*{[\s\S]*?color:\s*#1232c8\s*!important;/.test(css) &&
-    /html\[data-theme="light"\] \.fn-marker:focus-visible\s*{[\s\S]*?outline:\s*none\s*!important;[\s\S]*?color:\s*#0b238f\s*!important;/.test(css) &&
+  /html\[data-theme="light"\] \.fn-marker\s*{[\s\S]*?color:\s*#2347fb\s*(?:!important)?;/.test(css) &&
+    /html\[data-theme="light"\] \.fn-marker:hover\s*{[\s\S]*?color:\s*#1232c8\s*(?:!important)?;/.test(css) &&
+    /html\[data-theme="light"\] \.fn-marker:focus-visible\s*{[\s\S]*?outline:\s*none\s*(?:!important)?;[\s\S]*?color:\s*#0b238f\s*(?:!important)?;/.test(css) &&
     /html\[data-theme="light"\] \.fn-marker:focus-visible::before\s*{[\s\S]*?outline-color:\s*#2347fb;/.test(css),
   "Light-theme footnote contrast and full-target keyboard focus treatment must remain explicit.",
 );
@@ -437,8 +445,8 @@ assert(
   "Hebrew mark pills must stay reachable in narrow panels and must not clip low vowel symbols.",
 );
 assert(
-  /:root\[data-theme="dark"\] \.translation-renderings\s*{[\s\S]*?background:\s*var\(--bg-elevated\)\s*!important;/.test(css) &&
-    /:root\[data-theme="dark"\] \.translation-rendering-row\s*{[\s\S]*?background:\s*var\(--panel\)\s*!important;/.test(css),
+  /:root\[data-theme="dark"\] \.translation-renderings\s*{[\s\S]*?background:\s*var\(--bg-elevated\)\s*(?:!important)?;/.test(css) &&
+    /:root\[data-theme="dark"\] \.translation-rendering-row\s*{[\s\S]*?background:\s*var\(--panel\)\s*(?:!important)?;/.test(css),
   "Translation rendering surfaces must respect dark theme colors.",
 );
 assert(

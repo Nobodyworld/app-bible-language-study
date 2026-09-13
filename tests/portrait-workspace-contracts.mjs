@@ -1,12 +1,14 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { cssRules } from "../app/tools/stylesheet-ownership.mjs";
+import { readAppStyles } from "./helpers/app-styles.mjs";
 import { readFile } from "node:fs/promises";
 
 const [index, css, readerCss, runtime, pickerFlow, contextTabs] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
-  readFile(new URL("../app/styles-portrait.css", import.meta.url), "utf8"),
-  readFile(new URL("../app/styles.css", import.meta.url), "utf8"),
+  readAppStyles(),
+  readAppStyles(),
   readFile(new URL("../app/src/portrait-workspace.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/reader-picker-flow.js", import.meta.url), "utf8"),
   readFile(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8"),
@@ -21,60 +23,68 @@ assert(
   "The portrait brand backdrop must size to its title and retain trailing breathing room.",
 );
 assert(
-  /grid-template-areas:\s*[\s\S]*?"brand status \. theme"[\s\S]*?"controls controls controls controls"/.test(css),
-  "Portrait desktop must place status beside the brand and reader controls on the final header row.",
+  cssRules(css).some(rule => rule.selectors.includes(".app-header") &&
+    rule.contexts.includes("@media (min-width: 769px) and (max-width: 1100px)") &&
+    rule.declarations.some(d => d.property === "grid-template-areas" && d.value === '"brand controls status theme"')),
+  "Desktop reflow must keep the global header in one row instead of forcing reader controls onto an oversized second row.",
 );
 assert(
-  /@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]*?\.reader-controls\s*{[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/.test(css),
-  "Portrait desktop reader controls must remain one compact three-column row.",
+  cssRules(css).some(rule => rule.selectors.includes(".reader-controls") &&
+    rule.contexts.includes("@media (min-width: 769px) and (max-width: 1100px)") &&
+    rule.declarations.some(d => d.property === "grid-template-columns" &&
+      d.value === "minmax(0, 1.25fr) minmax(0, 1.15fr) minmax(0, 0.65fr)")),
+  "Desktop reader controls must keep three shrinkable columns with more room for translation and book names than chapter numbers.",
 );
 assert(
   /@media\s*\(min-width:\s*641px\)\s*and\s*\(max-width:\s*960px\)[\s\S]*?@container\s+reader-pane\s*\(min-width:\s*550px\)/.test(readerCss),
   "Portrait chapter-action labels must appear only when the measured reader pane can keep one action row.",
 );
 
-const widthButtons = index.match(/<button[\s\S]*?data-study-workspace-width-mode="(?:compact|standard|expanded)"[\s\S]*?<\/button>/g) || [];
-assert.equal(widthButtons.length, 3, "The workspace must retain exactly three width controls.");
-const widthExpectations = [
-  { mode: "compact", symbol: "−", title: "Compact study workspace" },
-  { mode: "standard", symbol: "↺", title: "Standard study workspace" },
-  { mode: "expanded", symbol: "+", title: "Expanded study workspace" },
-];
-for (const [buttonIndex, expectation] of widthExpectations.entries()) {
-  const button = widthButtons[buttonIndex];
+const widthCycle = index.match(/<button\b(?=[^>]*\bid="studyWorkspaceWidthCycle")[^>]*>[\s\S]*?<\/button>/)?.[0] || "";
+assert(widthCycle, "The workspace must expose one Study width cycle control.");
+assert.equal((index.match(/data-study-workspace-width-cycle/g) || []).length, 1, "The workspace must retain exactly one width cycle control.");
+assert(
+  /data-study-workspace-width-mode="standard"/.test(widthCycle) &&
+    /data-study-workspace-width-current="standard"/.test(widthCycle) &&
+    /data-study-workspace-width-next="expanded"/.test(widthCycle) &&
+    /aria-label="Study workspace width: Standard\. Change to Expanded\."/.test(widthCycle) &&
+    /title="Study workspace width: Standard \(click for Expanded\)"/.test(widthCycle) &&
+    !/aria-pressed=/.test(widthCycle),
+  "The single width cycle must declare truthful Standard-to-Expanded startup state without radio-button semantics.",
+);
+for (const mode of ["compact", "standard", "expanded"]) {
   assert(
-    new RegExp(`aria-label="Use ${expectation.mode} study workspace"`).test(button),
-    `${expectation.mode} width control needs an accessible name.`,
-  );
-  assert(
-    button.includes(`title="${expectation.title}"`),
-    `${expectation.mode} width control needs an accurate tooltip.`,
-  );
-  assert(
-    /class="study-workspace-width-symbol(?: [^"]*)?"/.test(button),
-    `${expectation.mode} width control must render its compact symbol.`,
-  );
-  assert(
-    button.includes(`>${expectation.symbol}</span>`),
-    `${expectation.mode} width control renders the wrong symbol.`,
+    new RegExp(`study-workspace-width-divider-${mode}`).test(widthCycle),
+    `${mode} must have deterministic right-pane divider artwork inside the one width control.`,
   );
 }
 assert(
-  /data-study-workspace-width-mode="compact"[\s\S]*?>−<\/span>[\s\S]*?data-study-workspace-width-mode="standard"[\s\S]*?>↺<\/span>[\s\S]*?data-study-workspace-width-mode="expanded"[\s\S]*?>\+<\/span>/.test(index),
-  "Width presets must read left-to-right as narrower, Standard reset, then wider.",
+  /class="study-workspace-width-frame"/.test(widthCycle) &&
+    /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*0;/.test(css) &&
+    /\.study-workspace-width-symbol\s*{[\s\S]*?display:\s*block;[\s\S]*?width:\s*18px;[\s\S]*?height:\s*16px;[\s\S]*?fill:\s*none;[\s\S]*?stroke:\s*currentColor;[\s\S]*?stroke-width:\s*1\.7;/.test(css) &&
+    /\.study-workspace-width-cycle\[data-study-workspace-width-current="compact"\][\s\S]*?study-workspace-width-divider-compact[\s\S]*?\.study-workspace-width-cycle\[data-study-workspace-width-current="standard"\][\s\S]*?study-workspace-width-divider-standard[\s\S]*?\.study-workspace-width-cycle\[data-study-workspace-width-current="expanded"\][\s\S]*?study-workspace-width-divider-expanded/.test(css),
+  "The single width control must use a centered stateful right-pane icon inside one 32px target.",
 );
 assert(
-  /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*0;/.test(css) &&
-    /button\[data-study-workspace-width-mode="compact"\][\s\S]*?\.study-workspace-width-symbol::before,[\s\S]*?button\[data-study-workspace-width-mode="expanded"\][\s\S]*?\.study-workspace-width-symbol::after\s*{[\s\S]*?grid-area:\s*1 \/ 1;[\s\S]*?width:\s*10px;[\s\S]*?height:\s*2px;/.test(css) &&
-    /button\[data-study-workspace-width-mode="expanded"\][\s\S]*?\.study-workspace-width-symbol::after\s*{[\s\S]*?width:\s*2px;[\s\S]*?height:\s*10px;/.test(css) &&
-    /\.study-workspace-width-reset-symbol\s*{[\s\S]*?font-size:\s*14px;/.test(css),
-  "Width controls must use compact 32px targets with centered Compact and Expanded strokes and an unchanged Standard reset glyph.",
+  !index.includes("study-workspace-width-reset-symbol") && !index.includes(">↺</") && !index.includes(">−</") && !index.includes(">+</"),
+  "Study width must not fall back to reset/minus/plus font glyphs.",
+);
+assert(
+  /id="clearDetail"[\s\S]*?<span class="detail-header-icon-label">Clear<\/span>[\s\S]*?<svg/.test(index) &&
+    /id="hideStudyWorkspace"[\s\S]*?<span id="hideStudyWorkspaceLabel" class="detail-header-icon-label">Hide<\/span>[\s\S]*?<svg/.test(index) &&
+    /\.detail-header-icon-label\s*{[\s\S]*?display:\s*inline-flex;[\s\S]*?align-items:\s*center;[\s\S]*?min-height:\s*14px;[\s\S]*?line-height:\s*1;/.test(css),
+  "Clear and Hide must expose explicit label boxes aligned with their SVG artwork.",
+);
+assert(
+  /id="hideStudyWorkspace"[\s\S]*?data-workspace-direction="collapse-right"[\s\S]*?class="study-workspace-panel-arrow-shaft" d="M10 12H18"[\s\S]*?class="study-workspace-panel-arrow-head" d="M15 9l3 3-3 3"/.test(index) &&
+    /id="showStudyWorkspace"[\s\S]*?data-workspace-direction="restore-left"[\s\S]*?class="study-workspace-panel-arrow-shaft" d="M18 12H10"[\s\S]*?class="study-workspace-panel-arrow-head" d="M13 9l-3 3 3 3"/.test(index),
+  "Right-side Hide must point outward/right and Show must point inward/left.",
 );
 assert(
   /@media\s*\(min-width:\s*769px\)[\s\S]*?\.detail-header\s*{[\s\S]*?--study-header-layout-band:\s*narrow;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?\.detail-header-main\s*{\s*display:\s*contents;/.test(css) &&
-    /@container\s+study-workspace\s*\(min-width:\s*320px\)[\s\S]*?--study-header-layout-band:\s*constrained;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto;/.test(css) &&
-    /@container\s+study-workspace\s*\(min-width:\s*420px\)[\s\S]*?--study-header-layout-band:\s*wide;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;/.test(css),
-  "Desktop detail controls must progress through measured three-row, two-row, and one-row container bands.",
+    /@container\s+study-workspace\s*\(min-width:\s*318px\)[\s\S]*?--study-header-layout-band:\s*wide;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;[\s\S]*?\.detail-title-block\s*{[\s\S]*?grid-row:\s*1;[\s\S]*?\.study-workspace-width-controls\s*{[\s\S]*?grid-row:\s*1;[\s\S]*?\.detail-header-actions\s*{[\s\S]*?grid-row:\s*1;/.test(css) &&
+    !/@container\s+study-workspace\s*\(min-width:\s*420px\)/.test(css),
+  "Desktop Study controls must stay on one header row from the compact 320px pane minimum upward.",
 );
 assert(
   /\.detail-header-icon-button\s*{[\s\S]*?min-width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*11px;/.test(css),
@@ -166,8 +176,13 @@ assert(
 );
 
 assert(
-  /@media\s*\(hover:\s*none\),\s*\(pointer:\s*coarse\)\s*{[\s\S]*?\.fn-marker::before\s*{[\s\S]*?width:\s*44px;[\s\S]*?height:\s*44px;[\s\S]*?\.verse-number\s*{[\s\S]*?width:\s*40px;[\s\S]*?min-height:\s*44px;[\s\S]*?\.reference-hover::before\s*{[\s\S]*?height:\s*44px;/.test(readerCss),
+  [[".fn-marker::before", {width: "44px", height: "44px"}],
+    [".verse-number", {width: "40px", "min-height": "44px"}],
+    [".presentation-block .cross-links .reference-hover::before", {height: "44px"}]].every(([selector, properties]) =>
+    cssRules(readerCss).some(rule => rule.selectors.includes(selector) &&
+      rule.contexts.includes("@media (hover: none), (pointer: coarse)") &&
+      Object.entries(properties).every(([property, value]) => rule.declarations.some(d => d.property === property && d.value === value)))),
   "Portrait touch layouts must retain the enlarged inline reader targets without changing the reader columns.",
 );
 
-console.log(JSON.stringify({ status: "ok", assertions: 24 }, null, 2));
+console.log(JSON.stringify({ status: "ok", assertions: 27 }, null, 2));

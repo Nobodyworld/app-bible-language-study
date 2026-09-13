@@ -17,6 +17,7 @@
 !/app/scripts/accessibility-test.mjs
 !/app/scripts/doc-consistency-test.mjs
 !/app/scripts/feature-profile-interaction-test.mjs
+!/app/scripts/footnote-scripture-interaction-test.mjs
 !/app/scripts/interaction-test.mjs
 !/app/scripts/local-jobs-retirement-test.mjs
 !/app/scripts/language-study-tooltip-interaction-test.mjs

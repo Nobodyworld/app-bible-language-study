@@ -2,6 +2,7 @@ import { fetchVerseBook, resolvePassageText } from "../data-service.js?v=pr13-li
 import { createDetailList, setDetail, setDetailMessage } from "../dom.js?v=pr13-live-qa-20260711e";
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
 import { DETAIL_SCROLL_POLICIES, DETAIL_VIEW_IDS } from "../ui-contracts.js";
+import { attachFootnoteScripture } from "../footnote-scripture.js";
 
 export function createReferenceViews(ctx) {
   function appendPassageText(container, text) {
@@ -56,11 +57,12 @@ export function createReferenceViews(ctx) {
     const body = document.createElement("p");
     body.textContent = note.text;
     wrap.append(heading, marker, body);
-    setDetail("Footnote", wrap, {
+    const intent = setDetail("Footnote", wrap, {
       forceHistory: true,
       ...options,
       viewId: DETAIL_VIEW_IDS.footnote,
     });
+    if (intent !== null) attachFootnoteScripture(wrap, note, ctx);
   }
 
   async function showParallelVerse(reference, verse, verseText, options = {}) {
