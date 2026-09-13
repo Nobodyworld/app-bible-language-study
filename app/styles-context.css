@@ -662,13 +662,13 @@ html[data-theme="light"] .word-meaning-menu {
     gap: 4px;
   }
 
-  .verse-context-tab,
-  .study-marks-trigger,
-  .scope-mark-button {
+  .panel-context-navigation .verse-context-tab,
+  .panel-context-navigation .study-marks-trigger,
+  .panel-context-navigation .scope-mark-button {
     min-height: 32px;
   }
 
-  .study-marks-trigger {
+  .panel-context-navigation .study-marks-trigger {
     width: 32px;
     min-width: 32px;
   }
