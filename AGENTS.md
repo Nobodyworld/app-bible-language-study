@@ -51,31 +51,57 @@ or a final distribution checkpoint, not each UI edit. Do not revive temporary
 owner-machine uninstall/firewall helpers or bypass blocked automation actions.
 Report failures and unrun checks accurately; source review is not rendered QA.
 
-## Current work: shared UI polish (#117–#121)
+## Current work: Septuagint comparison contracts (#96 Phase 1 / PR #115)
 
-Work only on `ui/visual-polish-pass` and existing PR #117. Keep that PR OPEN,
-DRAFT, and UNMERGED; retain its branch for further owner-directed UI polish.
-No ready-for-review transition, auto-merge, merge, closure, or replacement PR is
-authorized. Accepted main is `0148d6f989c1eafef489fb452a4a33a1a8c899ab`.
+Accepted `main` is `a76062e939c0ef3b66866cf4462f2811534644be`.
+Work only on `feature/septuagint-comparison-contracts` for this Phase 1 slice.
+After local acceptance, PR #115 may be marked Ready for review for the single final integration gate; keep it OPEN and UNMERGED until explicit owner authorization.
+Issue #83 remains the deterministic source-data generation authority. The accepted
+#97 decision allows shared witness/reference/evidence contracts to proceed, but
+it does not establish Swete token lemmas, morphology, or Hebrew↔Greek word-level
+alignment.
 
-Complete in priority order: the Strong-token wrapping regression; #118 Study
-header and #121 lexical-reference acceptance; #119 component stylesheet ownership;
-then #120 active-translation scripture inside footnote side-panel entries.
-Preserve the shared static/ES-module browser/Tauri frontend, personal study data,
-source text, existing width preference, Reader anchoring and panel lock/history.
-Keep Septuagint decisions in `docs/decisions/SEPTUAGINT_SOURCE_STACK.md`; do not
-restart that research or expand into multilingual Search or unrelated redesign.
+Required end state:
 
-Use focused local tests during each component slice. Commit the final tree before
-integrated Node 20/24, browser and isolated native acceptance. Keep runtime evidence
-outside tracked source. Update only PR #117 and scoped issues #118–#121 with actual
-results; #118 remains open while owner-rendered approval is outstanding.
+- Keep the framework-neutral comparison contract under `app/src`; do not put
+  shared domain semantics into a browser-only or desktop-only adapter.
+- Model one canonical `textWitness` with multiple display/normalization
+  representations. `wlc` and `wlco` remain one `openbible:wlc` witness vote and
+  one source-token identity when witness/reference/token position match.
+- Model witness-qualified `sourceToken` identity with source reference and token
+  index. Canonical reference, lemma, morphology, and transliteration may be null;
+  unsupported fields must remain null rather than inferred from spelling,
+  Strong's ids, English glosses, or canonical ordering.
+- Model explicit verse maps for exact, split, merged/many-to-one, moved,
+  source-only, canonical-only, unavailable, and uncertain states. Preserve
+  source-only/unmapped records instead of inventing targets.
+- Model alignment states `aligned-1:1`, `aligned-1:n`, `aligned-n:1`,
+  `aligned-n:m`, `reordered`, `hebrew-unaligned`, `greek-unaligned`,
+  `lexical-substitution`, and `uncertain`, with cardinality validation.
+- Keep source-provided, deterministic generated-candidate, and manually reviewed
+  evidence distinct. A generated candidate cannot become reviewed merely from a
+  confidence value.
+- Keep LXX↔NT exact lemma identity, normalized alias, lexical relation, and
+  unresolved candidate separate from passage citation/quotation relations.
+  Shared vocabulary never creates quotation, allusion, or textual-dependence
+  authority by itself.
+- Maintain deterministic, corpus-free fixtures for all alignment shapes and the
+  accepted Psalm 50:1–3 → app Psalm 51:1 many-to-one versification divergence.
+  Fixtures may use synthetic token ids/characters and exact reference metadata;
+  do not copy a production LXX corpus into this branch.
+- Keep the accepted #97 Phase 1 boundary explicit: Swete text contract-ready;
+  TVTMS only bounded reference authority; Swete lemma/morphology and Hebrew↔Greek
+  word alignment unsupported; production corpus/optional pack not part of Phase 1.
+
+Do not add a production Swete/LXX pack, import restricted CATSS/CCAT bytes, infer
+an alternate Hebrew Vorlage, implement the comparison UI, implement #78 Search,
+change user-data v3, add a backend/account/sync path, change repository settings,
+or create a release/tag in this slice.
 
 ## Completion report
 
-Report starting/final SHAs and remote equality, phase and issue status, wrapping
-root cause, stylesheet ownership measurements, footnote capabilities, exact local
-and hosted results, evidence locations, native coverage and limitations, outstanding
-owner review, and worktree/process status. Confirm PR #117 remains OPEN, DRAFT,
-and UNMERGED and its branch is retained. Keep private paths and personal data out
-of public GitHub evidence.
+Give the working path/branch, starting and final pushed SHAs, remote equality,
+contract/fixture files changed, focused and aggregate tests run, exact failures or
+unrun checks, Gitleaks/diff status, remaining blockers, and workspace status.
+Keep restricted source bytes and private local paths out of public GitHub artifacts.
+Keep the report concise.
