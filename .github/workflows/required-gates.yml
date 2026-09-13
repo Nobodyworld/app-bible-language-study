@@ -1,9 +1,7 @@
 name: Required Gates
 
 on:
-  push:
-    branches:
-      - main
+  workflow_dispatch:
   pull_request:
 
 permissions:
@@ -57,11 +55,13 @@ jobs:
 
           $changed = @(git diff --name-only $base $env:CANDIDATE_SHA --)
           if ($LASTEXITCODE -ne 0) { throw 'Could not determine candidate changed paths.' }
+          # Full installer lifecycle is reserved for native/packaging-sensitive work.
+          # Browser/UI changes remain covered by Verify without rebuilding/installing NSIS.
           $desktopPatterns = @(
             '^\.github/workflows/desktop-verify\.yml$',
-            '^app/',
             '^src-tauri/',
             '^tests/desktop-.*\.mjs$',
+            '^app/tools/(desktop-.*|run-desktop-e2e|prepare-desktop-frontend)\.mjs$',
             '^package(-lock)?\.json$'
           )
           $desktopRelevant = $false
@@ -124,7 +124,7 @@ jobs:
             throw "Security/relevance preflight concluded $env:PREFLIGHT_RESULT."
           }
           if ($env:DESKTOP_RELEVANT -ne 'true') {
-            Write-Host 'No desktop-relevant paths changed; exact-range Gitleaks passed and the expensive desktop lifecycle is not required.'
+            Write-Host 'No native/packaging-sensitive paths changed; exact-range Gitleaks passed and the expensive desktop lifecycle is not required.'
             exit 0
           }
 
