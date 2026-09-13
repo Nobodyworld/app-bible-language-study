@@ -121,9 +121,10 @@ assert.equal(
 );
 
 assert.match(desktopVerifyWorkflow, /name: desktop \(windows-2022\)/);
+assert.match(desktopVerifyWorkflow, /^\s{2}pull_request:\s*$/m);
 assert.match(
   desktopVerifyWorkflow,
-  /pull_request:\s*\n\s+paths:/,
+  /^\s{4}paths:\s*$/m,
   "The expensive desktop lifecycle should remain path-scoped; Required Gates owns always-present merge enforcement",
 );
 assert.match(desktopVerifyWorkflow, /persist-credentials: false/);
