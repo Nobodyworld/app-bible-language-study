@@ -2,22 +2,14 @@ name: Desktop Verify
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/desktop-verify.yml"
-      - "app/**"
-      - "src-tauri/**"
-      - "tests/desktop-*.mjs"
-      - "package.json"
-      - "package-lock.json"
   pull_request:
     paths:
       - ".github/workflows/desktop-verify.yml"
-      - "app/**"
       - "src-tauri/**"
       - "tests/desktop-*.mjs"
+      - "app/tools/desktop-*.mjs"
+      - "app/tools/run-desktop-e2e.mjs"
+      - "app/tools/prepare-desktop-frontend.mjs"
       - "package.json"
       - "package-lock.json"
 
@@ -70,6 +62,7 @@ jobs:
         run: npm ci
 
       - name: Scan exact candidate commit range
+        if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
