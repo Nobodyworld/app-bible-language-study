@@ -18,7 +18,7 @@ concurrency:
 
 jobs:
   deterministic:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    if: github.event_name == 'workflow_dispatch' || github.event.action == 'ready_for_review' || github.event.pull_request.draft == false
     name: deterministic (20)
     runs-on: windows-latest
     timeout-minutes: 20
@@ -69,7 +69,7 @@ jobs:
         run: npm run test:static
 
   browser:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    if: github.event_name == 'workflow_dispatch' || github.event.action == 'ready_for_review' || github.event.pull_request.draft == false
     name: browser (20)
     runs-on: windows-latest
     timeout-minutes: 20
