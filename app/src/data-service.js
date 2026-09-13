@@ -2,6 +2,7 @@ import { DATA_ROOT } from "./config.js";
 
 const cache = new Map();
 const pendingCache = new Map();
+const scripturePassagePending = new Map();
 const languageMetadataCache = new Map();
 const sourceByPath = new Map();
 const LANGUAGE_METADATA_VERSION = "clean-app-v1-sofit4";
@@ -61,7 +62,11 @@ export async function fetchJson(path) {
     if (cache.has(cacheKey)) return cache.get(cacheKey);
     if (!managed?.response && !dataAdapter) throw new Error("Static data adapter is not configured.");
     const response = managed?.response || await dataAdapter.fetchResponse(path);
-    if (!response.ok) throw new Error(`Could not load ${path}`);
+    if (!response.ok) {
+      const error = new Error(`Could not load ${path}`);
+      error.status = response.status;
+      throw error;
+    }
     const value = await response.json();
     cache.set(cacheKey, value);
     return value;
@@ -170,6 +175,57 @@ export function fetchSearchShard(path) {
 
 export async function fetchVerseBook(translationId, bookId) {
   return tryFetchJson(`${DATA_ROOT}/verses/${translationId}/${bookId}.json`);
+}
+
+// Strict citation loading reuses the same translation/book cache and physical
+// pack resolver as the Reader. It never falls back or mutates active-book state.
+export function resolveScripturePassage(translationId, reference) {
+  const key = JSON.stringify([physicalResolverEpoch, translationId, reference?.book_id,
+    reference?.chapter, reference?.verse_start, reference?.chapter_end ?? reference?.chapter,
+    reference?.verse_end ?? reference?.verse_start]);
+  if (scripturePassagePending.has(key)) return scripturePassagePending.get(key);
+  const pending = loadScripturePassage(translationId, reference).finally(() => scripturePassagePending.delete(key));
+  scripturePassagePending.set(key, pending);
+  return pending;
+}
+
+async function loadScripturePassage(translationId, reference) {
+  const invalid = {status:"invalid", message:"This reference is outside the available chapter or verse boundaries."};
+  if (!/^[a-z0-9_]+$/.test(translationId || "") || !/^[a-z0-9_]+$/.test(reference?.book_id || "")) return invalid;
+  const startChapter = Number(reference.chapter), endChapter = Number(reference.chapter_end ?? reference.chapter);
+  const startVerse = Number(reference.verse_start), endVerse = Number(reference.verse_end ?? reference.verse_start);
+  if (![startChapter, endChapter, startVerse, endVerse].every(n => Number.isSafeInteger(n) && n > 0) ||
+      endChapter < startChapter || (endChapter === startChapter && endVerse < startVerse)) return invalid;
+  let book;
+  try {
+    book = await fetchJson(`${DATA_ROOT}/verses/${translationId}/${reference.book_id}.json`);
+  } catch (error) {
+    return error?.status === 404 || error?.detail?.managed_fallback_forbidden
+      ? {status:"unavailable", message:"This passage is not available in the selected translation's installed data."}
+      : {status:"error", message:"Scripture could not be loaded. Refresh scripture to try again."};
+  }
+  const unavailable = {status:"unavailable", message:"The complete passage is not available in this translation. No other version was substituted."};
+  if (book?.translation?.id !== translationId || book?.book?.id !== reference.book_id) return unavailable;
+  const chapterNumbers = Object.keys(book.chapters || {}).map(Number).filter(Number.isSafeInteger);
+  if (!chapterNumbers.length) return unavailable;
+  if (endChapter > Math.max(...chapterNumbers)) return invalid;
+  const verses = [];
+  for (let chapter = startChapter; chapter <= endChapter; chapter += 1) {
+    const data = book.chapters[String(chapter)];
+    if (!data) return unavailable;
+    const numbers = Object.keys(data).map(Number).filter(n => Number.isSafeInteger(n) && n > 0);
+    if (!numbers.length) return unavailable;
+    const last = Math.max(...numbers);
+    const from = chapter === startChapter ? startVerse : 1;
+    const to = chapter === endChapter ? endVerse : last;
+    if (from > last || to > last) return invalid;
+    for (let verse = from; verse <= to; verse += 1) {
+      const text = data[String(verse)];
+      if (typeof text !== "string" || !text.trim()) return unavailable;
+      verses.push({chapter, verse, text});
+    }
+  }
+  return {status:"available", translation_id:translationId, translation_code:book.translation.code || translationId.toUpperCase(), verses};
 }
 
 export async function fetchWordMapBook(translationId, bookId) {

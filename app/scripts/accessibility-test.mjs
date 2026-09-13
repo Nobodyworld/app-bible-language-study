@@ -4,6 +4,7 @@ import { readFile } from "node:fs/promises";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { dirname } from "node:path";
+import { cssRules, loadedStyles } from "../tools/stylesheet-ownership.mjs";
 
 const appRoot = join(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -92,7 +93,9 @@ function checkCss(css) {
       /\.fn-marker:focus-visible::before\s*{[\s\S]*?outline:\s*3px solid #2347fb/.test(css) &&
       /\.reader-nav-arrow:focus-visible::before\s*{[\s\S]*?outline:\s*3px solid var\(--accent\)/.test(css) &&
       /\.reference-hover:focus-visible::before\s*{[\s\S]*?outline:\s*3px solid var\(--accent\)/.test(css) &&
-      /@media\s*\(forced-colors:\s*active\)[\s\S]*?\.fn-marker:focus-visible::before,[\s\S]*?\.reference-hover:focus-visible::before\s*{[\s\S]*?outline:\s*3px solid Highlight\s*!important;/.test(css),
+      [".fn-marker:focus-visible::before", ".presentation-block .cross-links .reference-hover:focus-visible::before"].every(selector =>
+        cssRules(css).some(rule => rule.selectors.includes(selector) && rule.contexts.includes("@media (forced-colors: active)") &&
+          rule.declarations.some(d => d.property === "outline" && d.value === "3px solid Highlight !important"))),
     "Inline reader targets need full-target focus indicators in normal and forced-colors modes.",
   );
   assert(/\.rtl-text\s*{[\s\S]*direction:\s*rtl/.test(css), "RTL text class must set right-to-left direction.");
@@ -189,7 +192,7 @@ async function main() {
     dom,
   ] = await Promise.all([
     read("index.html"),
-    read("styles.css"),
+    loadedStyles().then(sheets => sheets.map(sheet => sheet.source).join("\n")),
     read("app.js"),
     read("src/chapter-renderer.js"),
     read("src/language-tooltips.js"),

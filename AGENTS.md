@@ -51,52 +51,31 @@ or a final distribution checkpoint, not each UI edit. Do not revive temporary
 owner-machine uninstall/firewall helpers or bypass blocked automation actions.
 Report failures and unrun checks accurately; source review is not rendered QA.
 
-## Current work: Septuagint source-stack decision and proof (#97)
+## Current work: shared UI polish (#117–#121)
 
-Accepted `main` is `e420f31be6a79fd34e5e520c80fa76cc640d9c40` after #112/#113.
-Work only on `research/septuagint-source-stack` for #97. Issue #83 is complete,
-so its deterministic source/Search generation contracts are now the maintained
-production-data authority. This slice is the Phase 0 source, rights, feasibility,
-and proof-of-import prerequisite for #96. Do not start the full #96 comparison UI
-or #78 multilingual Search integration in this branch.
+Work only on `ui/visual-polish-pass` and existing PR #117. Keep that PR OPEN,
+DRAFT, and UNMERGED; retain its branch for further owner-directed UI polish.
+No ready-for-review transition, auto-merge, merge, closure, or replacement PR is
+authorized. Accepted main is `0148d6f989c1eafef489fb452a4a33a1a8c899ab`.
 
-Required end state:
+Complete in priority order: the Strong-token wrapping regression; #118 Study
+header and #121 lexical-reference acceptance; #119 component stylesheet ownership;
+then #120 active-translation scripture inside footnote side-panel entries.
+Preserve the shared static/ES-module browser/Tauri frontend, personal study data,
+source text, existing width preference, Reader anchoring and panel lock/history.
+Keep Septuagint decisions in `docs/decisions/SEPTUAGINT_SOURCE_STACK.md`; do not
+restart that research or expand into multilingual Search or unrelated redesign.
 
-- Maintain `docs/decisions/SEPTUAGINT_SOURCE_STACK.md` as the decision record.
-- Pin and verify the exact Greek-text proof source revision and source hash.
-- Recheck separate rights for text, annotations, lemma/morphology resources,
-  alignment data, versification data, and derived outputs. Public readability is
-  not redistribution permission.
-- Use Swete as the preferred Greek-text proof candidate unless current evidence
-  rejects it; preserve its share-alike obligations separately from MIT code.
-- Measure reproducible lemma/morphology join coverage rather than assuming that
-  Open Scriptures or STEPBible identifiers match the selected text.
-- Verify current STEPBible versification/lexical candidates by exact file and
-  revision; do not assume TAGOT exists merely because it is planned.
-- Do not commit, mirror, transform for redistribution, or use CATSS/restricted
-  alignment bytes as hidden public authority without documented permission.
-- Build only a small disposable/untracked proof covering Genesis 1, one Psalm
-  numbering/superscription case, and one prophetic passage used in the NT.
-- Report token/reference integrity, malformed or duplicate records,
-  normalization collisions, lemma-join coverage, versification mapping,
-  exact-GNT lemma matches, and raw/JSON/compressed size estimates.
-- Select an explicit first Hebrew↔Greek alignment delivery model: redistributable
-  source alignment, local-only restricted adapter, deterministic non-authoritative
-  candidates, limited manual review, or deferred word-level alignment.
-- State what #96 may and may not claim under that model and whether Phase 1
-  production contracts are cleared to begin.
-
-Preserve the #96 invariant that `wlc` and `wlco` are two representations of one
-Westminster Leningrad Codex Hebrew base, not independent textual witnesses. Do
-not add a production LXX corpus, generated full-corpus output, runtime provider,
-new data pack, UI, backend, account, release, tag, or repository-settings change
-in #97 unless separately authorized after the source decision.
+Use focused local tests during each component slice. Commit the final tree before
+integrated Node 20/24, browser and isolated native acceptance. Keep runtime evidence
+outside tracked source. Update only PR #117 and scoped issues #118–#121 with actual
+results; #118 remains open while owner-rendered approval is outstanding.
 
 ## Completion report
 
-Give the working path/branch, starting and final pushed SHAs, remote equality,
-exact source revisions/hashes/terms reviewed, proof inputs and disposable-output
-locations, measurements, selected source/alignment/packaging decisions, files
-committed, tests run and results, unsupported claims or blockers, and workspace
-status. Keep restricted source bytes and private local paths out of public GitHub
-artifacts. Keep the report concise.
+Report starting/final SHAs and remote equality, phase and issue status, wrapping
+root cause, stylesheet ownership measurements, footnote capabilities, exact local
+and hosted results, evidence locations, native coverage and limitations, outstanding
+owner review, and worktree/process status. Confirm PR #117 remains OPEN, DRAFT,
+and UNMERGED and its branch is retained. Keep private paths and personal data out
+of public GitHub evidence.

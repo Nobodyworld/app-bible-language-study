@@ -61,3 +61,30 @@ inside the Tauri composition; visible backup semantics remain version 3.
   unavailable state and retry behavior remain authoritative.
 - Core Reader failure: startup reports the existing bounded error state.
 - Compatibility-only interpretation polls own no ordinary or diagnostic controls, counts, or response mutations in either profile. Historical records remain accessible through the shared version-3 backup path.
+# Footnote scripture
+
+Footnotes preserve their original wording and show recognized cited scripture
+in the Reader's selected translation. Psalm 23:1 footnote a, “See Revelation
+7:17.”, is the maintained real-data example. Explicit canonical book names,
+OSIS names and supplied book aliases support single verses, ranges, multiple
+distinct references and chapter-spanning ranges. Revelation 7:15–17 is valid;
+Revelation 7:17–18 is invalid and must not be truncated. Ambiguous names remain
+plain text; abbreviated verse lists and malformed ranges show an unsupported
+format message. No prose-only guesses are made.
+
+`references.js` owns reference extraction and `data-service.js` owns strict
+passage loading through the existing translation/book cache and physical-pack
+resolver. In-flight passage identity includes translation, the complete range
+and the data-source epoch. Missing, invalid, loading and recoverable failure
+states are explicit. No translation fallback, external service or silent pack
+installation is allowed. Restored/refreshed entries use the current translation;
+stale footnote, translation or panel responses cannot replace the current view.
+
+Scripture is subordinate to the note. Verse numbers and range boundaries remain
+visible. Passages over three verses or 650 characters use an accessible disclosure
+with all text retained and a bounded, keyboard-scrollable region. Text is rendered
+with text nodes and direction-aware `bdi`, with no recursive citation expansion.
+Hydration and expansion do not navigate the Reader or add panel history. The
+explicit “Read…” button is the navigation action. English Reader versions remain
+unchanged; RTL rendering is tested against existing WLC data without adding a
+new selectable version.

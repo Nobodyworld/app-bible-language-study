@@ -4,16 +4,27 @@ export const STUDY_WORKSPACE_WIDTH_MODES = Object.freeze({
   expanded: "expanded",
 });
 
+export const STUDY_WORKSPACE_WIDTH_SEQUENCE = Object.freeze([
+  STUDY_WORKSPACE_WIDTH_MODES.compact,
+  STUDY_WORKSPACE_WIDTH_MODES.standard,
+  STUDY_WORKSPACE_WIDTH_MODES.expanded,
+]);
 export const STUDY_WORKSPACE_WIDTH_DEFAULT = STUDY_WORKSPACE_WIDTH_MODES.standard;
 export const STUDY_WORKSPACE_WIDTH_STORAGE_KEY = "bibleapp:study-workspace-width:v1";
 export const STUDY_WORKSPACE_WIDTH_CONTROL_SELECTOR =
-  "[data-study-workspace-width-mode], [data-study-workspace-width-option]";
+  "[data-study-workspace-width-cycle], [data-study-workspace-width-mode], [data-study-workspace-width-option]";
 
 const WIDTH_MODE_VALUES = new Set(Object.values(STUDY_WORKSPACE_WIDTH_MODES));
 const READER_ROW_SELECTOR = ".verse-row, .source-bearing-segment";
 
 export function normalizeStudyWorkspaceWidth(value) {
   return WIDTH_MODE_VALUES.has(value) ? value : STUDY_WORKSPACE_WIDTH_DEFAULT;
+}
+
+export function nextStudyWorkspaceWidth(value) {
+  const normalizedMode = normalizeStudyWorkspaceWidth(value);
+  const index = STUDY_WORKSPACE_WIDTH_SEQUENCE.indexOf(normalizedMode);
+  return STUDY_WORKSPACE_WIDTH_SEQUENCE[(index + 1) % STUDY_WORKSPACE_WIDTH_SEQUENCE.length];
 }
 
 function availableStorage(storage) {
@@ -67,6 +78,42 @@ function controlMode(control) {
   );
 }
 
+function isCycleControl(control) {
+  return Boolean(
+    control?.dataset?.studyWorkspaceWidthCycle !== undefined ||
+    control?.hasAttribute?.("data-study-workspace-width-cycle"),
+  );
+}
+
+function currentRootMode(root) {
+  const target = attributeRoot(root);
+  return normalizeStudyWorkspaceWidth(
+    target?.dataset?.studyWorkspaceWidth || target?.getAttribute?.("data-study-workspace-width"),
+  );
+}
+
+function widthLabel(mode) {
+  return `${mode.slice(0, 1).toUpperCase()}${mode.slice(1)}`;
+}
+
+function updateCycleControl(control, mode) {
+  const nextMode = nextStudyWorkspaceWidth(mode);
+  const currentLabel = widthLabel(mode);
+  const nextLabel = widthLabel(nextMode);
+  control?.setAttribute?.("data-study-workspace-width-mode", mode);
+  control?.setAttribute?.("data-study-workspace-width-current", mode);
+  control?.setAttribute?.("data-study-workspace-width-next", nextMode);
+  control?.setAttribute?.(
+    "aria-label",
+    `Study workspace width: ${currentLabel}. Change to ${nextLabel}.`,
+  );
+  control?.setAttribute?.(
+    "title",
+    `Study workspace width: ${currentLabel} (click for ${nextLabel})`,
+  );
+  control?.removeAttribute?.("aria-pressed");
+}
+
 export function applyStudyWorkspaceWidth(root, mode, controls) {
   const normalizedMode = normalizeStudyWorkspaceWidth(mode);
   const target = attributeRoot(root);
@@ -77,6 +124,10 @@ export function applyStudyWorkspaceWidth(root, mode, controls) {
   }
 
   controlsFor(root, controls).forEach((control) => {
+    if (isCycleControl(control)) {
+      updateCycleControl(control, normalizedMode);
+      return;
+    }
     const candidate = controlMode(control);
     const active = WIDTH_MODE_VALUES.has(candidate) && candidate === normalizedMode;
     control?.setAttribute?.("aria-pressed", active ? "true" : "false");
@@ -270,7 +321,9 @@ export function bindStudyWorkspaceWidthControls({
 
   resolvedControls.forEach((control) => {
     const listener = () => {
-      const requestedMode = controlMode(control);
+      const requestedMode = isCycleControl(control)
+        ? nextStudyWorkspaceWidth(currentRootMode(root))
+        : controlMode(control);
       if (!WIDTH_MODE_VALUES.has(requestedMode)) return;
 
       const readerAnchor = captureReaderAnchor(readerRoot);
