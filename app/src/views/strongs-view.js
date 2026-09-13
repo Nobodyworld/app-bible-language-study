@@ -272,6 +272,7 @@ function createOriginValue(entry, openStrongCode) {
     if (match.start > cursor) wrap.append(textNode(source.slice(cursor, match.start)));
     const button = createStrongReferenceControl(match.ref, {
       label: match.label,
+      resolveOriginLabel: true,
       onActivate: (item) => openStrongCode(item.strong_code, item.language),
     });
     if (button) {

@@ -1,10 +1,15 @@
 #!/usr/bin/env node
 
-import { existsSync, mkdirSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright-core";
 import { startStaticAppServer } from "../tools/serve-app.mjs";
 import { checkZoomReflow } from "./zoom-reflow-acceptance.mjs";
+
+const bundledLexicon = (language, chunk) => JSON.parse(readFileSync(
+  new URL(`../data/lexicon/${language}/${chunk}.json`, import.meta.url), "utf8"));
+const greek0 = bundledLexicon("greek", "0000");
+const greek2 = bundledLexicon("greek", "2000");
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -90,6 +95,29 @@ function assertViewportContainedTooltip(snapshot, label) {
   `${label}: fixed Strong tooltip escaped the viewport: ${JSON.stringify(snapshot)}`);
 }
 
+async function waitForOriginLabels(page) {
+  await page.waitForFunction(() => {
+    const links = [...document.querySelectorAll("#detailContent .strong-origin-link")];
+    return links.length === 2 && links.every(link => link.dataset.previewReady === "true");
+  });
+}
+
+async function assertOriginSource(origin, entry) {
+  // Visible labels intentionally improve. Restore only those reference labels
+  // from the bundled source, then compare every surrounding character separately.
+  const source = await origin.evaluate((node, refs) => {
+    const copy = node.cloneNode(true);
+    for (const button of copy.querySelectorAll("button")) {
+      const code = button.getAttribute("aria-label")?.match(/[HG]\d+$/u)?.[0];
+      const ref = refs.find(item => item.strong_code === code);
+      if (!ref) throw new Error(`Unexpected origin destination: ${code}`);
+      button.replaceWith(document.createTextNode(ref.label));
+    }
+    return copy.textContent;
+  }, entry.word_origin_refs);
+  assert.equal(source, entry.word_origin, "Origin label resolution must preserve the entire source prose and reference positions");
+}
+
 async function checkLexicalReferences(page, url) {
   await page.goto(`${url}/#/read/bsb/john/4/18`, { waitUntil: "load" });
   const trueToken = page.locator('.verse-row[data-verse="18"] .strong-token[data-strong-code="G227"]').first();
@@ -98,22 +126,35 @@ async function checkLexicalReferences(page, url) {
   await waitForEntry(page, "G227");
   const route = page.url();
   const origin = page.locator("#detailContent .word-origin-value");
-  assert(/From a \(G1\) \(as a negative particle\) and lanthano \(G2990\)/.test(await origin.innerText()), "G227 must display both linked Strong codes without dropping the source relationship");
-  const sourceOrigin = await origin.evaluate((node) => {
-    const copy = node.cloneNode(true);
-    copy.querySelectorAll(".strong-origin-code").forEach((code) => code.remove());
-    return copy.textContent;
-  });
-  assert(/^From a \(as a negative particle\) and lanthano/.test(sourceOrigin), "Visible reference annotations must not rewrite the source prose");
+  await waitForOriginLabels(page); // No origin hover or focus is needed to resolve either label.
+  assert.equal(await origin.innerText(), "From alpha (G1) (as a negative particle) and lanthanō (G2990)", "G227 must display destination transliterations and both existing codes");
+  await assertOriginSource(origin, greek0.entries.G227);
   assert.equal(JSON.stringify(await origin.locator(".strong-origin-code").allTextContents()), '[" (G1)"," (G2990)"]', "G227 must expose the actual two reference destinations");
-  const prefix = origin.getByRole("button", { name: "Open Strong's a, G1", exact: true });
+  for (const entry of [greek0.entries.G1, greek2.entries.G2990]) {
+    const control = origin.getByRole("button", { name: `Open Strong's ${entry.transliteration}, ${entry.strong_code}`, exact: true });
+    assert.equal(await control.innerText(), `${entry.transliteration} (${entry.strong_code})`, "Origin labels must come from bundled destination data");
+    const tooltip = await control.getAttribute("data-tooltip");
+    assert(tooltip.includes(entry.transliteration) && tooltip.includes(entry.strong_code), "Resolved origin tooltip and accessible destination must agree");
+  }
+  if (process.env.BIBLEAPP_UI_EVIDENCE_DIR) {
+    mkdirSync(process.env.BIBLEAPP_UI_EVIDENCE_DIR, {recursive:true});
+    await origin.scrollIntoViewIfNeeded();
+    await page.mouse.move(0, 0);
+    await page.screenshot({path:path.join(process.env.BIBLEAPP_UI_EVIDENCE_DIR, "g227-origin-resolved.png")});
+  }
+  const prefix = origin.getByRole("button", { name: "Open Strong's alpha, G1", exact: true });
   assert(await prefix.count() === 1 && await origin.locator("button").count() === 2, "G227 must link its two origin words, not the article in '(as a negative particle)'");
   await prefix.focus();
-  await page.waitForFunction(() => document.querySelector('.strong-origin-link[aria-label="Open Strong\'s a, G1"]')?.dataset.previewReady === "true");
   assert(/G1/.test(await prefix.getAttribute("data-tooltip")), "G1 must hydrate through the existing reference control");
   await prefix.press("Enter");
   await waitForEntry(page, "G1");
   assert(page.url() === route, "Opening the lexical prefix must not navigate the Reader");
+  await trueToken.click();
+  await waitForEntry(page, "G227");
+  await waitForOriginLabels(page);
+  await origin.getByRole("button", {name:"Open Strong's lanthanō, G2990", exact:true}).click();
+  await waitForEntry(page, "G2990");
+  assert.equal(page.url(), route, "Pointer activation of the second origin must preserve the Reader route");
 
   // Owner review caught G4571 `se` being matched inside the English word
   // `second` in G4771's Word origin. Exercise that real occurrence and also
@@ -133,6 +174,14 @@ async function checkLexicalReferences(page, url) {
     "G4771 Word origin must preserve the source prose exactly");
   assert.equal(await pronounOrigin.locator("button").count(), 0,
     "G4771 Word origin must not turn `se` inside `second` or absent related forms into links");
+
+  await page.goto(`${url}/#/read/bsb/proverbs/1/1`, {waitUntil:"load"});
+  await page.locator('.verse-row[data-verse="1"] .strong-token[data-strong-code="H4912"]').first().click();
+  await waitForEntry(page, "H4912");
+  const hebrewOrigin = page.locator("#detailContent .word-origin-value");
+  await page.waitForFunction(() => document.querySelector(".strong-origin-link")?.dataset.previewReady === "true");
+  assert.equal(await hebrewOrigin.locator(".strong-origin-code").count(), 0, "H4912 must retain word-focused origins without added codes");
+  assert.equal(await hebrewOrigin.innerText(), bundledLexicon("hebrew", "4000").entries.H4912.word_origin, "H4912's accepted word-focused presentation must stay intact");
 
   // John 4:24 opens the real G4151 entry. Compare psuche. is that entry's
   // lexicon metadata, not a word asserted to occur in the verse.
@@ -181,6 +230,79 @@ async function checkLexicalReferences(page, url) {
     return result;
   });
   assert(JSON.stringify(activated) === '["G3068","G3538"]', "Each comparison must activate its own destination");
+}
+
+async function checkOriginResolutionEdges(browser, url) {
+  const results = [];
+  for (const mode of ["delayed", "stale-view", "stale-failure", "missing-entry", "unusable-transliteration", "failed-load"]) {
+    const page = await browser.newPage({viewport:{width:1280,height:720}});
+    const errors = [];
+    page.on("pageerror", error => errors.push(error.message));
+    let release;
+    const held = new Promise(resolve => { release = resolve; });
+    const stale = mode.startsWith("stale-");
+    const delayed = mode === "delayed" || stale;
+    const failed = mode === "failed-load" || mode === "stale-failure";
+    page.on("console", message => {
+      if (message.type() === "error" && !(failed && /503/.test(message.text()))) errors.push(message.text());
+    });
+    let requests = 0;
+    const sourceChunk = structuredClone(greek0);
+    // Exercise remaining prose without modifying any bundled lexicon bytes.
+    sourceChunk.entries.G227.word_origin += "; a second statement stays intact.";
+    const destinationChunk = structuredClone(greek2);
+    if (mode === "missing-entry") delete destinationChunk.entries.G2990;
+    if (mode === "unusable-transliteration") destinationChunk.entries.G2990.transliteration = "  ";
+    try {
+      await page.route("**/lexicon/greek/0000.json*", route => route.fulfill({json:sourceChunk}));
+      await page.route("**/lexicon/greek/2000.json*", async route => {
+        requests += 1;
+        if (delayed) await held;
+        await route.fulfill(failed ? {status:503,body:"Unavailable fixture"} : {json:destinationChunk});
+      });
+      const pendingRequest = delayed ? page.waitForRequest("**/lexicon/greek/2000.json*", {timeout:15000}) : null;
+      await page.goto(`${url}/#/read/bsb/john/4/18`, {waitUntil:"load"});
+      await page.locator('.verse-row[data-verse="18"] .strong-token[data-strong-code="G227"]').first().click();
+      await waitForEntry(page, "G227");
+      const origin = page.locator("#detailContent .word-origin-value");
+      const destination = origin.locator('.strong-origin-link[aria-label$="G2990"]');
+      if (delayed) {
+        await pendingRequest;
+        assert(requests > 0, `${mode}: origin rendering must start loading before hover/focus`);
+        assert.equal(await destination.innerText(), "lanthano (G2990)", `${mode}: preserve the original label while pending`);
+        await destination.evaluate(node => { window.__pendingOriginControl = node; });
+        if (stale) await page.locator("#clearDetail").click();
+        else await destination.focus();
+        const before = await page.evaluate(() => ({route:location.hash, title:document.querySelector("#detailTitle").textContent,
+          focusId:document.activeElement?.id, originFocused:document.activeElement === window.__pendingOriginControl}));
+        release();
+        await page.waitForFunction(() => window.__pendingOriginControl?.dataset.previewReady === "true");
+        const after = await page.evaluate(() => ({route:location.hash, title:document.querySelector("#detailTitle").textContent,
+          focusId:document.activeElement?.id, originFocused:document.activeElement === window.__pendingOriginControl}));
+        assert.equal(JSON.stringify(after), JSON.stringify(before), `${mode}: completion must not replace a Study view, move focus or navigate`);
+        if (stale) {
+          assert.equal(await page.evaluate(() => window.__pendingOriginControl.isConnected), false, "The stale-control fixture must actually leave its view");
+        } else {
+          assert.equal(await destination.innerText(), "lanthanō (G2990)", "The delayed destination must resolve from bundled transliteration");
+          assertViewportContainedTooltip(await visibleTooltipSnapshot(destination), "Delayed origin keyboard preview");
+          await assertOriginSource(origin, sourceChunk.entries.G227);
+        }
+      } else {
+        await waitForOriginLabels(page);
+        assert.equal(await destination.innerText(), "lanthano (G2990)", `${mode}: retain the original label on unavailable resolution`);
+        assert.equal(await destination.getAttribute("aria-label"), "Open Strong's lanthano, G2990", `${mode}: fallback accessible name must retain the destination`);
+        assert((await destination.getAttribute("data-tooltip")).includes("G2990"), `${mode}: fallback preview must retain the destination`);
+        await assertOriginSource(origin, sourceChunk.entries.G227);
+      }
+      assert.equal(requests, 1, `${mode}: eager resolution and focus must reuse the existing pending/cache load`);
+      assert.equal(errors.length, 0, `${mode}: unexpected browser exception: ${JSON.stringify(errors)}`);
+      results.push(mode);
+    } finally {
+      release();
+      await page.close();
+    }
+  }
+  return results;
 }
 
 async function checkWrappedTokenFragments(page, url, viewport) {
@@ -339,6 +461,7 @@ async function main() {
     `hydrated Strong's preview did not update in place: ${JSON.stringify(preview)}`);
 
     await checkLexicalReferences(page, url);
+    const originResolution = await checkOriginResolutionEdges(browser, url);
     const reflow = await checkZoomReflow(browser, url);
     const wrapping = [];
     for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
@@ -352,7 +475,7 @@ async function main() {
       }
     }
     assert(errors.length === 0, `Strong preview regressions reported browser errors: ${JSON.stringify(errors)}`);
-    console.log(JSON.stringify({ status: "ok", browser: browser.version(), hydratedPreview: true, lexicalReferences: true, viewportContainedReaderPreview: true, originBoundaryMatching: true, reflow, wrapping }, null, 2));
+    console.log(JSON.stringify({ status: "ok", browser: browser.version(), hydratedPreview: true, lexicalReferences: true, originResolution, viewportContainedReaderPreview: true, originBoundaryMatching: true, reflow, wrapping }, null, 2));
   } finally {
     await browser.close();
     await new Promise((resolveClose) => server.close(resolveClose));

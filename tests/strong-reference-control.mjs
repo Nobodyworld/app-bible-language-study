@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import { resolveStrongSeeSegments, strongReferenceDisplayLabel } from "../app/src/strong-reference-control.js";
 
 const refs = [
@@ -76,5 +77,26 @@ assert.equal(strongReferenceDisplayLabel({ strong_code: "G25", label: "agapao" }
 assert.equal(strongReferenceDisplayLabel({ strong_code: "G25", label: "a" }), "a");
 assert.equal(strongReferenceDisplayLabel({ strong_code: "G1", label: "Alpha" }), "Alpha");
 assertions += 4;
+
+// Resolution is supplied explicitly by origin controls; raw reference metadata
+// and default Compare/See labels retain their original wording.
+const greek0 = JSON.parse(readFileSync(new URL("../app/data/lexicon/greek/0000.json", import.meta.url), "utf8")).entries;
+const greek2 = JSON.parse(readFileSync(new URL("../app/data/lexicon/greek/2000.json", import.meta.url), "utf8")).entries;
+const origin = greek0.G227;
+const originalSource = JSON.stringify(origin);
+for (const ref of origin.word_origin_refs) {
+  const entry = (ref.strong_code === "G1" ? greek0 : greek2)[ref.strong_code];
+  assert.equal(strongReferenceDisplayLabel(ref, ref.label, entry), entry.transliteration);
+  assert.equal(strongReferenceDisplayLabel(ref), ref.label, "Default reference labels must stay source-focused");
+  assertions += 2;
+}
+assert.equal(JSON.stringify(origin), originalSource, "Label resolution must not rewrite source text or reference metadata");
+assertions += 1;
+for (const entry of [null, {}, {transliteration:null}, {transliteration:12}, {transliteration:"  "}, {transliteration:"—"}, {original_word:"α", xlit:"alpha"}]) {
+  assert.equal(strongReferenceDisplayLabel({strong_code:"G1",label:"a"}, "a", entry), "a", "Missing/unusable bundled transliteration must retain the original label");
+  assertions += 1;
+}
+assert.equal(strongReferenceDisplayLabel({strong_code:"G25",label:"source"}, "source", {transliteration:"  differentō  "}), "differentō", "Resolve destination metadata, never a special code-to-label map");
+assertions += 1;
 
 console.log(JSON.stringify({ status: "ok", assertions }, null, 2));

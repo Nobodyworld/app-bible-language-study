@@ -53,12 +53,30 @@ export async function checkDesktopUiPolish(client, runRoot) {
   }
   await route(client,"#/read/bsb/john/4/18",'.verse-row[data-verse="18"] .strong-token[data-strong-code="G227"]');
   await activate(client,'.verse-row[data-verse="18"] .strong-token[data-strong-code="G227"]');
-  await client.waitFor("return document.querySelector('#detailContent .strong-code')?.textContent==='G227' && Boolean(document.querySelector('.word-origin-value .strong-inline-link[aria-label$=\"G1\"]')); ");
+  const originReady="const links=[...document.querySelectorAll('.word-origin-value .strong-origin-link')]; return document.querySelector('#detailContent .strong-code')?.textContent==='G227' && links.length===2 && links.every(n=>n.dataset.previewReady==='true');";
+  await client.waitFor(originReady);
   assert.equal(await client.execute("return document.querySelector('.word-origin-value').querySelectorAll('button').length;"),2);
-  assert.match(await client.execute("return document.querySelector('.word-origin-value').textContent;"),/^From a \(G1\) \(as a negative particle\) and lanthano \(G2990\)/);
+  assert.equal(await client.execute("return document.querySelector('.word-origin-value').textContent;"),"From alpha (G1) (as a negative particle) and lanthanō (G2990)");
+  const originEntry=JSON.parse(await readFile(new URL('../data/lexicon/greek/0000.json',import.meta.url),'utf8')).entries.G227;
+  const sourceOrigin=await client.execute(`
+    const copy=document.querySelector('.word-origin-value').cloneNode(true);
+    for(const button of copy.querySelectorAll('button')) {
+      const ref=arguments[0].find(ref=>ref.strong_code===button.dataset.strongCode);
+      if(!ref) throw new Error('Unexpected origin destination');
+      button.replaceWith(document.createTextNode(ref.label));
+    }
+    return copy.textContent;
+  `,[originEntry.word_origin_refs]);
+  assert.equal(sourceOrigin,originEntry.word_origin,"Improved visible origin labels must preserve all source prose and reference positions");
   await shot("g227-prefix");
-  await activate(client,'.word-origin-value .strong-inline-link[aria-label$="G1"]',"\uE007");
+  await activate(client,'.word-origin-value .strong-inline-link[aria-label="Open Strong\'s alpha, G1"]',"\uE007");
   await client.waitFor("return document.querySelector('#detailContent .strong-code')?.textContent==='G1';");
+  assert.equal(await client.execute("return location.hash;"),"#/read/bsb/john/4/18");
+  await activate(client,'.verse-row[data-verse="18"] .strong-token[data-strong-code="G227"]');
+  await client.waitFor(originReady);
+  await activate(client,'.word-origin-value .strong-inline-link[aria-label="Open Strong\'s lanthanō, G2990"]');
+  await client.waitFor("return document.querySelector('#detailContent .strong-code')?.textContent==='G2990';");
+  assert.equal(await client.execute("return location.hash;"),"#/read/bsb/john/4/18");
   // John 4:24 opens G4151; Compare psuche. is lexicon metadata, not verse text.
   await route(client,"#/read/bsb/john/4/24",'.verse-row[data-verse="24"] .strong-token[data-strong-code="G4151"]');
   await activate(client,'.verse-row[data-verse="24"] .strong-token[data-strong-code="G4151"]');

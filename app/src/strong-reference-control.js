@@ -65,27 +65,36 @@ function findStrongReference(refs, label, language = "") {
   return destinations.size === 1 ? candidates[0] : null;
 }
 
-export function strongReferenceDisplayLabel(ref, label = ref?.label || ref?.strong_code || "Strong's") {
+export function strongReferenceDisplayLabel(ref, label = ref?.label || ref?.strong_code || "Strong's", entry = null) {
+  const transliteration = typeof entry?.transliteration === "string" ? entry.transliteration.trim() : "";
+  if (/\p{L}/u.test(transliteration)) return transliteration;
   return String(label || "").trim();
 }
 
-export function createStrongReferenceControl(ref, { label = ref?.label || ref?.strong_code || "Strong's", onActivate } = {}) {
+export function createStrongReferenceControl(ref, { label = ref?.label || ref?.strong_code || "Strong's", onActivate, resolveOriginLabel = false } = {}) {
   const code = /^[HG]\d+$/u.test(String(ref?.strong_code || "").toUpperCase())
     ? String(ref.strong_code).toUpperCase()
     : "";
   if (!code) return null;
   const item = { ...ref, strong_code: code };
-  const displayLabel = strongReferenceDisplayLabel(item, label);
+  let displayLabel = strongReferenceDisplayLabel(item, label);
   const button = document.createElement("button");
   button.type = "button";
   button.className = "strong-inline-link definition-tooltip";
-  button.textContent = displayLabel;
+  // Keep a dedicated text node so origin code annotations and focus survive hydration.
+  const labelNode = document.createTextNode(displayLabel);
+  button.append(labelNode);
   button.dataset.tooltip = `${displayLabel} (${code}) — Loading definition…`;
   button.setAttribute("aria-label", `Open Strong's ${displayLabel}, ${code}`);
   let hydration;
   const hydrate = () => {
     if (!hydration) {
       hydration = fetchLexiconEntry(code).catch(() => null).then((entry) => {
+        if (resolveOriginLabel) {
+          displayLabel = strongReferenceDisplayLabel(item, label, entry);
+          labelNode.textContent = displayLabel;
+          button.setAttribute("aria-label", `Open Strong's ${displayLabel}, ${code}`);
+        }
         button.dataset.tooltip = strongReferencePreview(entry, item, displayLabel);
         button.dataset.previewReady = "true";
         refreshVisibleTooltip(button);
@@ -98,6 +107,7 @@ export function createStrongReferenceControl(ref, { label = ref?.label || ref?.s
   button.addEventListener("focus", hydrate);
   button.addEventListener("pointerdown", hydrate);
   button.addEventListener("click", () => onActivate?.(item));
+  if (resolveOriginLabel) hydrate();
   return button;
 }
 
