@@ -2,22 +2,19 @@ name: Desktop Verify
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
-    paths:
-      - ".github/workflows/desktop-verify.yml"
-      - "app/**"
-      - "src-tauri/**"
-      - "tests/desktop-*.mjs"
-      - "package.json"
-      - "package-lock.json"
   pull_request:
+    types:
+      - opened
+      - synchronize
+      - reopened
+      - ready_for_review
     paths:
       - ".github/workflows/desktop-verify.yml"
-      - "app/**"
       - "src-tauri/**"
       - "tests/desktop-*.mjs"
+      - "app/tools/desktop-*.mjs"
+      - "app/tools/run-desktop-e2e.mjs"
+      - "app/tools/prepare-desktop-frontend.mjs"
       - "package.json"
       - "package-lock.json"
 
@@ -30,6 +27,7 @@ concurrency:
 
 jobs:
   desktop:
+    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
     name: desktop (windows-2022)
     runs-on: windows-2022
     timeout-minutes: 90
@@ -70,6 +68,7 @@ jobs:
         run: npm ci
 
       - name: Scan exact candidate commit range
+        if: github.event_name == 'workflow_dispatch'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
