@@ -112,11 +112,15 @@ async function layoutState(page) {
 
 function assertPortraitLayout(state, label) {
   assert.equal(state.titleText, "Bible Reader", `${label}: visible title was not shortened`);
-  assert(state.title && state.status && state.controls && state.header && state.shell && state.detail, `${label}: layout geometry is incomplete`);
+  assert(state.title && state.brand && state.status && state.controls && state.theme && state.header && state.shell && state.detail, `${label}: layout geometry is incomplete`);
   assert(state.status.left >= state.title.right + 4, `${label}: BSB status is not to the right of the title`);
   const verticalOverlap = Math.min(state.status.bottom, state.title.bottom) - Math.max(state.status.top, state.title.top);
   assert(verticalOverlap > 0, `${label}: title and status do not share the same header row`);
-  assert(state.controls.top >= Math.max(state.brand.bottom, state.status.bottom) - 1, `${label}: reader controls are not the final header row`);
+  const row = [state.brand, state.controls, state.status, state.theme];
+  assert(state.header.height <= 88 && Math.max(...row.map(box => box.top)) < Math.min(...row.map(box => box.bottom)),
+    `${label}: global header must remain one compact row at a reduced CSS viewport`);
+  assert(row.every((box, index) => box.left >= state.header.left && box.right <= state.header.right &&
+    (index === 0 || box.left >= row[index - 1].right - 1)), `${label}: global header controls overlap or escape the header`);
   assert(state.shell.top >= state.header.bottom, `${label}: app shell overlaps the header`);
   assert(state.shell.top - state.header.bottom <= 24, `${label}: excessive gap remains below reader controls`);
   assert(state.detail.top >= state.header.bottom + 6, `${label}: detail pane begins above the measured header`);

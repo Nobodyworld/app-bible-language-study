@@ -767,10 +767,10 @@ html[data-theme="light"] .app-header {
 .brand {
     grid-area: brand;
     justify-self: start;
-    width: auto;
-    min-width: 0;
+    width: max-content;
+    min-width: max-content;
     flex-shrink: 0;
-    padding-inline-end: 0;
+    padding-inline-end: 14px;
   }
 }
 
@@ -788,7 +788,7 @@ html[data-theme="light"] .app-header {
     justify-self: start;
     min-width: 0;
     max-width: 9rem;
-    overflow-wrap: anywhere;
+    overflow-wrap: normal;
   }
 }
 

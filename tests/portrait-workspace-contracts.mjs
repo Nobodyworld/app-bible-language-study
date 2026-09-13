@@ -23,12 +23,17 @@ assert(
   "The portrait brand backdrop must size to its title and retain trailing breathing room.",
 );
 assert(
-  /grid-template-areas:\s*[\s\S]*?"brand status \. theme"[\s\S]*?"controls controls controls controls"/.test(css),
-  "Portrait desktop must place status beside the brand and reader controls on the final header row.",
+  cssRules(css).some(rule => rule.selectors.includes(".app-header") &&
+    rule.contexts.includes("@media (min-width: 769px) and (max-width: 1100px)") &&
+    rule.declarations.some(d => d.property === "grid-template-areas" && d.value === '"brand controls status theme"')),
+  "Desktop reflow must keep the global header in one row instead of forcing reader controls onto an oversized second row.",
 );
 assert(
-  /@media\s*\(min-width:\s*769px\)\s*and\s*\(max-width:\s*1100px\)[\s\S]*?\.reader-controls\s*{[\s\S]*?grid-template-columns:\s*repeat\(3, minmax\(0, 1fr\)\)/.test(css),
-  "Portrait desktop reader controls must remain one compact three-column row.",
+  cssRules(css).some(rule => rule.selectors.includes(".reader-controls") &&
+    rule.contexts.includes("@media (min-width: 769px) and (max-width: 1100px)") &&
+    rule.declarations.some(d => d.property === "grid-template-columns" &&
+      d.value === "minmax(0, 1.25fr) minmax(0, 1.15fr) minmax(0, 0.65fr)")),
+  "Desktop reader controls must keep three shrinkable columns with more room for translation and book names than chapter numbers.",
 );
 assert(
   /@media\s*\(min-width:\s*641px\)\s*and\s*\(max-width:\s*960px\)[\s\S]*?@container\s+reader-pane\s*\(min-width:\s*550px\)/.test(readerCss),
