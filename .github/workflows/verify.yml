@@ -2,13 +2,14 @@ name: Verify
 
 on:
   workflow_dispatch:
-  push:
-    branches:
-      - main
   pull_request:
 
 permissions:
   contents: read
+
+concurrency:
+  group: verify-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
   deterministic:
@@ -41,6 +42,7 @@ jobs:
         run: npm run test:static
 
       - name: Run publication audit
+        if: matrix.node-version == '20'
         run: npm run audit
 
   browser:
