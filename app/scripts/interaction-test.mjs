@@ -1554,7 +1554,12 @@ async function runQa(page) {
     }));
     const geometryFailures = statusGeometryMatrix.flatMap(({ profile, measurement }) =>
       measurement.results.flatMap((result) => {
-        const presentedStatusIsReadable = result.presented.length === 1 && result.presented.every((box) =>
+        // This desktop matrix includes the approved compact fine-pointer high-zoom mode.
+        const compactFinePointer = profile.width >= 641 && profile.width <= 768;
+        const loadedStatusMayBeHidden = compactFinePointer && result.name === "loaded";
+        const presentedStatusIsReadable = (
+          result.presented.length === 1 || (loadedStatusMayBeHidden && result.presented.length === 0)
+        ) && result.presented.every((box) =>
           box.clientWidth + 1 >= box.scrollWidth &&
           box.clientHeight + 1 >= box.scrollHeight &&
           box.wordBreak !== 'break-all' &&
@@ -1566,9 +1571,9 @@ async function runQa(page) {
           result.targets.chapterPicker,
         ].every((box) => box && box.width > 0 && box.height >= 36 && box.left >= 0 && box.right <= result.clientWidth + 1);
         const headerIdentityIsUsable = result.targets.brand && result.targets.brand.width > 0 &&
-          result.targets.brand.height >= 40 && result.targets.brand.left >= 0 &&
+          result.targets.brand.height >= (compactFinePointer ? 36 : 40) && result.targets.brand.left >= 0 &&
           result.targets.brand.right <= result.clientWidth + 1 &&
-          result.targets.theme && result.targets.theme.width > 0 && result.targets.theme.height >= 44 &&
+          result.targets.theme && result.targets.theme.width > 0 && result.targets.theme.height >= (compactFinePointer ? 36 : 44) &&
           result.targets.theme.left >= 0 && result.targets.theme.right <= result.clientWidth + 1;
         const compactContract = result.liveRegionCount === 1 && result.compactAriaHidden === 'true' &&
           result.compactHidden === (result.name !== 'loaded');
