@@ -811,10 +811,42 @@ async function runProfile(browser, url, profile) {
       clearMeaning = page.locator("button.word-meaning-trigger").first();
     }
     await clearMeaning.focus();
+    if (profile.mobile) {
+      // Model a slow frame after keyboard activation, without sleeps or retries.
+      // Clear may receive focus before the tool's deferred initial-focus pass.
+      await page.evaluate(() => {
+        const request = window.requestAnimationFrame;
+        const cancel = window.cancelAnimationFrame;
+        const pending = new Map();
+        let nextId = -1;
+        window.requestAnimationFrame = (callback) => {
+          const id = nextId--;
+          pending.set(id, callback);
+          return id;
+        };
+        window.cancelAnimationFrame = (id) => pending.delete(id) || cancel.call(window, id);
+        window.releaseMeaningFocusFrame = () => {
+          window.requestAnimationFrame = request;
+          window.cancelAnimationFrame = cancel;
+          delete window.releaseMeaningFocusFrame;
+          for (const callback of pending.values()) callback(performance.now());
+          return pending.size;
+        };
+      });
+    }
     await clearMeaning.press("Enter");
     await waitFor(page, () => document.querySelector("#detailToolSurface")?.dataset.toolKind === "meaning");
     if (profile.mobile) {
-      await page.locator("#clearDetail").evaluate((button) => button.focus({ preventScroll: true }));
+      const focusFrame = await page.locator("#clearDetail").evaluate((button) => {
+        const initialClass = document.activeElement?.className;
+        button.focus({ preventScroll: true });
+        const before = document.activeElement?.id;
+        const released = window.releaseMeaningFocusFrame();
+        return { initialClass, before, after: document.activeElement?.id, released };
+      });
+      assert(focusFrame.released > 0 && focusFrame.before === "clearDetail" &&
+        focusFrame.after === "clearDetail",
+      `${profile.name}: deferred tool focus stole Clear focus: ${JSON.stringify(focusFrame)}`);
       await waitFor(page, () => document.activeElement === document.querySelector("#clearDetail"));
     }
     const readerContextBeforeClear = profile.mobile

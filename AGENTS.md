@@ -51,10 +51,11 @@ or a final distribution checkpoint, not each UI edit. Do not revive temporary
 owner-machine uninstall/firewall helpers or bypass blocked automation actions.
 Report failures and unrun checks accurately; source review is not rendered QA.
 
-## Current work: Septuagint comparison contracts (#96 Phase 1)
+## Current work: Septuagint comparison contracts (#96 Phase 1 / PR #115)
 
-Accepted `main` is `0148d6f989c1eafef489fb452a4a33a1a8c899ab` after #97 / PR #114.
+Accepted `main` is `a76062e939c0ef3b66866cf4462f2811534644be`.
 Work only on `feature/septuagint-comparison-contracts` for this Phase 1 slice.
+Keep PR #115 OPEN, DRAFT, and UNMERGED.
 Issue #83 remains the deterministic source-data generation authority. The accepted
 #97 decision allows shared witness/reference/evidence contracts to proceed, but
 it does not establish Swete token lemmas, morphology, or Hebrew↔Greek word-level

@@ -66,7 +66,7 @@ assert.match(summaryRule, /color:\s*var\(--text\)/, "selected context title must
 assert.doesNotMatch(contextStyles, /#favoriteBook::before|#favoriteChapter::before/, "Book and Chapter labels must be real trigger markup, not CSS pseudo-elements");
 assert.match(contextStyles, /\.study-marks-trigger-label\s*\{/, "visible Book and Chapter labels need a shared trigger label style");
 assert.match(
-  contextStyles,
+  readFileSync(new URL("../app/styles-study.css", import.meta.url), "utf8"),
   /\.original-language-transliteration,[\s\S]*color:\s*var\(--text\)/,
   "Language Study transliteration must use primary text contrast",
 );

@@ -19,6 +19,7 @@ const DOCUMENT_CLASSIFICATIONS = new Set([
 ]);
 
 const DOCUMENT_MODEL = Object.freeze([
+  { path: "docs/STYLESHEET_OWNERSHIP.md", classification: "maintained", roles: ["technical", "ui-contract", "test-inventory"] },
   { path: ".github/PULL_REQUEST_TEMPLATE.md", classification: "maintained", roles: ["policy"] },
   { path: "AGENTS.md", classification: "maintained", roles: ["policy"] },
   { path: "CHANGELOG.md", classification: "maintained", roles: ["current-status", "release-history"] },

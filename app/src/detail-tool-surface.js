@@ -171,9 +171,15 @@ function resolveRestoreFocus(session) {
 
 function scheduleInitialFocus(session) {
   const expectedGeneration = session.generation;
+  const initialTarget = session.document.activeElement;
   session.cancelInitialFocus = requestFrame(session.document, () => {
     session.cancelInitialFocus = null;
     if (activeSession !== session || sessionGeneration !== expectedGeneration) return;
+    const currentTarget = session.document.activeElement;
+    // Reinforce activation/default focus or recover replaced content, but never
+    // undo navigation to another control while this frame was pending.
+    if (currentTarget !== initialTarget && currentTarget !== session.trigger &&
+      currentTarget !== session.document.body) return;
     focusElement(resolveInitialFocus(session));
   });
 }

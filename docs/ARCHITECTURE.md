@@ -3,6 +3,8 @@
 Bible App Reader is one static DOM application with browser and Tauri 2 Windows
 composition roots. The shell comes from `app/index.html`, `app/app.js`, and the
 app stylesheets; runtime behavior is split across ES modules in `app/src/`.
+See [Stylesheet ownership](STYLESHEET_OWNERSHIP.md) for the shared load order,
+component responsibilities and static ownership guard.
 
 ## Runtime Shape
 
