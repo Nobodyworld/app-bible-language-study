@@ -11,7 +11,9 @@ token transformation, or Search indexing.
 `import-original-language-sources.mjs` is the single maintained original-language
 importer. Its XHTML mode extracts WLC, WLCO, Nestle 1904, and TR 1894 source text;
 its Strong's mode groups reviewed verse-word JSONL into interlinear books and
-lexicon JSONL into numbered chunks. There is no maintained Python generator.
+lexicon JSONL into numbered chunks. Its Swete mode imports pinned source-native
+line records into shared textual-comparison contracts. There is no maintained
+Python generator.
 
 ```sh
 npm run sources:check -- --archive-root <reviewed-extracted-archive>
@@ -69,6 +71,142 @@ chunks (8,674 Hebrew and 5,624 Greek entries); its 384,267 word records
 (268,136 Hebrew and 116,131 Greek) differ in all 66 interlinear books. Full current
 interlinear reconstruction therefore requires matching reviewed external inputs.
 Packaged-data tests remain the authority for the currently shipped source records.
+
+## Swete text pipeline (#96 Phase 2)
+
+The same `import-original-language-sources.mjs` owns Swete mode. Its only output
+namespace is `<output-root>/sources/swete-lxx/text/`. The output root is mandatory.
+It does not register a runtime corpus, build an installable pack, or change Search.
+Raw sources and full generated records remain external or ignored; only input
+identities and small synthetic tests are tracked.
+
+```sh
+npm run sources:import -- --swete-root <pinned-source-root> --output-root <proof-output-root>
+npm run sources:check -- --swete-root <pinned-source-root> --output-root <proof-output-root>
+npm run test:swete-generator
+```
+
+`app/tools/source-inputs/swete-pinned.json` locks all 55 `data/*.txt` files and
+the source README at `nathans/lxx-swete` revision
+`26bad3eb42bba98471d154c954e36a6f30a0279d`. Each entry has its exact logical path,
+source book number, byte length, SHA-256 and Git blob SHA-1. Acquire these files
+from public raw URLs at that exact commit, preserving bytes and paths under the
+external root. The importer performs no network access. Missing, altered,
+wrong-revision or colliding inputs fail before any output write. Extra raw files
+are not consumed. Coverage means the files present in this pinned source, not
+every book in another canon or an independently reconstructed upstream edition.
+First1KGreek provenance is a declaration from the pinned source README.
+
+`--provenance-path` accepts the identical pin manifest, or an explicitly synthetic
+`fixture:swete` / `synthetic-v1` / CC0-1.0 declaration. The latter is labeled
+synthetic with partial witness coverage; it cannot claim the approved revision.
+There is no generic corpus or restricted-data import mode.
+
+### Source references and token identity
+
+One source line is `book.chapter.verse surface`. The parser preserves literal
+source labels: the accepted alias `Ps.50.1` is stored as `27.50.1`. It supports
+numeric zero units, `prologue`, `iva`, `ivb`, and suffixes such as `35I`, `13a`
+and `1a1`. Leading-zero numeric aliases, invalid UTF-8, interior blank lines and
+malformed records fail with logical file and one-based line diagnostics.
+
+Every non-whitespace surface is preserved verbatim, including punctuation,
+non-Greek artifacts and controls. Quality counters report these records without
+correcting the source. NFC is a separate `normalized_forms.nfc` alias. Tokens
+are emitted in source line order and carry `source_file` and `source_line`,
+linked to the manifest's exact hash. The occurrence key remains the four fields
+owned by Phase 1. `token_index` starts at one per literal source reference and
+continues when it recurs later in the file; `segment_index` increments for each
+recurring block. Repeated surfaces remain distinct occurrences. This extends
+the bounded Phase-0 contiguous-block experiment without discarding source lines.
+
+### Explicit verse-map coverage
+
+`app/tools/source-inputs/swete-verse-maps.json` transcribes only the accepted #97
+projection: Genesis 1, Psalm 50 and Isaiah 40:3. It records authority revisions,
+hashes, credits and changes, plus exact hashes of the three actual app WLC book
+files supplying targets. `--verse-map-path` and `--app-verses-root` accept an
+explicit matching projection and app book extract. No target is synthesized
+from numeric similarity. Changed app bytes fail their hash check. Expanding
+the reviewed projection requires a separate input review; confidence never
+promotes a candidate in the importer.
+
+All source units are reconciled against the explicit maps. The shared contracts
+validate exact, split, merged, moved, source-only, canonical-only, unavailable
+and uncertain shapes. Orphan sources, nonexistent app targets, duplicate IDs
+and conflicting ownership of either side fail; splits/merges belong in one
+group. Unlisted units receive `unavailable` / `unreviewed` records with empty
+target arrays. Declared source-only material is distinct from an unknown map.
+Coverage counts all units as mapped, source-only or unmapped, globally and per
+book. Unreferenced app units are measured only over supplied app books and are
+not automatically declared canonical-only evidence.
+
+Reviewed/source-provided maps with one target may populate token
+`canonical_reference`. Splits, multiple targets, uncertain/unavailable maps and
+generated/unreviewed candidates leave it null; the map preserves all references
+and its review state. Psalm `27.50.1`–`27.50.3` jointly map to `psalms/51/1`,
+preserving both superscriptions and three source identity sequences.
+`27.50.4`–`27.50.21` map to `psalms/51/2`–`psalms/51/19`. This is bounded
+accepted evidence, not a full TVTMS interpreter.
+
+### Manifest, checks and rights
+
+Outputs are `witness.json`, `tokens/<source-book-number>.jsonl`,
+`verse-maps.jsonl`, `provenance.json`, `NOTICE.txt`, the source README under
+`notices/`, and `manifest.json`. Every domain record passes the shared validators.
+Lemma, morphology and transliteration stay null; external IDs stay empty.
+Swete-specific validation rejects populated annotations, Strong's identities,
+Hebrew alignment and unknown token/map fields. No word alignment, lexical bridge
+or alternate-Vorlage conclusion is generated.
+
+The manifest uses #83's sorted inventory/digest model: transformation ID/version,
+LF-normalized importer/contract code hashes, raw input identities, provenance,
+coverage, semantic-record/file counts and per-file byte lengths/SHA-256.
+`output_records` counts witness, token and verse-map records;
+`output_payload_bytes` excludes the manifest. Returned measurements include
+manifest bytes and separate parse/total times. Timings, wall-clock timestamps
+and absolute local paths are excluded from deterministic artifacts. Importer or
+contract code changes intentionally change input identity.
+
+`--check` reconstructs and compares exact bytes, including manifest and notices,
+without creating directories or modifying files. Diagnostics identify missing,
+changed and unexpected files and the review/regeneration action. Unexpected
+files in the owned namespace also block writes; nothing is deleted automatically.
+All output paths are checked against input and symbolic-link/junction aliases
+before writing.
+
+Swete text and project adaptations retain CC BY-SA 4.0. Attribution, the source
+README, upstream change history and license links accompany output. Bounded
+STEPBible components retain CC BY 4.0 credits/notices and the upstream raw-data
+distribution request. Application code remains MIT. Synthetic fixture text is
+invented CC0-1.0 material; it establishes no production text/mapping authority.
+
+### Production-size local proof
+
+The 2026-09-13 proof consumed all 55 pinned text files: **11,795,198 raw text
+bytes, 29,308 source units and 588,579 tokens**. The source README adds 845 bytes.
+All size/SHA-256/Git-blob checks passed, with zero parse failures, duplicate
+occurrence identities or orphan mapping sources/targets. **53 source units map
+to 51 app targets; 0 are classified source-only; 29,255 remain unmapped.**
+The source contains 55 recurring reference blocks, 1,046 tokens without Greek
+letters and 10 tokens with Unicode control/format characters, all retained.
+No source surface changes under NFC.
+
+There are 61 generated files and approximately 340 MB of uncompressed contract
+records/metadata. Exact bytes, generation/check timings, input/output digests
+and per-book coverage are recorded in
+[`measurements/septuagint-phase2.json`](measurements/septuagint-phase2.json).
+This measures local Node/filesystem work, not browser, native or compressed-pack
+performance. Repeated reconstruction is byte-identical and no-write checking
+passes. Full source-file parsing is covered; **full-corpus reference mapping and
+optional-pack readiness remain incomplete**. Source artifacts also need editorial
+review before future delivery. No installer lifecycle is involved.
+
+The offline synthetic suite covers normal/malformed parsing, repeated tokens and
+blocks, suffix/zero units, all map cardinalities, Psalm superscriptions,
+candidates, source-only/unmapped records, stale/missing/wrong identities,
+determinism, no-write drift, annotations and input/output alias boundaries.
+It runs in `test:source-generators` and therefore `npm run verify`.
 
 ## Current exact Search authority
 
@@ -187,8 +325,9 @@ source/rights boundary: Swete is text-contract-ready, TVTMS is bounded reference
 authority, and Swete token lemma/morphology must remain null (enforced by the
 validator). Synthetic annotation fixtures for other witnesses establish schema
 behavior only. Hebrew↔Greek word alignment, certified Swete/GNT token bridges,
-production LXX delivery and an optional separately licensed pack remain unsupported
-or outside this Phase 1 slice. Text rights do not confer annotation/alignment rights.
+production LXX delivery and an optional separately licensed pack remain unsupported.
+Phase 2 adds local import/check proof as described above, without changing those
+delivery limits. Text rights do not confer annotation/alignment rights.
 
 The source identity is witness-qualified, with a canonical source-token namespace,
 source-specific versification identifier and source reference. Representation,
@@ -204,8 +343,9 @@ they are not discarded or assigned a fabricated English reference.
 
 New alignment generators must expose the same deterministic identity, counts,
 digest and no-write comparison discipline before any alignment pack is shipped.
-This slice imports no LXX/CATSS corpus and adds no multilingual Search lanes,
-SQLite store, native pack delivery, or user-data migration.
+The maintained Swete mode consumes only its approved source inputs; CATSS remains
+excluded. It adds no multilingual Search lanes, SQLite store, native pack
+delivery, or user-data migration.
 
 ## Historical candidate reconciliation
 

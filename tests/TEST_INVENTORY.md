@@ -71,7 +71,8 @@ composition above:
 | `npm run test:reader-data-loading` | `app/scripts/reader-data-loading-interaction-test.mjs`. |
 | `npm run test:reliability` | Pack commit/removal failure injection and uninstall-preservation assertion self-tests; included once through `test:domain`. |
 | `npm run test:search-highlight` | `app/scripts/search-highlight-interaction-test.mjs`. |
-| `npm run test:source-generators` | Original-language extraction, Strong's transformation, deterministic identity, namespace and no-write checks. |
+| `npm run test:source-generators` | Original-language extraction, Strong's transformation, and Swete text/reference import; deterministic identity, namespace and no-write checks. |
+| `npm run test:swete-generator` | Offline synthetic Swete parsing, complete reference accounting, explicit verse maps, Psalm divergence, input/output identity, no-write drift and unsupported annotation rejection. |
 | `npm run test:search-generator` | Current Search generation, input/output identity, reproducibility and actionable mismatch checks. |
 | `npm run test:search-contract` | Direct production Search normalization, posting multiplicity, ordering, scopes, canonical resolution and missing-data contracts using storage adapters. |
 | `npm run search:check` | No-write reconstruction of all four current Search collections and their manifest from tracked canonical inputs. |
@@ -120,6 +121,7 @@ order:
 | `tests/reader-ui-regressions.mjs` | Reader layout and source-level UI regressions, including deterministic picker handoff, bounded indexed Reader snapshots, browser-owned route history, exact phrase preservation, informational alignment groups, contained Strong's scrolling, and retired header controls. |
 | `tests/original-language-source-importer.mjs` | Reproducible original-language extraction, Strong's transformations, source-qualified identity, namespace safety and no-write verification. |
 | `tests/search-generator.mjs` | Deterministic Search generation and source/provenance/count/digest validation, including stale, missing and invalid input/output rejection. |
+| `tests/swete-source-importer.mjs` | Synthetic CC0 text fixtures: repeated occurrences/blocks, named/suffix/zero references, malformed inputs, collisions, all eight verse-map types, superscriptions, candidates, deterministic manifest/output digests, CLI no-write drift and source/annotation boundaries. Full pinned-source measurements remain a separate local proof. |
 | `tests/search-contract.mjs` | Storage-engine-neutral direct production Search behavior; no copied lookup algorithm or rendered-QA claim. |
 | `tests/original-language-source-data.mjs` | Packaged Hebrew and Greek source coverage and identity. |
 | `tests/original-language-study.mjs` | Language Study entry, source-backed cards, and related-reference behavior. |
