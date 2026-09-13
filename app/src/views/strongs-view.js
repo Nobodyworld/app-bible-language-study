@@ -273,6 +273,15 @@ function createOriginValue(entry, openStrongCode) {
     });
     if (button) {
       button.classList.add("strong-origin-link");
+      // Preserve the source relationship and word boundaries while exposing
+      // the destination. Compare/See controls retain their source text.
+      const code = String(match.ref.strong_code).toUpperCase();
+      button.dataset.strongCode = code;
+      const codeLabel = document.createElement("span");
+      codeLabel.className = "strong-origin-code";
+      codeLabel.textContent = ` (${code})`;
+      codeLabel.setAttribute("aria-hidden", "true");
+      button.append(codeLabel);
       wrap.append(button);
     } else {
       wrap.append(textNode(source.slice(match.start, match.end)));

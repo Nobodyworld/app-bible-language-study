@@ -55,10 +55,11 @@ export async function checkDesktopUiPolish(client, runRoot) {
   await activate(client,'.verse-row[data-verse="18"] .strong-token[data-strong-code="G227"]');
   await client.waitFor("return document.querySelector('#detailContent .strong-code')?.textContent==='G227' && Boolean(document.querySelector('.word-origin-value .strong-inline-link[aria-label$=\"G1\"]')); ");
   assert.equal(await client.execute("return document.querySelector('.word-origin-value').querySelectorAll('button').length;"),2);
-  assert.match(await client.execute("return document.querySelector('.word-origin-value').textContent;"),/^From a \(as a negative particle\) and lanthano/);
+  assert.match(await client.execute("return document.querySelector('.word-origin-value').textContent;"),/^From a \(G1\) \(as a negative particle\) and lanthano \(G2990\)/);
   await shot("g227-prefix");
   await activate(client,'.word-origin-value .strong-inline-link[aria-label$="G1"]',"\uE007");
   await client.waitFor("return document.querySelector('#detailContent .strong-code')?.textContent==='G1';");
+  // John 4:24 opens G4151; Compare psuche. is lexicon metadata, not verse text.
   await route(client,"#/read/bsb/john/4/24",'.verse-row[data-verse="24"] .strong-token[data-strong-code="G4151"]');
   await activate(client,'.verse-row[data-verse="24"] .strong-token[data-strong-code="G4151"]');
   await client.waitFor("return Boolean(document.querySelector('#detailContent .concordance-text .strong-inline-link[aria-label$=\"G5590\"]'));");

@@ -60,7 +60,7 @@
   border-bottom: 1px solid var(--line);
   -webkit-backdrop-filter: blur(10px);
   backdrop-filter: blur(10px);
-  transition: all 140ms ease;
+  transition: background-color 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -753,12 +753,13 @@ html[data-theme="light"] .app-header {
 @media (min-width: 769px) and (max-width: 1100px) {
 .app-header {
     display: grid;
-    grid-template-areas: "brand status . theme"
-        "controls controls controls controls";
-    grid-template-columns: max-content max-content minmax(0, 1fr) auto;
+    /* Browser zoom reduces the CSS viewport. Keep desktop controls in one row
+       rather than switching to the old two-row tablet header at 1100px. */
+    grid-template-areas: "brand controls status theme";
+    grid-template-columns: max-content minmax(0, 1fr) fit-content(9rem) auto;
     align-items: center;
-    gap: 10px 12px;
-    padding: 10px 22px 12px;
+    gap: 8px;
+    padding: 10px 12px;
   }
 }
 
@@ -766,10 +767,10 @@ html[data-theme="light"] .app-header {
 .brand {
     grid-area: brand;
     justify-self: start;
-    width: max-content;
-    min-width: max-content;
+    width: auto;
+    min-width: 0;
     flex-shrink: 0;
-    padding-inline-end: 14px;
+    padding-inline-end: 0;
   }
 }
 
@@ -785,6 +786,9 @@ html[data-theme="light"] .app-header {
     grid-area: status;
     align-self: center;
     justify-self: start;
+    min-width: 0;
+    max-width: 9rem;
+    overflow-wrap: anywhere;
   }
 }
 
@@ -792,10 +796,11 @@ html[data-theme="light"] .app-header {
 .reader-controls {
     grid-area: controls;
     display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: minmax(0, 1.25fr) minmax(0, 1.15fr) minmax(0, 0.65fr);
     justify-content: stretch;
     width: 100%;
-    gap: 10px;
+    min-width: 0;
+    gap: 6px;
   }
 }
 
@@ -809,6 +814,7 @@ html[data-theme="light"] .app-header {
 .reader-controls select,
 .reader-picker-button {
     width: 100%;
+    min-width: 0;
     max-width: none;
   }
 }

@@ -4,6 +4,7 @@ import { existsSync, mkdirSync } from "node:fs";
 import path from "node:path";
 import { chromium } from "playwright-core";
 import { startStaticAppServer } from "../tools/serve-app.mjs";
+import { checkZoomReflow } from "./zoom-reflow-acceptance.mjs";
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
@@ -97,7 +98,14 @@ async function checkLexicalReferences(page, url) {
   await waitForEntry(page, "G227");
   const route = page.url();
   const origin = page.locator("#detailContent .word-origin-value");
-  assert(/From a \(as a negative particle\) and lanthano/.test(await origin.innerText()), "G227 must preserve the source wording while distinguishing the lexical a from the ordinary article in its explanation");
+  assert(/From a \(G1\) \(as a negative particle\) and lanthano \(G2990\)/.test(await origin.innerText()), "G227 must display both linked Strong codes without dropping the source relationship");
+  const sourceOrigin = await origin.evaluate((node) => {
+    const copy = node.cloneNode(true);
+    copy.querySelectorAll(".strong-origin-code").forEach((code) => code.remove());
+    return copy.textContent;
+  });
+  assert(/^From a \(as a negative particle\) and lanthano/.test(sourceOrigin), "Visible reference annotations must not rewrite the source prose");
+  assert.equal(JSON.stringify(await origin.locator(".strong-origin-code").allTextContents()), '[" (G1)"," (G2990)"]', "G227 must expose the actual two reference destinations");
   const prefix = origin.getByRole("button", { name: "Open Strong's a, G1", exact: true });
   assert(await prefix.count() === 1 && await origin.locator("button").count() === 2, "G227 must link its two origin words, not the article in '(as a negative particle)'");
   await prefix.focus();
@@ -126,7 +134,8 @@ async function checkLexicalReferences(page, url) {
   assert.equal(await pronounOrigin.locator("button").count(), 0,
     "G4771 Word origin must not turn `se` inside `second` or absent related forms into links");
 
-  // Open an actual G4151 occurrence rather than a synthetic dictionary entry.
+  // John 4:24 opens the real G4151 entry. Compare psuche. is that entry's
+  // lexicon metadata, not a word asserted to occur in the verse.
   await page.goto(`${url}/#/read/bsb/john/4/24`, { waitUntil: "load" });
   const spirit = page.locator('.verse-row[data-verse="24"] .strong-token[data-strong-code="G4151"]').first();
   await spirit.waitFor({ state: "visible" });
@@ -330,6 +339,7 @@ async function main() {
     `hydrated Strong's preview did not update in place: ${JSON.stringify(preview)}`);
 
     await checkLexicalReferences(page, url);
+    const reflow = await checkZoomReflow(browser, url);
     const wrapping = [];
     for (const viewport of [{ width: 1280, height: 720 }, { width: 390, height: 844 }]) {
       const wrappingPage = await browser.newPage({ viewport });
@@ -342,7 +352,7 @@ async function main() {
       }
     }
     assert(errors.length === 0, `Strong preview regressions reported browser errors: ${JSON.stringify(errors)}`);
-    console.log(JSON.stringify({ status: "ok", browser: browser.version(), hydratedPreview: true, lexicalReferences: true, viewportContainedReaderPreview: true, originBoundaryMatching: true, wrapping }, null, 2));
+    console.log(JSON.stringify({ status: "ok", browser: browser.version(), hydratedPreview: true, lexicalReferences: true, viewportContainedReaderPreview: true, originBoundaryMatching: true, reflow, wrapping }, null, 2));
   } finally {
     await browser.close();
     await new Promise((resolveClose) => server.close(resolveClose));
