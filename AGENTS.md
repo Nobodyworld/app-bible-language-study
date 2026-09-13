@@ -55,7 +55,7 @@ Report failures and unrun checks accurately; source review is not rendered QA.
 
 Accepted `main` is `a76062e939c0ef3b66866cf4462f2811534644be`.
 Work only on `feature/septuagint-comparison-contracts` for this Phase 1 slice.
-Keep PR #115 OPEN, DRAFT, and UNMERGED.
+After local acceptance, PR #115 may be marked Ready for review for the single final integration gate; keep it OPEN and UNMERGED until explicit owner authorization.
 Issue #83 remains the deterministic source-data generation authority. The accepted
 #97 decision allows shared witness/reference/evidence contracts to proceed, but
 it does not establish Swete token lemmas, morphology, or Hebrew↔Greek word-level
