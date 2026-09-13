@@ -74,8 +74,14 @@ assert.doesNotMatch(
 );
 assert.match(desktopE2e, /PROFILE_ID === ["']lab["'][\s\S]*?--features["'], ["']lab-profile/, "Lab E2E builds must compile the native Lab feature");
 
-assert.match(verifyWorkflow, /name: deterministic \(\$\{\{ matrix\.node-version \}\}\)/);
-assert.match(verifyWorkflow, /node-version:\s*\n\s*- "20"\s*\n\s*- "24"/);
+assert.match(verifyWorkflow, /name: deterministic \(20\)/);
+assert.match(verifyWorkflow, /node-version: "20"/);
+assert.match(
+  verifyWorkflow,
+  /node24_compatibility:[\s\S]*?if: github\.event_name == 'workflow_dispatch'[\s\S]*?name: deterministic \(24\)[\s\S]*?node-version: "24"/,
+  "Node 24 compatibility must remain available only as an explicit manual check",
+);
+assert.doesNotMatch(verifyWorkflow, /matrix\.node-version/, "Routine PR verification must not retain the removed Node-version matrix");
 assert.match(verifyWorkflow, /run: npm run test:static/);
 assert.match(verifyWorkflow, /run: npm run audit/);
 assert.match(verifyWorkflow, /name: browser \(20\)/);
@@ -88,8 +94,8 @@ assert.doesNotMatch(
 );
 assert.equal(
   (verifyWorkflow.match(/persist-credentials: false/g) || []).length,
-  2,
-  "Both Verify checkouts must keep persisted credentials disabled",
+  3,
+  "All Verify checkouts must keep persisted credentials disabled",
 );
 
 assert.match(requiredGatesWorkflow, /name: Required Gates/);
@@ -135,9 +141,11 @@ console.log(JSON.stringify({
   no_localhost_dev_server: "PASS",
   ci_required_context_candidates: [
     "deterministic (20)",
-    "deterministic (24)",
     "browser (20)",
     "desktop/security gate",
+  ],
+  ci_manual_context_candidates: [
+    "deterministic (24)",
   ],
   browser_matrix_duplication: "ABSENT",
   always_present_desktop_security_gate: "PASS",
