@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   preflight:
-    if: github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false
+    if: github.event_name == 'workflow_dispatch' || github.event.action == 'ready_for_review' || github.event.pull_request.draft == false
     name: security/relevance
     runs-on: windows-2022
     timeout-minutes: 10
@@ -114,7 +114,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 100
     needs: preflight
-    if: always() && (github.event_name == 'workflow_dispatch' || github.event.pull_request.draft == false)
+    if: always() && (github.event_name == 'workflow_dispatch' || github.event.action == 'ready_for_review' || github.event.pull_request.draft == false)
     env:
       CANDIDATE_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
       DESKTOP_RELEVANT: ${{ needs.preflight.outputs.desktop_relevant }}
