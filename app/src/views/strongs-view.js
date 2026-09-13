@@ -263,6 +263,9 @@ function createOriginValue(entry, openStrongCode) {
     .filter(Boolean)
     .sort((left, right) => left.start - right.start || right.label.length - left.label.length);
 
+  // Single-letter prefixes (such as G227's a) need explicit destinations.
+  // Preserve the accepted word-focused presentation for unambiguous origins.
+  const showOriginCodes = matches.some(({ label }) => /^\p{L}\p{M}*-?$/u.test(label));
   let cursor = 0;
   for (const match of matches) {
     if (match.start < cursor) continue;
@@ -273,15 +276,15 @@ function createOriginValue(entry, openStrongCode) {
     });
     if (button) {
       button.classList.add("strong-origin-link");
-      // Preserve the source relationship and word boundaries while exposing
-      // the destination. Compare/See controls retain their source text.
-      const code = String(match.ref.strong_code).toUpperCase();
-      button.dataset.strongCode = code;
-      const codeLabel = document.createElement("span");
-      codeLabel.className = "strong-origin-code";
-      codeLabel.textContent = ` (${code})`;
-      codeLabel.setAttribute("aria-hidden", "true");
-      button.append(codeLabel);
+      if (showOriginCodes) {
+        const code = String(match.ref.strong_code).toUpperCase();
+        button.dataset.strongCode = code;
+        const codeLabel = document.createElement("span");
+        codeLabel.className = "strong-origin-code";
+        codeLabel.textContent = ` (${code})`;
+        codeLabel.setAttribute("aria-hidden", "true");
+        button.append(codeLabel);
+      }
       wrap.append(button);
     } else {
       wrap.append(textNode(source.slice(match.start, match.end)));
