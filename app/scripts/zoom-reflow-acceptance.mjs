@@ -11,6 +11,7 @@ const VIEWPORTS = [
   { width: 960, height: 540 },
   { width: 769, height: 432 },
   { width: 768, height: 540 },
+  { width: 720, height: 476 },
   { width: 390, height: 844 },
 ];
 
@@ -24,6 +25,8 @@ async function geometry(page) {
     const context = document.querySelector("#detailContext");
     const card = context.querySelector(".panel-context-navigation");
     const header = document.querySelector(".app-header");
+    const detailHeader = document.querySelector(".detail-header");
+    const floatingNav = document.querySelector(".detail-floating-nav");
     const contextStyle = getComputedStyle(context);
     const headerControls = [".brand", ".reader-controls", "#statusText", "#themeToggle"]
       .map((selector) => rect(header.querySelector(selector)));
@@ -32,12 +35,15 @@ async function geometry(page) {
     const horizontal = (child, parent) => child.left >= parent.left - 1 && child.right <= parent.right + 1;
     return {
       viewport: { width: innerWidth, height: innerHeight },
+      finePointer: matchMedia("(hover: hover) and (pointer: fine)").matches,
       header: rect(header),
       headerControls,
       headerSingleRow: Math.max(...headerControls.map((box) => box.top)) < Math.min(...headerControls.map((box) => box.bottom)),
       headerNoOverlap: headerControls.slice(1).every((box, index) => box.left >= headerControls[index].right - 1),
       headerContained: headerControls.every((box) => horizontal(box, rect(header))),
       pane: rect(pane),
+      detailHeader: rect(detailHeader),
+      floatingNav: rect(floatingNav),
       context: contextRect,
       card: cardRect,
       cardFillsContext: Math.abs(cardRect.left - contextRect.left - parseFloat(contextStyle.paddingLeft)) <= 1 &&
@@ -101,6 +107,15 @@ export async function checkZoomReflow(browser, url) {
             assert(state.header.height <= 88 && state.headerSingleRow && state.headerNoOverlap && state.headerContained,
               `Desktop header must remain a compact, nonoverlapping row: ${diagnostic}`);
           }
+          const zoomedFinePointer = viewport.width >= 641 && viewport.width <= 768 && state.finePointer;
+          if (zoomedFinePointer) {
+            assert(state.header.height <= 118,
+              `Fine-pointer narrow reflow must not let the Reader header dominate the viewport: ${diagnostic}`);
+            assert(state.detailHeader.height <= 64 && state.floatingNav.height <= 40,
+              `Fine-pointer narrow reflow must keep Study chrome compact: ${diagnostic}`);
+            assert(state.context.height <= state.viewport.height * 0.34,
+              `Fine-pointer narrow reflow must bound the WORD/VERSE context card: ${diagnostic}`);
+          }
           // Keyboard focus must be able to reveal the final context action even
           // when a short viewport requires this bounded region to scroll.
           const last = page.locator("#detailContext button:not([disabled])").last();
@@ -115,7 +130,7 @@ export async function checkZoomReflow(browser, url) {
             mkdirSync(process.env.BIBLEAPP_UI_EVIDENCE_DIR, { recursive: true });
             await page.screenshot({ path: path.join(process.env.BIBLEAPP_UI_EVIDENCE_DIR, `reflow-${theme}-${viewport.width}-${mode}.png`) });
           }
-          results.push({ theme, ...viewport, mode, headerHeight: state.header.height, paneWidth: state.pane.width });
+          results.push({ theme, ...viewport, mode, finePointer: state.finePointer, headerHeight: state.header.height, paneWidth: state.pane.width });
         }
       }
       assert.deepEqual(errors, [], `${theme}: reflow acceptance reported browser errors`);

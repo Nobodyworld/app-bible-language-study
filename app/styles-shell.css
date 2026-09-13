@@ -884,3 +884,91 @@ html[data-theme="light"] .app-header {
 :root {
   --app-header-block-size: 76px;
 }
+
+/* A zoomed desktop can cross the mobile width breakpoint while still using a
+   precise mouse pointer. Keep that reflow compact without weakening touch UI. */
+@media (min-width: 641px) and (max-width: 768px) and (hover: hover) and (pointer: fine) {
+  .app-header {
+    display: grid;
+    grid-template-areas: "brand theme" "controls controls";
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 6px 8px;
+    padding: 8px 12px;
+  }
+
+  .brand {
+    grid-area: brand;
+    justify-self: start;
+    width: auto;
+    min-width: 0;
+    max-width: none;
+    padding-inline-end: 0;
+  }
+
+  .brand-mark {
+    width: 36px;
+    height: 36px;
+  }
+
+  .brand h1 {
+    font-size: 18px;
+    white-space: nowrap;
+  }
+
+  .theme-toggle-button {
+    grid-area: theme;
+    justify-self: end;
+    min-height: 36px;
+    padding: 4px 7px;
+  }
+
+  .reader-controls {
+    grid-area: controls;
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    width: 100%;
+    min-width: 0;
+    gap: 6px;
+  }
+
+  .reader-control {
+    display: grid;
+    min-width: 0;
+    gap: 3px;
+    font-size: 11px;
+  }
+
+  .reader-controls select,
+  .reader-picker-button {
+    width: 100%;
+    min-width: 0;
+    height: 36px;
+    max-width: none;
+  }
+
+  .header-status {
+    grid-area: auto;
+  }
+
+  .header-status[data-status-state="loaded"] {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    margin: -1px;
+    overflow: hidden;
+    padding: 0;
+    border: 0;
+    clip: rect(0 0 0 0);
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+
+  .header-status:not([data-status-state="loaded"]) {
+    grid-column: 1 / -1;
+    justify-self: stretch;
+    max-width: 100%;
+    text-align: left;
+    white-space: normal;
+  }
+}

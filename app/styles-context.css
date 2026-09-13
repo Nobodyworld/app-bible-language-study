@@ -636,3 +636,57 @@ html[data-theme="light"] .word-meaning-menu {
   z-index: 8;
   background: var(--panel);
 }
+
+/* Fine-pointer desktops can enter the drawer breakpoint under browser zoom.
+   Keep that reflow dense while preserving 44px touch targets on real mobile. */
+@media (min-width: 641px) and (max-width: 768px) and (hover: hover) and (pointer: fine) {
+  .detail-context {
+    max-height: min(32dvh, 160px);
+    padding: 6px 12px 4px;
+  }
+
+  .panel-context-groups {
+    gap: 4px;
+  }
+
+  .panel-context-group {
+    gap: 4px;
+  }
+
+  .panel-context-scope-label {
+    padding-top: 5px;
+    font-size: 9px;
+  }
+
+  .panel-context-controls {
+    gap: 4px;
+  }
+
+  .verse-context-tab,
+  .study-marks-trigger,
+  .scope-mark-button {
+    min-height: 32px;
+  }
+
+  .study-marks-trigger {
+    width: 32px;
+    min-width: 32px;
+  }
+
+  .panel-context-navigation .word-meaning-trigger {
+    min-height: 32px;
+    padding: 5px 9px;
+  }
+
+  .detail-floating-nav {
+    min-height: 36px;
+    padding: 4px 10px 0;
+  }
+
+  .detail-nav-arrow {
+    width: 30px;
+    height: 30px;
+    min-width: 30px;
+    min-height: 30px;
+  }
+}
