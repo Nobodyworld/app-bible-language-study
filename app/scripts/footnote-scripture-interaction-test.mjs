@@ -16,6 +16,19 @@ const errors=[];
 async function ready(page) {
   await page.goto(`${url}/#/read/bsb/psalms/23/1`);
   await page.locator('.verse-row[data-verse="1"] .fn-marker').first().waitFor({state:"visible"});
+  // Navigation centers the requested verse with smooth scrolling. Wait for that
+  // motion and font layout before measuring whether a later footnote moves it.
+  await page.evaluate(async () => {
+    await document.fonts.ready;
+    let previous = scrollY, stableFrames = 0;
+    for (let frame = 0; frame < 180; frame += 1) {
+      await new Promise(requestAnimationFrame);
+      stableFrames = scrollY === previous ? stableFrames + 1 : 0;
+      previous = scrollY;
+      if (stableFrames >= 6) return;
+    }
+    throw new Error("Reader navigation scroll did not settle.");
+  });
 }
 async function snapshot(page) {
   return page.evaluate(() => ({route:location.hash, scroll:scrollY, chapter:document.querySelector("#chapterContent").textContent,
