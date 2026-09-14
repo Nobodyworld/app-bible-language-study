@@ -32,11 +32,27 @@ export async function checkDesktopUiPolish(client, runRoot) {
   for(const [expected,key,next] of [["compact",null,"standard"],["standard","\uE007","expanded"],["expanded"," ","compact"]]) {
     assert.equal(await mode(),expected);
     const geometry=await client.execute(`
-      const pane=document.querySelector('.detail-pane').getBoundingClientRect();
-      const nodes=['.detail-header h2','#detailModeStatus','#studyWorkspaceWidthCycle','#clearDetail','#hideStudyWorkspace'].map(s=>document.querySelector(s).getBoundingClientRect());
-      return {width:pane.width, viewport:innerWidth, sameRow:Math.max(...nodes.map(r=>r.top))<Math.min(...nodes.map(r=>r.bottom)), contained:nodes.every(r=>r.left>=pane.left && r.right<=pane.right)};
+      const pane=document.querySelector('.detail-pane');
+      const header=document.querySelector('.detail-header');
+      const paneRect=pane.getBoundingClientRect();
+      const headerRect=header.getBoundingClientRect();
+      const nodes=['.detail-header h2','#detailModeStatus','#studyWorkspaceWidthCycle','#detailBack','#detailForward','#clearDetail','#hideStudyWorkspace'].map(s=>document.querySelector(s).getBoundingClientRect());
+      const noOverlap=nodes.every((a,i)=>nodes.slice(i+1).every(b=>a.right<=b.left || b.right<=a.left || a.bottom<=b.top || b.bottom<=a.top));
+      return {
+        width:paneRect.width,
+        contentWidth:pane.clientWidth,
+        viewport:innerWidth,
+        headerHeight:headerRect.height,
+        sameRow:Math.max(...nodes.map(r=>r.top))<Math.min(...nodes.map(r=>r.bottom)),
+        contained:nodes.every(r=>r.left>=headerRect.left && r.right<=headerRect.right),
+        historyInHeader:Boolean(header.querySelector('.detail-header-actions .detail-floating-nav')),
+        noOverlap,
+      };
     `);
-    assert.ok(geometry.width>=320 && geometry.sameRow && geometry.contained,JSON.stringify(geometry));
+    assert.ok(geometry.width>=320 && geometry.contained,JSON.stringify(geometry));
+    assert.ok(geometry.historyInHeader && geometry.noOverlap,JSON.stringify(geometry));
+    assert.equal(geometry.sameRow,geometry.contentWidth>=560,JSON.stringify(geometry));
+    assert.ok(geometry.headerHeight<=86,JSON.stringify(geometry));
     headers.push({mode:expected,...geometry}); await shot(`header-${expected}`);
     await activate(client,"#studyWorkspaceWidthCycle",key);
     await client.waitFor("return document.documentElement.dataset.studyWorkspaceWidth===arguments[0];",[next]);
