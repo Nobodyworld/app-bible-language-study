@@ -39,7 +39,8 @@ async function exportBackup(page) {
 }
 async function checkControls(page, touch) {
   const measured = await page.evaluate(async (touch) => {
-    const { auditStudyControls } = await import("./src/ui-label-audit.js");
+    const auditUrl = new URL("./src/ui-label-audit.js", document.baseURI).href;
+    const { auditStudyControls } = await import(auditUrl);
     const controls = [...document.querySelectorAll("#detailContext .verse-context-tab, #detailContext .word-meaning-trigger, #detailContext .study-marks-trigger")];
     return {
       audit: auditStudyControls(),
@@ -139,7 +140,8 @@ try {
   await page.getByRole("textbox", { name: /Alternative wording for/ }).fill("Retain through recovery");
   await page.getByRole("button", { name: "Save", exact: true }).click();
   await page.evaluate(async () => {
-    const { BrowserPhysicalPackRegistry } = await import("./src/physical-pack-registry.js");
+    const registryUrl = new URL("./src/physical-pack-registry.js", document.baseURI).href;
+    const { BrowserPhysicalPackRegistry } = await import(registryUrl);
     const registry = new BrowserPhysicalPackRegistry();
     await registry.open();
     await registry.setMeta("physical_data_mode", "managed_cache_packs");
@@ -155,7 +157,8 @@ try {
   await page.getByRole("button", { name: "Use included data", exact: true }).waitFor();
   assert.equal(await page.locator(".physical-pack-manager").count(), 0);
   assert.equal(await page.evaluate(async () => {
-    const { BrowserPhysicalPackRegistry } = await import("./src/physical-pack-registry.js");
+    const registryUrl = new URL("./src/physical-pack-registry.js", document.baseURI).href;
+    const { BrowserPhysicalPackRegistry } = await import(registryUrl);
     return (await new BrowserPhysicalPackRegistry().open()).getMeta("physical_data_mode");
   }), "managed_cache_packs", "Opening recovery cannot silently change mode");
   await page.getByRole("button", { name: "Use included data", exact: true }).click();
@@ -169,7 +172,8 @@ try {
   await page.locator(".advanced-diagnostics > summary").click();
   assert.equal(await page.locator(".pack-recovery").count(), 0);
   assert.deepEqual(await page.evaluate(async () => {
-    const { BrowserPhysicalPackRegistry } = await import("./src/physical-pack-registry.js");
+    const registryUrl = new URL("./src/physical-pack-registry.js", document.baseURI).href;
+    const { BrowserPhysicalPackRegistry } = await import(registryUrl);
     return { mode: await (await new BrowserPhysicalPackRegistry().open()).getMeta("physical_data_mode"), bytes: await (await (await caches.open("bibleapp-pack:cleanup-fixture")).match("./cleanup-fixture.json")).text() };
   }), { mode: "bundled_static_data", bytes: "retained fixture bytes" });
   await page.goto(`${url}/?profile=lab#/read/bsb/psalms/23`);
