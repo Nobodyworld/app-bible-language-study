@@ -79,6 +79,17 @@ this same PR. Review screenshots where visible product claims changed. Only then
 request Ready/hosted integration and owner acceptance. Do not call the draft a
 PASS merely because it compiles. No merge/tag/release is implied.
 
+## Remaining Study-pane acceptance on PR #125
+
+My Data and Interpretation are owner-accepted. Further rendered acceptance is
+limited to the Study header/history, context height, open-pane zoom reflow,
+Language lock persistence, English phrase emphasis and sticky verse handoff.
+`npm run test:study-followup` is in the browser aggregate. It checks both Language
+entry points, passive interactions, Clear/history/navigation, short viewports and
+desktop/drawer transitions without reload or manual reopening. Existing contained
+tool tests also click the relocated header history control through the real UI.
+Viewport regression evidence does not establish genuine Edge 175% to 200% zoom.
+
 ## Deferred future work
 
 Future feature: #96 remaining Septuagint work; #78 multilingual Search; #89 context;

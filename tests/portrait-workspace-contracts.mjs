@@ -60,7 +60,7 @@ for (const mode of ["compact", "standard", "expanded"]) {
 }
 assert(
   /class="study-workspace-width-frame"/.test(widthCycle) &&
-    /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*0;/.test(css) &&
+    /\.study-workspace-width-controls button\s*{[\s\S]*?width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*inherit;/.test(css) &&
     /\.study-workspace-width-symbol\s*{[\s\S]*?display:\s*block;[\s\S]*?width:\s*18px;[\s\S]*?height:\s*16px;[\s\S]*?fill:\s*none;[\s\S]*?stroke:\s*currentColor;[\s\S]*?stroke-width:\s*1\.7;/.test(css) &&
     /\.study-workspace-width-cycle\[data-study-workspace-width-current="compact"\][\s\S]*?study-workspace-width-divider-compact[\s\S]*?\.study-workspace-width-cycle\[data-study-workspace-width-current="standard"\][\s\S]*?study-workspace-width-divider-standard[\s\S]*?\.study-workspace-width-cycle\[data-study-workspace-width-current="expanded"\][\s\S]*?study-workspace-width-divider-expanded/.test(css),
   "The single width control must use a centered stateful right-pane icon inside one 32px target.",
@@ -81,10 +81,11 @@ assert(
   "Right-side Hide must point outward/right and Show must point inward/left.",
 );
 assert(
-  /@media\s*\(min-width:\s*769px\)[\s\S]*?\.detail-header\s*{[\s\S]*?--study-header-layout-band:\s*narrow;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\);[\s\S]*?\.detail-header-main\s*{\s*display:\s*contents;/.test(css) &&
-    /@container\s+study-workspace\s*\(min-width:\s*318px\)[\s\S]*?--study-header-layout-band:\s*wide;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;[\s\S]*?\.detail-title-block\s*{[\s\S]*?grid-row:\s*1;[\s\S]*?\.study-workspace-width-controls\s*{[\s\S]*?grid-row:\s*1;[\s\S]*?\.detail-header-actions\s*{[\s\S]*?grid-row:\s*1;/.test(css) &&
-    !/@container\s+study-workspace\s*\(min-width:\s*420px\)/.test(css),
-  "Desktop Study controls must stay on one header row from the compact 320px pane minimum upward.",
+  /\.detail-header\s*{[\s\S]*?--study-header-layout-band:\s*narrow;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto;/.test(css) &&
+    /\.detail-header-main\s*{\s*display:\s*contents;/.test(css) &&
+    /\.detail-header-actions\s*{[\s\S]*?grid-row:\s*2;/.test(css) &&
+    /@container\s+study-workspace\s*\(min-width:\s*560px\)[\s\S]*?--study-header-layout-band:\s*wide;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;[\s\S]*?\.detail-header-actions\s*{[\s\S]*?grid-row:\s*1;/.test(css),
+  "Study history and actions must share the header, with a second row below the complete toolbar's 560px threshold.",
 );
 assert(
   /\.detail-header-icon-button\s*{[\s\S]*?min-width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*11px;/.test(css),
@@ -128,7 +129,7 @@ assert(
   /ResizeObserver/.test(runtime) &&
     /--app-header-block-size/.test(runtime) &&
     /top:\s*calc\(var\(--app-header-block-size\) \+ 12px\)/.test(css) &&
-    /height:\s*calc\(100dvh - var\(--app-header-block-size\) - 24px\)/.test(css),
+    /height:\s*calc\(var\(--study-viewport-block-size, 100dvh\) - var\(--app-header-block-size\) - 24px\)/.test(css),
   "The sticky workspace must derive its usable height from the rendered header.",
 );
 assert(
@@ -145,7 +146,7 @@ assert(
   "Reader picker correction must have one owner and center only within the intended scroller.",
 );
 assert(
-  /@media\s*\(max-width:\s*768px\)[\s\S]*?\.study-workspace-width-controls,[\s\S]*?\.study-workspace-show-button\s*{[\s\S]*?display:\s*none !important;/.test(css) &&
+  /@media\s*\(max-width:\s*768px\)[\s\S]*?\.study-workspace-width-controls,[\s\S]*?\.study-workspace-show-button\s*{[\s\S]*?display:\s*none;/.test(css) &&
     /\.detail-header-icon-button\s*{[\s\S]*?min-width:\s*44px;[\s\S]*?min-height:\s*44px;/.test(css),
   "Mobile must hide desktop width/show controls while retaining 44px Clear and Close actions.",
 );

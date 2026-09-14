@@ -35,6 +35,7 @@
 !/app/scripts/schema-validation.mjs
 !/app/scripts/semantic-test.mjs
 !/app/scripts/study-workspace-interaction-test.mjs
+!/app/scripts/study-pane-followup-interaction-test.mjs
 !/app/scripts/user-data-semantic-test.mjs
 /app/scripts/__pycache__/
 *.pyc

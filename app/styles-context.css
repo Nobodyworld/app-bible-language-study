@@ -51,7 +51,7 @@
   max-width: 100%;
   /* A viewport bound is stable while the enclosing flex boxes reflow at zoom.
      Very short windows may scroll this region; actions are never discarded. */
-  max-height: min(240px, 45dvh);
+  max-height: min(200px, 34dvh);
   box-sizing: border-box;
   overflow-x: hidden;
   overflow-y: auto;

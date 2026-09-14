@@ -87,6 +87,8 @@ async function layoutState(page) {
         width: bounds.width,
         height: bounds.height,
         fontSize: Number.parseFloat(getComputedStyle(button).fontSize),
+        text: button.textContent.trim(),
+        hasIcon: Boolean(button.querySelector('svg')),
         ariaLabel: button.getAttribute("aria-label") || "",
       } : null;
     }).filter(Boolean);
@@ -134,7 +136,7 @@ function assertPortraitLayout(state, label) {
     assert(control.height >= 30 && control.height <= 32 && control.width >= 30, `${label}: ${control.id} is outside the approved compact target range: ${JSON.stringify(control)}`);
     if (control.id === "studyWorkspaceWidthCycle") {
       assert(control.width <= 32, `${label}: width cycle is oversized`);
-      assert(control.fontSize <= 1, `${label}: width cycle still presents a text-sized label`);
+      assert(control.hasIcon && control.text === "", `${label}: width cycle must use its SVG artwork without hiding action text via font-size`);
     }
     assert(control.ariaLabel, `${label}: ${control.id} lacks an accessible label`);
   }

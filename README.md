@@ -138,6 +138,13 @@ On desktop, the study workspace offers Compact, Standard, and Expanded widths,
 with Standard as the default. The reader and study workspace scroll
 independently, so longer study material does not displace the reading location.
 At 768px and below, the workspace continues to use the full-screen mobile drawer.
+An open Study session stays open when the viewport crosses that breakpoint.
+Back/Forward share the Study header with Clear/Hide, and context controls have
+their own bounded scroll region so the content retains reading space.
+Language Study opens Locked from either entry point. Ordinary text clicks,
+scrolling and Reader-word hover preserve that view; Clear, history and deliberate
+tool choices remain available. Verse headings stick beneath the controls and
+hand off to the next verse, with larger English phrases in Word Meaning cards.
 
 The contextual workspace hierarchy is `Word → Verse`. Word is present only for
 exact canonical word or source-token context; Verse retains its parallel,

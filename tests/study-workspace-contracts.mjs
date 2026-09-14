@@ -79,11 +79,11 @@ assert(
   "The Detail pane must be the single named inline-size authority for the Study workspace.",
 );
 assert(
-  /@container\s+study-workspace\s*\(min-width:\s*318px\)[\s\S]*?--study-header-layout-band:\s*wide[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto/.test(sources.portraitCss) &&
+  /@container\s+study-workspace\s*\(min-width:\s*560px\)[\s\S]*?--study-header-layout-band:\s*wide[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto/.test(sources.portraitCss) &&
     !/@container\s+study-workspace\s*\(min-width:\s*420px\)/.test(sources.portraitCss) &&
     /--study-header-layout-band:\s*narrow/.test(sources.portraitCss) &&
     !/--study-header-layout-band:\s*constrained/.test(sources.portraitCss),
-  "Desktop Study headers must keep the one-row wide band from the 320px compact minimum, with stacked fallback only below it.",
+  "Study headers must place history with the actions, using one row only when the complete toolbar fits at 560px.",
 );
 assert(
   /\.detail-header\s+:is\(h2, button, \.detail-mode-status, \.study-workspace-width-label\)[\s\S]*?word-break:\s*normal;[\s\S]*?overflow-wrap:\s*normal;[\s\S]*?hyphens:\s*none;/.test(sources.css) &&
@@ -97,13 +97,13 @@ assert(
 );
 assert(
   /@media\s*\(max-width:\s*768px\)[\s\S]*?\.app-shell\s*{[\s\S]*?grid-template-columns:\s*1fr/.test(sources.css) &&
-    /@media\s*\(max-width:\s*768px\)[\s\S]*?\.study-workspace-width-controls\s*{\s*display:\s*none;/.test(sources.css) &&
+    /@media\s*\(max-width:\s*768px\)[\s\S]*?\.study-workspace-width-controls,\s*\.study-workspace-show-button\s*{\s*display:\s*none;/.test(sources.css) &&
     (sources.css.match(/\.app-shell\s*{[^}]*grid-template-columns:\s*1fr/g) || []).length === 1,
   "Only the established mobile breakpoint may collapse the shell or hide width controls.",
 );
 assert(
   ["reader-pane", "detail-pane"].every(name => new RegExp(`\\.${name}\\s*\\{[^}]*min-width:\\s*0`).test(sources.css)) &&
-    /\.detail-pane\s*{[\s\S]*?position:\s*sticky;[\s\S]*?height:\s*calc\(100dvh - 88px\);[\s\S]*?overflow-y:\s*hidden/.test(sources.css) &&
+    /\.detail-pane\s*{[\s\S]*?position:\s*sticky;[\s\S]*?height:\s*calc\(var\(--study-viewport-block-size, 100dvh\) - 88px\);[\s\S]*?overflow-y:\s*hidden/.test(sources.css) &&
     /\.detail-content\s*{[\s\S]*?min-height:\s*0;[\s\S]*?overflow-x:\s*hidden;[\s\S]*?overflow-y:\s*auto;[\s\S]*?overscroll-behavior-y:\s*contain/.test(sources.css),
   "The bounded pane and #detailContent must own an independent, horizontal-safe scroll region.",
 );

@@ -733,9 +733,7 @@ async function runProfile(browser, url, profile) {
     await secondMeaning.focus();
     await secondMeaning.press("Enter");
     await waitFor(page, (targetId) => document.querySelector("#detailToolSurface")?.dataset.targetId === targetId, secondTargetId);
-    await page.evaluate(() => {
-      document.querySelector("#detailBack")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await page.locator(".detail-header-actions #detailBack").click();
     await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true &&
       document.querySelector("#detailForward")?.disabled === false);
     await assertSurfaceClosed(page, profile, "detail Back");

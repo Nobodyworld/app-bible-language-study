@@ -407,6 +407,11 @@
   line-height: 1.5;
 }
 
+.detail-pane[data-displayed-view="language-study"] .detail-content {
+  /* Sticky verse headings meet the controls at the scrollport's top edge. */
+  padding-block-start: 0;
+}
+
 .detail-content h3 {
   margin: 0 0 8px;
   color: var(--text);

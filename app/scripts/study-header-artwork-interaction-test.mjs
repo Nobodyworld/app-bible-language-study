@@ -175,21 +175,24 @@ async function assertHeaderRow(page, label) {
   const geometry = await page.evaluate(() => {
     const pane = document.querySelector('.detail-pane');
     const header = document.querySelector('.detail-header');
-    const boxes = ['.detail-title-block h2', '.detail-mode-status', '#studyWorkspaceWidthCycle', '#clearDetail', '#hideStudyWorkspace']
+    const boxes = ['.detail-title-block h2', '.detail-mode-status', '#studyWorkspaceWidthCycle', '#detailBack', '#detailForward', '#clearDetail', '#hideStudyWorkspace']
       .map(selector => { const r = document.querySelector(selector).getBoundingClientRect(); return { selector, left:r.left, right:r.right, top:r.top, bottom:r.bottom }; });
     const r = header.getBoundingClientRect();
     return { paneWidth:pane.getBoundingClientRect().width, contentWidth:pane.clientWidth, headerHeight:r.height,
       sameRow: Math.min(...boxes.map(b=>b.bottom)) > Math.max(...boxes.map(b=>b.top)),
       contained: boxes.every(b=>b.left>=r.left && b.right<=r.right),
-      noOverlap: boxes.slice(1).every((b,i)=>b.left>=boxes[i].right), boxes };
+      historyInHeader: Boolean(header.querySelector('.detail-header-actions .detail-floating-nav')),
+      noOverlap: boxes.every((a,i)=>boxes.slice(i+1).every(b=>a.right<=b.left || b.right<=a.left || a.bottom<=b.top || b.bottom<=a.top)), boxes };
   });
   if (process.env.BIBLEAPP_UI_EVIDENCE_DIR) {
     mkdirSync(process.env.BIBLEAPP_UI_EVIDENCE_DIR, { recursive:true });
     await page.screenshot({path:path.join(process.env.BIBLEAPP_UI_EVIDENCE_DIR, `header-${label}.png`)});
   }
   assert(geometry.contained, `${label}: Study controls must remain contained: ${JSON.stringify(geometry)}`);
-  assert(geometry.paneWidth >= 320 ? geometry.sameRow && geometry.noOverlap : !geometry.sameRow,
-    `${label}: Study header must use one row from 320px and stacked fallback below it: ${JSON.stringify(geometry)}`);
+  assert(geometry.historyInHeader && geometry.noOverlap, `${label}: history and actions must share a nonoverlapping header: ${JSON.stringify(geometry)}`);
+  assert(geometry.contentWidth >= 560 ? geometry.sameRow : !geometry.sameRow,
+    `${label}: the complete Study toolbar must use one row at 560px and a compact second row below it: ${JSON.stringify(geometry)}`);
+  assert(geometry.headerHeight <= 86, `${label}: the compact header must not grow a separate history row`);
   return { label, paneWidth:geometry.paneWidth, contentWidth:geometry.contentWidth, headerHeight:geometry.headerHeight };
 }
 
