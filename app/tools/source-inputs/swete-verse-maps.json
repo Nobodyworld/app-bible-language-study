@@ -1,0 +1,1217 @@
+{
+  "schema_version": 1,
+  "source_revision": "26bad3eb42bba98471d154c954e36a6f30a0279d",
+  "app_witness_id": "openbible:wlc",
+  "app_files": [
+    {
+      "path": "genesis.json",
+      "book_id": "genesis",
+      "bytes": 363908,
+      "sha256": "sha256:38a474394b2780efb40a9eb33b11ad66e368a4bf9796b49a64652c4643387fff"
+    },
+    {
+      "path": "isaiah.json",
+      "book_id": "isaiah",
+      "bytes": 309357,
+      "sha256": "sha256:d92f560f39de9143cb461b398c18f236b357e1c13182baa6ca3f47acfabe5981"
+    },
+    {
+      "path": "psalms.json",
+      "book_id": "psalms",
+      "bytes": 376689,
+      "sha256": "sha256:8c069d866671e17b01848bb23518216c4d98eeeb3bea820ab14aa93a0d65f4cd"
+    }
+  ],
+  "authorities": [
+    {
+      "source_id": "stepbible:tvtms",
+      "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+      "authority": "versification",
+      "license_id": "CC-BY-4.0",
+      "attribution": "STEPBible.org / Tyndale House; Translators Versification Traditions.",
+      "source_url": "https://github.com/STEPBible/STEPBible-Data/blob/ea47bd4c7eab7375f2dca07086ccc356e95a4128/Versification/TVTMS%20-%20Translators%20Versification%20Traditions%20with%20Methodology%20for%20Standardisation%20for%20Eng%2BHeb%2BLat%2BGrk%2BOthers%20-%20STEPBible.org%20CC%20BY.txt",
+      "sha256": "sha256:63058e0f20201af4bdaa7d830da5be8f493455d947c5f147d84840b33db9ddf8",
+      "changes": "Bounded Psalm 50 rows selected, expanded and projected onto app title-merged Psalm 51 per accepted #97 proof. This is not a TVTMS interpreter. Retain upstream raw-data distribution request; no raw mirror supplied."
+    },
+    {
+      "source_id": "app:issue97-projection",
+      "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+      "authority": "versification",
+      "license_id": "CC-BY-4.0",
+      "attribution": "Nobodyworld project; accepted #97 reference projection, retaining STEPBible.org / Tyndale House credits.",
+      "source_url": "https://github.com/Nobodyworld/app-bible-language-study/blob/1358b9157f7810794e63a777b757f24d3bd03982/docs/decisions/SEPTUAGINT_SOURCE_STACK.md",
+      "sha256": "sha256:7f4cee4ab51ff078d1bac68b95001884b411fb1c50a4824dc3f0ca01b3555ae2",
+      "changes": "Transcribed accepted bounded Gen.1, Ps.50 and Isa.40.3 mappings; source aliases replaced with literal Swete numeric prefixes 1, 27, 48. No additional reference inference."
+    }
+  ],
+  "records": [
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-1",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.1"
+      ],
+      "canonical_references": [
+        "genesis/1/1"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-2",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.2"
+      ],
+      "canonical_references": [
+        "genesis/1/2"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-3",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.3"
+      ],
+      "canonical_references": [
+        "genesis/1/3"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-4",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.4"
+      ],
+      "canonical_references": [
+        "genesis/1/4"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-5",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.5"
+      ],
+      "canonical_references": [
+        "genesis/1/5"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-6",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.6"
+      ],
+      "canonical_references": [
+        "genesis/1/6"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-7",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.7"
+      ],
+      "canonical_references": [
+        "genesis/1/7"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-8",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.8"
+      ],
+      "canonical_references": [
+        "genesis/1/8"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-9",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.9"
+      ],
+      "canonical_references": [
+        "genesis/1/9"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-10",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.10"
+      ],
+      "canonical_references": [
+        "genesis/1/10"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-11",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.11"
+      ],
+      "canonical_references": [
+        "genesis/1/11"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-12",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.12"
+      ],
+      "canonical_references": [
+        "genesis/1/12"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-13",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.13"
+      ],
+      "canonical_references": [
+        "genesis/1/13"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-14",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.14"
+      ],
+      "canonical_references": [
+        "genesis/1/14"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-15",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.15"
+      ],
+      "canonical_references": [
+        "genesis/1/15"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-16",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.16"
+      ],
+      "canonical_references": [
+        "genesis/1/16"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-17",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.17"
+      ],
+      "canonical_references": [
+        "genesis/1/17"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-18",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.18"
+      ],
+      "canonical_references": [
+        "genesis/1/18"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-19",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.19"
+      ],
+      "canonical_references": [
+        "genesis/1/19"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-20",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.20"
+      ],
+      "canonical_references": [
+        "genesis/1/20"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-21",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.21"
+      ],
+      "canonical_references": [
+        "genesis/1/21"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-22",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.22"
+      ],
+      "canonical_references": [
+        "genesis/1/22"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-23",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.23"
+      ],
+      "canonical_references": [
+        "genesis/1/23"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-24",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.24"
+      ],
+      "canonical_references": [
+        "genesis/1/24"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-25",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.25"
+      ],
+      "canonical_references": [
+        "genesis/1/25"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-26",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.26"
+      ],
+      "canonical_references": [
+        "genesis/1/26"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-27",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.27"
+      ],
+      "canonical_references": [
+        "genesis/1/27"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-28",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.28"
+      ],
+      "canonical_references": [
+        "genesis/1/28"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-29",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.29"
+      ],
+      "canonical_references": [
+        "genesis/1/29"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-30",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.30"
+      ],
+      "canonical_references": [
+        "genesis/1/30"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:gen1-31",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "1.1.31"
+      ],
+      "canonical_references": [
+        "genesis/1/31"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-title-merge",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.1",
+        "27.50.2",
+        "27.50.3"
+      ],
+      "canonical_references": [
+        "psalms/51/1"
+      ],
+      "map_type": "merged",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-4",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.4"
+      ],
+      "canonical_references": [
+        "psalms/51/2"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-5",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.5"
+      ],
+      "canonical_references": [
+        "psalms/51/3"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-6",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.6"
+      ],
+      "canonical_references": [
+        "psalms/51/4"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-7",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.7"
+      ],
+      "canonical_references": [
+        "psalms/51/5"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-8",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.8"
+      ],
+      "canonical_references": [
+        "psalms/51/6"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-9",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.9"
+      ],
+      "canonical_references": [
+        "psalms/51/7"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-10",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.10"
+      ],
+      "canonical_references": [
+        "psalms/51/8"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-11",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.11"
+      ],
+      "canonical_references": [
+        "psalms/51/9"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-12",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.12"
+      ],
+      "canonical_references": [
+        "psalms/51/10"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-13",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.13"
+      ],
+      "canonical_references": [
+        "psalms/51/11"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-14",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.14"
+      ],
+      "canonical_references": [
+        "psalms/51/12"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-15",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.15"
+      ],
+      "canonical_references": [
+        "psalms/51/13"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-16",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.16"
+      ],
+      "canonical_references": [
+        "psalms/51/14"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-17",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.17"
+      ],
+      "canonical_references": [
+        "psalms/51/15"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-18",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.18"
+      ],
+      "canonical_references": [
+        "psalms/51/16"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-19",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.19"
+      ],
+      "canonical_references": [
+        "psalms/51/17"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-20",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.20"
+      ],
+      "canonical_references": [
+        "psalms/51/18"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:ps50-21",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "27.50.21"
+      ],
+      "canonical_references": [
+        "psalms/51/19"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "stepbible:tvtms",
+          "revision": "ea47bd4c7eab7375f2dca07086ccc356e95a4128",
+          "authority": "versification"
+        },
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    },
+    {
+      "schema_version": 1,
+      "id": "verse-map:swete:isa40-3",
+      "witness_id": "swete:lxx",
+      "source_versification": "swete:source-references",
+      "source_references": [
+        "48.40.3"
+      ],
+      "canonical_references": [
+        "isaiah/40/3"
+      ],
+      "map_type": "exact",
+      "review_status": "reviewed",
+      "provenance": [
+        {
+          "source_id": "app:issue97-projection",
+          "revision": "1358b9157f7810794e63a777b757f24d3bd03982",
+          "authority": "versification"
+        }
+      ]
+    }
+  ]
+}
