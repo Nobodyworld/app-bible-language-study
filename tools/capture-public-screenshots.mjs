@@ -7,12 +7,13 @@ import { createRequire } from "node:module";
 import { createServer } from "node:net";
 import { dirname, extname, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { tmpdir } from "node:os";
 import { chromium } from "playwright-core";
 
 const workspaceRoot = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const appRoot = resolve(workspaceRoot, "app");
 const outputRoot = resolve(workspaceRoot, "docs", "images");
-const evidenceRoot = "C:\\tmp\\bibleapp-flexible-study-workspace-screenshot-evidence";
+const evidenceRoot = process.env.BIBLEAPP_UI_EVIDENCE_DIR || resolve(tmpdir(), "bibleapp-public-screenshot-evidence");
 const require = createRequire(import.meta.url);
 const playwrightVersion = require("playwright-core/package.json").version;
 
@@ -186,7 +187,7 @@ export const PUBLIC_SCREENSHOT_MANIFEST = Object.freeze([
     toolKind: "meaning",
     selectedVerse: "1",
     selectedTokenId: "target:source_token:bsb:new:john:1:1:2",
-    intendedState: "contained exact-token Meaning with saved personal meaning",
+    intendedState: "contained exact-token Interpretation with saved alternative wording",
   },
   {
     filename: "my-data.png",
@@ -197,7 +198,7 @@ export const PUBLIC_SCREENSHOT_MANIFEST = Object.freeze([
     panelTitle: "My Data",
     toolKind: "",
     selectedVerse: "1",
-    intendedState: "My study data summary",
+    intendedState: "Saved study summary",
   },
   {
     filename: "my-data-backup-restore.png",
@@ -342,19 +343,18 @@ function attachBrowserIssueCapture(page, applicationUrl) {
 }
 
 async function setStudyWorkspaceWidth(page, widthMode = STANDARD_STUDY_WORKSPACE_WIDTH) {
-  await page.evaluate(({ key, mode }) => {
-    localStorage.setItem(key, mode);
-    const button = document.querySelector(`[data-study-workspace-width-mode="${mode}"]`);
-    if (!button) throw new Error(`Study workspace width control is missing: ${mode}`);
-    if (document.documentElement.dataset.studyWorkspaceWidth !== mode || button.getAttribute("aria-pressed") !== "true") {
-      button.click();
-    }
-  }, { key: STUDY_WORKSPACE_WIDTH_STORAGE_KEY, mode: widthMode });
+  for (let attempt = 0; attempt < 3; attempt += 1) {
+    const selected = await page.evaluate(({ key, mode }) =>
+      localStorage.getItem(key) === mode && document.documentElement.dataset.studyWorkspaceWidth === mode,
+    { key: STUDY_WORKSPACE_WIDTH_STORAGE_KEY, mode: widthMode });
+    if (selected) break;
+    await page.locator("#studyWorkspaceWidthCycle").click();
+  }
   await page.waitForFunction(
     ({ key, mode }) =>
       localStorage.getItem(key) === mode &&
       document.documentElement.dataset.studyWorkspaceWidth === mode &&
-      document.querySelector(`[data-study-workspace-width-mode="${mode}"]`)?.getAttribute("aria-pressed") === "true",
+      document.querySelector("#studyWorkspaceWidthCycle")?.dataset.studyWorkspaceWidthCurrent === mode,
     { key: STUDY_WORKSPACE_WIDTH_STORAGE_KEY, mode: widthMode },
   );
 }
@@ -367,17 +367,13 @@ async function assertStandardDesktopEnvironment(page, descriptor) {
       return node ? node.scrollWidth - node.clientWidth : null;
     };
     const root = document.documentElement;
-    const pressed = (mode) =>
-      document.querySelector(`[data-study-workspace-width-mode="${mode}"]`)?.getAttribute("aria-pressed") || "";
     return {
-      compactPressed: pressed("compact"),
+      currentMode: document.querySelector("#studyWorkspaceWidthCycle")?.dataset.studyWorkspaceWidthCurrent || "",
       detailContentOverflow: overflow("#detailContent"),
       documentOverflow: Math.max(root.scrollWidth, document.body.scrollWidth) - window.innerWidth,
-      expandedPressed: pressed("expanded"),
       mode: root.getAttribute("data-study-workspace-width") || "",
       paneOverflow: overflow(".detail-pane"),
       shellOverflow: overflow(".app-shell"),
-      standardPressed: pressed("standard"),
       toolContentOverflow: overflow("#detailToolContent"),
       toolSurfaceOverflow: overflow("#detailToolSurface"),
       workspaceOverflow: overflow("#detailWorkspace"),
@@ -402,9 +398,7 @@ async function assertStandardDesktopEnvironment(page, descriptor) {
   if (
     state.mode !== STANDARD_STUDY_WORKSPACE_WIDTH ||
     state.storedMode !== STANDARD_STUDY_WORKSPACE_WIDTH ||
-    state.standardPressed !== "true" ||
-    state.compactPressed !== "false" ||
-    state.expandedPressed !== "false" ||
+    state.currentMode !== STANDARD_STUDY_WORKSPACE_WIDTH ||
     !state.widthControlsVisible ||
     state.detailOverflowY !== "auto" ||
     state.paneWidth / state.viewportWidth < 0.32 ||
@@ -670,7 +664,7 @@ async function openVerseStudy(page, verse = 1) {
 
 async function openLanguageStudy(page) {
   const control = page.locator(
-    "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language']",
+    "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Language Study']",
   );
   await control.waitFor({ state: "visible", timeout: 15000 });
   await control.click();
@@ -873,7 +867,8 @@ async function seedPersonalData(page, browserHealth, baseUrl) {
     timeout: 15000,
   });
   const exactEnglishOption = meaningContent.locator('.word-meaning-option[data-source="exact_bsb"]');
-  if ((await exactEnglishOption.textContent())?.trim() !== "the beginning") {
+  if ((await exactEnglishOption.locator(".word-meaning-choice-value").textContent())?.trim() !== "the beginning" ||
+      (await exactEnglishOption.locator(".word-meaning-choice-source").textContent())?.trim() !== "BSB wording") {
     throw new Error("Exact-English Meaning choice for the deterministic token is not 'the beginning'.");
   }
   await exactEnglishOption.click();
@@ -950,9 +945,9 @@ async function verifyMyDataSummary(page) {
     ]),
   ));
   if (
-    summary["Personal meanings"] !== 1 ||
-    summary["Active Study Marks"] !== 1 ||
-    summary["Study Mark assertions"] !== 1
+    summary["Word interpretations"] !== 1 ||
+    summary["Study Marks"] !== 1 ||
+    Object.hasOwn(summary, "Study Mark assertions")
   ) {
     throw new Error(`My Data does not reflect the UI-seeded Meaning and Study Mark: ${JSON.stringify(summary)}`);
   }
@@ -1023,7 +1018,7 @@ async function assertContainedToolCapture(page, dataSetup, toolKind) {
     state.toolKind !== toolKind ||
     state.canonicalTargetId !== dataSetup.targetId ||
     state.toolTargetId !== dataSetup.targetId ||
-    state.title !== (toolKind === "meaning" ? "Meaning" : "Study Marks") ||
+    state.title !== (toolKind === "meaning" ? "Word interpretation" : "Study Marks") ||
     !state.workAreaInert ||
     !state.activeInside ||
     state.contentOverflow > 1 ||
@@ -1232,13 +1227,17 @@ async function main() {
     dataSetup = await seedPersonalData(page, browserHealth, localServer.url);
     await setCaptureEnvironment(page, browserHealth, "meaning.png");
     const meaningTool = await openExactTokenTool(page, dataSetup, "meaning");
-    await page.locator("#detailToolContent .word-meaning-saved-actions").filter({ hasText: "Saved: origin" }).waitFor({
+    await page.locator("#detailToolContent .word-meaning-saved-actions").filter({ hasText: "Saved wording: origin" }).waitFor({
       state: "visible",
       timeout: 10000,
     });
-    await page.locator('#detailToolContent .word-meaning-option[data-source="exact_bsb"]').filter({
+    const savedExactChoice = page.locator('#detailToolContent .word-meaning-option[data-source="exact_bsb"]');
+    await savedExactChoice.locator(".word-meaning-choice-value").filter({
       hasText: /^the beginning$/,
     }).waitFor({ state: "visible", timeout: 15000 });
+    if ((await savedExactChoice.locator(".word-meaning-choice-source").textContent())?.trim() !== "BSB wording") {
+      throw new Error("Saved interpretation choices must retain their visible source label.");
+    }
     await page.locator('#detailToolContent .word-meaning-option[data-source="lexicon"]').waitFor({
       state: "visible",
       timeout: 15000,

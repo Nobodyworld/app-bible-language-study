@@ -58,8 +58,8 @@ const standardWidthCaptureRequirements = Object.freeze([
   [/localStorage\.setItem/, "deterministic width preference setup"],
   [/localStorage\.getItem/, "deterministic width preference verification"],
   [/data-study-workspace-width/, "the root study-workspace width state"],
-  [/data-study-workspace-width-mode/, "the visible study-workspace width controls"],
-  [/aria-pressed/, "the width-control pressed states"],
+  [/#studyWorkspaceWidthCycle/, "the visible study-workspace width cycle control"],
+  [/studyWorkspaceWidthCurrent/, "the width control's current mode"],
   [/\bcompact\b/, "the Compact width control state"],
   [/\bstandard\b/, "the Standard width control state"],
   [/\bexpanded\b/, "the Expanded width control state"],
@@ -69,9 +69,7 @@ const standardWidthCaptureRequirements = Object.freeze([
   [/\.detail-pane/, "study-workspace panel overflow"],
   [/#detailToolSurface/, "contained-tool surface overflow"],
   [/#detailToolContent/, "contained-tool content overflow"],
-  [/standardPressed\s*!==\s*["']true["']/, "the pressed Standard width control"],
-  [/compactPressed\s*!==\s*["']false["']/, "the unpressed Compact width control"],
-  [/expandedPressed\s*!==\s*["']false["']/, "the unpressed Expanded width control"],
+  [/currentMode\s*!==\s*STANDARD_STUDY_WORKSPACE_WIDTH/, "the Standard width cycle state"],
 ]);
 
 const themeCaptureRequirements = Object.freeze([
@@ -192,7 +190,7 @@ assert.equal(
   "README must describe the flexible desktop workspace and its default and scroll ownership.",
 );
 assert.equal(
-  /contained exact-source-token Meaning surface with saved `origin`/i.test(readme),
+  /contained exact-source-token Interpretation surface with saved `origin`/i.test(readme),
   true,
   "README must describe the maintained Meaning image as a contained exact-source-token surface.",
 );
@@ -202,7 +200,7 @@ assert.equal(
   "Screenshot showcase must distinguish the contained light Study Marks workflow from the dark index.",
 );
 assert.equal(
-  /Contained Meaning[\s\S]*?saved `origin` plus exact-English and lexicon choices/i.test(showcase),
+  /Contained Interpretation[\s\S]*?saved `origin` plus exact-English and lexicon choices/i.test(showcase),
   true,
   "Screenshot showcase must describe the contained Meaning state and its deterministic choices.",
 );

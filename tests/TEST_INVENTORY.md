@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-09-13
+Reviewed: 2026-09-14
 
 ## Authority
 
@@ -25,6 +25,16 @@ remove, or reclassify a maintained test.
 | `npm run desktop:build` | Unsigned Windows x64 NSIS release build; it is intentionally outside ordinary browser verification. |
 
 ## Focused Aliases
+
+`npm run test:cleanup` runs the isolated current-feature browser checks in the
+browser aggregate: Compact/Standard, light/dark, narrow/touch, Hebrew/Greek
+labels, source-labeled Interpretation choices, save/cancel/remove, and explicit
+Stable managed-mode recovery with saved bytes and study data preserved. Optional
+`CLEANUP_SCREENSHOT_DIR` writes focused screenshots outside the repository.
+`npm run ui:hygiene` checks same-context selectors/properties and visible labels
+using the maintained stylesheet parser. The new backup format, backup round-trip
+and cleanup naming tests run through `tests/run.mjs` in the static aggregate.
+Actual 175%/200% browser zoom remains separate from CSS viewport coverage.
 
 `tests/stylesheet-ownership.mjs` runs in `test:static`. It verifies the shared
 stylesheet load/staging order, component structural ownership, conditional

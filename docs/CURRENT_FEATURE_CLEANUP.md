@@ -41,6 +41,8 @@ Do not start new study capabilities while the existing surfaces are confusing.
 node tests/portable-backup-format.mjs
 node tests/portable-backup-roundtrip.mjs
 node tests/current-feature-cleanup.mjs
+npm run ui:hygiene
+npm run test:cleanup
 node tests/stylesheet-ownership.mjs
 node tests/panel-context-model.mjs
 node tests/word-meaning.mjs
@@ -51,7 +53,13 @@ node app/scripts/physical-pack-interaction-test.mjs
 
 Update existing tests/docs for owner-approved wording/layout changes, not for
 retired assertions. Wire the new tests into the maintained static suite before
-Ready. The hygiene scanner also supports explicit file checks and an all-sheet
+Ready. `test:cleanup` is part of the browser aggregate and checks four isolated
+light/dark, Compact/Standard, narrow and touch profiles plus non-destructive
+Stable recovery and Lab isolation. Set `CLEANUP_SCREENSHOT_DIR` to an external
+evidence directory to retain its focused captures. It checks viewport reflow;
+actual browser zoom remains a separate rendered gate.
+
+The hygiene scanner also supports explicit file checks and an all-sheet
 report; agent maintenance should reuse it rather than invent another linter.
 
 Required browser evidence: Stable My Data; fresh and populated data; valid

@@ -123,9 +123,10 @@ export async function checkZoomReflow(browser, url) {
           const reachable = await last.evaluate((node) => {
             const item = node.getBoundingClientRect();
             const host = document.querySelector("#detailContext").getBoundingClientRect();
-            return document.activeElement === node && item.top >= host.top - 1 && item.bottom <= host.bottom + 1;
+            return { reachable: document.activeElement === node && item.top >= host.top - 1 && item.bottom <= host.bottom + 1,
+              item: item.toJSON(), host: host.toJSON(), scrollTop: document.querySelector("#detailContext").scrollTop };
           });
-          assert(reachable, `Final context action must be keyboard-reachable: ${label}`);
+          assert(reachable.reachable, `Final context action must be keyboard-reachable: ${label}: ${JSON.stringify(reachable)}`);
           if (process.env.BIBLEAPP_UI_EVIDENCE_DIR) {
             mkdirSync(process.env.BIBLEAPP_UI_EVIDENCE_DIR, { recursive: true });
             await page.screenshot({ path: path.join(process.env.BIBLEAPP_UI_EVIDENCE_DIR, `reflow-${theme}-${viewport.width}-${mode}.png`) });

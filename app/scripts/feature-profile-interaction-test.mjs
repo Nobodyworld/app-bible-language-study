@@ -59,7 +59,7 @@ async function replacePayload(page, payload) {
   }, payload);
   await page.getByRole("button", { name: "Replace all local data", exact: true }).click();
   await page.locator(".replace-confirmation button.danger-button").click();
-  await page.waitForFunction(() => document.querySelector(".import-status")?.textContent.includes("Backup replaced"));
+  await page.waitForFunction(() => document.querySelector(".import-status")?.textContent.includes("Local data replaced"));
 }
 
 function addMarker(payload, marker) {
@@ -104,7 +104,7 @@ async function exerciseCapabilityDiagnostics(browser, url) {
     await goToProfile("stable");
     const freshStable = await readExport(page);
     const historical = structuredClone(freshStable);
-    historical.stores.packages.disabled_capability_ids = ["commentary", "historical-unknown-capability"];
+    historical.stores.packages = { version: 1, disabled_capability_ids: ["commentary", "historical-unknown-capability"] };
     await replacePayload(page, historical);
     await goToProfile("stable");
     const stableBeforeDiagnostics = await readExport(page);
@@ -116,8 +116,10 @@ async function exerciseCapabilityDiagnostics(browser, url) {
     assert(await page.locator(".advanced-diagnostics").getByRole("button", { name: /^(Disable|Restore)$/ }).count() === 0, "Stable must not expose capability mutation buttons");
     const stableText = await page.locator(".user-data-panel").innerText();
     assert(!/Technical feature controls|Diagnostic capability controls|Package ops|Installed packs|Assertion events/.test(stableText), "Stable must omit technical capability copy and implementation-only summary counts");
-    assert(/Storage authority:.*migration:/i.test(stableText) && /Quarantined assertions/.test(stableText) && /Import backups/.test(stableText), "Stable must retain storage, migration, quarantine and recovery backup information");
-    assert(await page.locator('[data-physical-pack-manager="true"]').count() === 1, "Stable must retain physical-pack recovery information");
+    assert(/Saved-data recovery/.test(stableText) && /Recovery copies/.test(stableText), "Stable must retain concise recovery help and its populated recovery count");
+    assert(!/Storage authority:|migration:|Quarantined assertions|Import backups/.test(stableText), "Stable recovery must omit internal vocabulary and empty counters");
+    assert(await page.locator('[data-physical-pack-manager="true"]').count() === 0, "Stable must not expose the experimental pack manager");
+    assert(await page.locator('.pack-recovery').count() === 0, "Bundled Stable needs no managed-mode recovery control");
     assertStrict.deepEqual((await readExport(page)).stores, stableBeforeDiagnostics.stores, "Opening diagnostics must not rewrite disabled IDs or any study data");
     // Merge keeps existing local capability preferences; replace adopts the incoming preferences.
     await mergePayload(page, addMarker(freshStable, "capability-merge"));
@@ -130,14 +132,14 @@ async function exerciseCapabilityDiagnostics(browser, url) {
     assert(await page.locator(".advanced-diagnostics").evaluate((node) => node.open), "Lab must retain expanded-by-default diagnostics");
     assert(await page.locator(capabilityManager).count() === 1, "Lab must retain its capability manager");
     const labBefore = await readExport(page);
-    assertStrict.deepEqual(labBefore.stores.packages.disabled_capability_ids, [], "Stable disabled IDs must not leak into Lab");
+    assertStrict.deepEqual((labBefore.stores.packages?.disabled_capability_ids ?? []), [], "Stable disabled IDs must not leak into Lab");
     const labText = await page.locator(".advanced-diagnostics").innerText();
     for (const label of ["Package ops", "Installed packs", "Assertion events"]) assert(labText.includes(label), `Lab must retain ${label}`);
     await page.locator(commentaryRow).getByRole("button", { name: "Disable", exact: true }).click();
     await page.locator(commentaryRow).getByRole("button", { name: "Restore", exact: true }).waitFor();
     const labDisabled = await readExport(page);
     assertStrict.deepEqual(labDisabled.stores.packages.disabled_capability_ids, ["commentary"], "Lab Disable must update the saved capability state");
-    assertStrict.deepEqual(labDisabled.stores.packages.installed_feature_pack_ids, labBefore.stores.packages.installed_feature_pack_ids, "Disabling must not remove package data");
+    assertStrict.deepEqual(labDisabled.stores.packages.installed_feature_pack_ids, (labBefore.stores.packages?.installed_feature_pack_ids ?? []), "Disabling must not remove package data");
     for (const store of ["tags", "workspace", "assertions", "polls"]) assertStrict.deepEqual(labDisabled.stores[store], labBefore.stores[store], `Lab Disable must preserve ${store}`);
     await goToProfile("lab");
     await page.locator(commentaryRow).getByRole("button", { name: "Restore", exact: true }).waitFor();
@@ -150,8 +152,8 @@ async function exerciseCapabilityDiagnostics(browser, url) {
     await goToProfile("lab");
     const labRestored = await readExport(page);
     assertStrict.deepEqual(labRestored.stores.packages.disabled_capability_ids, [], "Lab Restore must persist across reload");
-    assertStrict.deepEqual(labRestored.stores.packages.installed_feature_pack_ids, labBefore.stores.packages.installed_feature_pack_ids);
-    assert(labRestored.stores.packages.operations.length === labBefore.stores.packages.operations.length + 2, "Only the two explicit capability actions may add package operations");
+    assertStrict.deepEqual(labRestored.stores.packages.installed_feature_pack_ids, (labBefore.stores.packages?.installed_feature_pack_ids ?? []));
+    assert(labRestored.stores.packages.operations.length === (labBefore.stores.packages?.operations ?? []).length + 2, "Only the two explicit capability actions may add package operations");
     await goToProfile("unknown-profile");
     await page.locator(".advanced-diagnostics > summary").click();
     await page.waitForSelector(".storage-health-status");
@@ -187,15 +189,14 @@ async function exerciseRetirement(browser, url, profile) {
     assert((await page.title()).length > 0, "Reader must have a title");
     await openMyData(page);
     const freshPolls = (await readExport(page)).stores.polls;
-    assertStrict.deepEqual(freshPolls.responses, {}, "Startup must not seed responses");
-    assertStrict.deepEqual(freshPolls.events, [], "Startup must not generate poll events");
+    assertStrict.equal(freshPolls, undefined, "An ordinary backup omits the empty retired poll store");
     for (const mode of ["merge", "replace"]) {
       if (mode === "merge") await mergePayload(page, fixture);
       else {
         await page.evaluate((value) => { document.querySelector(".import-textarea").value = JSON.stringify(value); }, fixture);
         await page.getByRole("button", { name: "Replace all local data", exact: true }).click();
         await page.locator(".replace-confirmation button.danger-button").click();
-        await page.waitForFunction(() => document.querySelector(".import-status")?.textContent.includes("Backup replaced"));
+        await page.waitForFunction(() => document.querySelector(".import-status")?.textContent.includes("Local data replaced"));
       }
       await page.reload({ waitUntil: "load" });
       await waitForReader(page);
@@ -415,9 +416,10 @@ try {
   const stableDiagnostics = await page.locator(".advanced-diagnostics").evaluate((node) => ({ open: node.open, parent: node.closest(".user-data-panel") != null }));
   assert(!stableDiagnostics.open && stableDiagnostics.parent, `Stable diagnostics must remain collapsed inside My Data: ${JSON.stringify(stableDiagnostics)}`);
   await page.locator(".advanced-diagnostics > summary").click();
-  await page.waitForSelector('[data-physical-pack-manager="true"]');
+  await page.waitForSelector(".storage-health-status");
+  assert(await page.locator(".physical-pack-manager").count() === 0, "Stable must omit the experimental manager");
   assert(await page.locator("body > [data-physical-pack-manager='true']").count() === 0, "Physical packs acquired an ordinary primary destination");
-  pass("Stable physical-pack recovery remains inside collapsed Advanced diagnostics");
+  pass("Stable Help and recovery is concise and contains no experimental manager");
 
   const stableExport = await readExport(page);
   assert(stableExport.kind === "bibleapp:user-data" && stableExport.version === 3, "Stable portable data contract changed");

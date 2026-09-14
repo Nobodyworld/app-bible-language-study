@@ -66,12 +66,12 @@ assert.match(
 );
 assert.match(
   readmeProse,
-  /Personal Meaning is separate from Study Marks and applies only to exact canonical source-token identity/i,
+  /Word interpretation is separate from Study Marks and applies only to exact canonical source-token identity/i,
   "README must preserve exact-token Meaning as separate from Study Marks",
 );
 assert.match(
   readmeProse,
-  /My study data[\s\S]*Backup and restore[\s\S]*App settings[\s\S]*Advanced diagnostics/i,
+  /Saved study[\s\S]*Backup and restore[\s\S]*Help and recovery/i,
   "README must list the accepted My Data sections",
 );
 assert.match(

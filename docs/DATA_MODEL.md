@@ -182,9 +182,9 @@ these disposable derived values are not historical opinions or community data.
 The full-record schema is retained; sparse records need no invented target.
 See [the reference inventory and policy](POLL_COMPATIBILITY.md).
 
-### Personal meanings
+### Word interpretations
 
-`workspaceStore.token_renderings` stores optional personal meanings for exact
+`workspaceStore.token_renderings` stores optional alternative wording for exact
 canonical schema-v2 `source_token` targets. A rendering is identified by its
 translation/reference and source-token index, not by display spelling or a
 shared Strong's code. These values are distinct from Favorites and
@@ -199,20 +199,24 @@ target metadata is added without rejecting or deleting the saved value.
 `workspaceStore.verse_drafts` remains independent legacy user data. The former
 Translation workspace has no primary editing surface, but drafts remain
 counted, importable, exportable, merge/replace-compatible, and separate from
-personal meanings. Existing `bibleapp:user-data` exports remain compatible,
+word interpretations. Existing `bibleapp:user-data` exports remain compatible,
 including exports with legacy token-rendering records or verse drafts.
 
 ### My Data backup and compatibility contract
 
-The My Data surface reports user-owned records before implementation history:
-custom labels, tagged verses, Study Mark assertions, active Study Marks,
-personal meanings, and preserved legacy verse drafts. These stores remain local
+The My Data surface reports populated Study Marks, word interpretations and
+custom labels under Saved study. Preserved legacy drafts and nonzero recovery
+counts are explained under Help and recovery. These stores remain local
 to the current browser or desktop profile and are not associated with an online
 account.
 
 Portable backups retain kind `bibleapp:user-data` and version `3`. Download,
 raw JSON copy, file selection, pasted JSON, merge, and replace all use the same
-export/import contract. Replace creates a profile-local recovery backup before
+export/import contract. Ordinary downloads and copies omit known empty retired
+job arrays, null job hooks, empty polls and an entirely default package store.
+Active tag definitions, nonempty histories, unknown fields, drafts, quarantine
+and recovery records remain intact. Full store and recovery snapshots are not
+compacted; the version-3 importer supplies omitted defaults. Replace creates a profile-local recovery backup before
 overwriting current stores. Import normalization and compatibility checks occur
 before mutation; malformed, foreign, or unsupported future-version payloads do
 not partially change current stores.

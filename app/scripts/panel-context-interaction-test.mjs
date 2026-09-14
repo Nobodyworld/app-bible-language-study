@@ -305,7 +305,7 @@ async function waitForReaderWordPreserved(page, oldTargetId, label, timeoutMs = 
         ? document.querySelector(`.verse-row[data-verse="${CSS.escape(selectedVerse)}"]`)
         : null;
       return {
-        activeWordControl: document.querySelector("#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Word']")?.getAttribute("aria-current") || "",
+        activeWordControl: document.querySelector("#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Definition']")?.getAttribute("aria-current") || "",
         contextSummary: String(document.querySelector("#detailContext .panel-context-summary")?.textContent || "").replace(/\s+/gu, " ").trim(),
         detailMode: document.querySelector(".detail-pane")?.dataset.panelMode || "",
         detailTitle: document.querySelector("#detailTitle")?.textContent?.trim() || "",
@@ -377,7 +377,7 @@ async function panelStudyMarksState(page, selector) {
     const versePreview = clean(document.querySelector(`.verse-row[data-verse="${CSS.escape(verse || "")}"] .verse-body`)?.textContent);
     const activeElement = document.activeElement;
     return {
-      activeWord: document.querySelector("#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Word']")?.getAttribute("aria-current") || "",
+      activeWord: document.querySelector("#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Definition']")?.getAttribute("aria-current") || "",
       controlHeight: controls?.getBoundingClientRect().height || 0,
       controlRows: controls
         ? new Set([...controls.children].map((node) => Math.round(node.getBoundingClientRect().top))).size
@@ -892,10 +892,10 @@ async function contextState(page) {
       (node) => `${node.dataset.panelScope}:${node.dataset.visibleLabel}`,
     );
     const wordButton = document.querySelector(
-      "#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Word']",
+      "#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Definition']",
     );
     const parallelButton = document.querySelector(
-      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel']",
+      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel translations']",
     );
     const verseScopeLabels = [...document.querySelectorAll(
       "#detailContext [data-panel-scope='verse'] .panel-context-scope-label",
@@ -955,7 +955,7 @@ async function contextState(page) {
       wordActiveColor: wordStyle?.color || "",
       parallelDisabled: parallelButton?.disabled ?? null,
       parallelActionCount: document.querySelectorAll(
-        "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel']",
+        "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel translations']",
       ).length,
       verseScopeLabels: verseScopeLabels.map((label) => label.textContent.trim()),
       strongSectionControls: [...document.querySelectorAll("#detailContext [data-strong-section-control]")].map((button) => ({
@@ -1271,7 +1271,7 @@ async function runScenario(browser, baseUrl, mode, theme) {
     assert.equal(wordState.scopeOrder, "word verse", `${mode}: Word must lead the compact scope order`);
     assert.deepEqual(wordState.groupScopes, ["word", "verse"], `${mode}: contextual groups must be Word then Verse`);
     assert.deepEqual(wordState.staticScopes, [], `${mode}: Chapter and Book groups must be absent from the side panel`);
-    assert.deepEqual(wordState.active, ["word:Word"], `${mode}: Strong's must mark Word as current`);
+    assert.deepEqual(wordState.active, ["word:Definition"], `${mode}: Strong's must mark Word as current`);
     assert.match(wordState.summary, /H\d+.*Proverbs 1:1|Proverbs 1:1.*H\d+/, `${mode}: summary must identify word and verse`);
     assert.equal(wordState.theme, theme, `${mode}: requested ${theme} theme was not applied`);
     assert(wordState.summaryOverflow <= 1, `${mode}/${theme}: selected-word summary is clipped`);
@@ -1297,7 +1297,7 @@ async function runScenario(browser, baseUrl, mode, theme) {
     await capturePanel(page, mode, theme, "word");
 
     const wordReactivation = await page.evaluate(() => {
-      const button = document.querySelector("#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Word']");
+      const button = document.querySelector("#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Definition']");
       const detail = document.querySelector("#detailContent .strong-detail");
       const overview = detail?.querySelector("[data-strong-section='word']");
       const before = {
@@ -1333,7 +1333,7 @@ async function runScenario(browser, baseUrl, mode, theme) {
     const forwardState = await page.evaluate(() => ({
       token: document.querySelector("#detailContent .strong-code")?.textContent,
       lock: document.querySelector(".detail-pane")?.dataset.panelMode,
-      wordControl: document.querySelector("#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Word']")?.getAttribute("aria-current"),
+      wordControl: document.querySelector("#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Definition']")?.getAttribute("aria-current"),
       readerToken: document.querySelector(".reader-context-word")?.dataset.strongCode,
     }));
     assert.equal(forwardState.token, wordReactivation.token, `${mode}: Forward must restore the selected Strong's word`);
@@ -1397,7 +1397,7 @@ async function runScenario(browser, baseUrl, mode, theme) {
       document.querySelector("#detailContent")?.scrollTop === 0,
     );
     await page.locator(
-      "#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Word']",
+      "#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Definition']",
     ).click();
     await waitFor(page, () =>
       document.querySelector("#detailTitle")?.textContent === "Strong's" &&
@@ -1413,13 +1413,13 @@ async function runScenario(browser, baseUrl, mode, theme) {
     );
 
     await page.locator(
-      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel']",
+      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel translations']",
     ).click();
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Parallel");
     const inheritedState = await contextState(page);
     assert.equal(inheritedState.scopeOrder, "word verse", `${mode}: Verse view must retain containing Word context`);
     assert.deepEqual(inheritedState.groupScopes, ["word", "verse"], `${mode}: inherited Word and Verse groups are out of order`);
-    assert.deepEqual(inheritedState.active, ["verse:Parallel"], `${mode}: Parallel must be the sole current displayed view`);
+    assert.deepEqual(inheritedState.active, ["verse:Parallel translations"], `${mode}: Parallel must be the sole current displayed view`);
     assertTruthfulCurrentState(inheritedState, "par", "parallel", `${mode}/${theme}: Parallel`);
     assert.equal(inheritedState.panelOccupant, "parallel", `${mode}: visible Parallel panel occupant must remain identifiable`);
     assert.equal(inheritedState.wordDisabled, false, `${mode}: Word must remain available from Parallel`);

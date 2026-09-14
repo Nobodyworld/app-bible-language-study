@@ -2890,7 +2890,7 @@ async function runQa(page) {
   await waitFor(page, "document.querySelector('#chapterTitle')?.textContent.includes('Proverbs 1')");
   await click(page, ".verse-number");
   await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Parallel'");
-  await clickButtonByText(page, "Cmt", { index: 0 });
+  await clickButtonByText(page, "Commentary", { index: 0 });
   await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Commentary'");
   await waitFor(
     page,
@@ -2975,7 +2975,7 @@ async function runQa(page) {
   pass("outline navigation");
 
   await click(page, ".verse-study-button");
-  await clickButtonByText(page, "Int", { index: 0 });
+  await clickButtonByText(page, "Language", { index: 0 });
   await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Language Study'");
   await waitFor(page, "document.querySelectorAll('#detailContent .interlinear-token').length > 0", 15000);
   state = await getQaState(page);
@@ -3350,7 +3350,7 @@ async function runQa(page) {
   await navigate(page, `${routeBase}#/read/bsb/john/1/1`);
   await waitFor(page, "document.querySelector('#chapterTitle')?.textContent.includes('John 1')");
   await click(page, ".verse-study-button");
-  await clickButtonByText(page, "Int", { index: 0 });
+  await clickButtonByText(page, "Language", { index: 0 });
   await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Language Study'");
   await waitFor(page, "document.querySelectorAll('#detailContent .interlinear-token').length > 0", 15000);
   state = await getQaState(page);
@@ -3515,8 +3515,8 @@ async function runQa(page) {
   );
   state = await getQaState(page);
   assert(
-    state.detailText.includes("Personal meanings") && state.detailText.includes("Preserved legacy verse drafts"),
-    "My Data summary missing Meaning or preserved legacy draft counts",
+    state.detailText.includes("Saved study") && !/Personal meanings|Preserved legacy verse drafts|Study Mark assertions|App settings/.test(state.detailText),
+    "My Data must show saved study without retired labels or internal counters",
   );
   pass("My Data summary and collapsed diagnostics");
 
@@ -3557,15 +3557,16 @@ async function runQa(page) {
         hasWorkspace: Boolean(parsed.stores?.workspace),
         tagJobTypes: (parsed.stores?.tags?.job_events || []).map((event) => event.type),
         workspaceJobTypes: (parsed.stores?.workspace?.job_events || []).map((event) => event.type),
-        summaryText: document.querySelector('#detailContent')?.textContent || ''
+        summaryText: document.querySelector('#detailContent')?.textContent || '',
+        summaryCounts: [...document.querySelectorAll('.study-data-section .user-data-summary-item strong')].map((node) => Number(node.textContent))
       };
     })()`,
   );
   assert(userDataExport.kind === "bibleapp:user-data", "user-data export has wrong kind");
   assert(userDataExport.hasTags && userDataExport.hasWorkspace, "user-data export missing local stores");
   assert(
-    userDataExport.summaryText.includes("Custom labels") && userDataExport.summaryText.includes("My study data"),
-    "user-data summary missing expected counts",
+    userDataExport.summaryText.includes("Saved study") && userDataExport.summaryCounts.every((count) => count > 0),
+    "Saved study must show only populated summary counts",
   );
   assert(userDataExport.tagJobTypes.length === 0 && userDataExport.workspaceJobTypes.length === 0, "Study actions must not create jobs");
   await evaluate(page, "document.querySelector('.advanced-diagnostics').open = false");
@@ -3753,7 +3754,7 @@ async function runQa(page) {
   );
   await clickButtonByText(page, "Replace all local data");
   await click(page, ".replace-confirmation .danger-button");
-  await waitFor(page, "document.querySelector('.import-status')?.textContent.includes('Recovery backup created')");
+  await waitFor(page, "document.querySelector('.import-status')?.textContent.includes('A recovery copy of the previous data was saved')");
   pass("versioned backup merge, replace confirmation, and recovery backup");
 
   await click(page, "#homeButton");

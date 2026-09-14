@@ -14,7 +14,12 @@ registration; it does not present a data-unavailable error or request its data.
 
 The ordinary Stable controls remain Search, Language Study, Outline, Study
 Marks, My Data, Strong's, Commentary, Cross References, Parallel translations,
-and Meaning. The contextual scope order remains exactly `Word → Verse`.
+and Interpretation. The contextual scope order remains exactly `Word → Verse`.
+Word actions read Definition, Concordance and Interpretation; Verse actions read
+Translations, References, Commentary and Language. These are actual DOM labels,
+with compact mouse controls and 44px narrow/touch targets. Word interpretation
+shows separate source-labeled choices and an Alternative wording editor. Save,
+Cancel and Remove retain the exact token target and existing focus behavior.
 
 DOM construction, focus, hash routing, panel history, CSS, and responsive
 behavior are shared webview concerns rather than platform services. Browser or
@@ -23,19 +28,20 @@ files, static-data reads, notifications, and physical bytes.
 
 ## Stable and Lab
 
-Stable is the default and does not show a profile badge. Its Advanced
-diagnostics element stays collapsed and renders lazily. It retains storage
-authority, migration and failure messages, quarantine and recovery-backup
-counts, and physical-pack recovery. Capability Disable/Restore controls,
-package-operation and logical installed-pack counts, assertion-event counts,
-and duplicate storage summary tiles are absent. Local Jobs routes, counts,
+Stable is the default and does not show a profile badge. My Data shows Saved
+study and Backup and restore. Its Help and recovery element stays collapsed and
+renders lazily, with concise failure help and nonzero recovery counts. Existing
+managed-data users may explicitly choose Use included data without deleting
+separately saved files or study records. Opening the surface never changes mode.
+Pack catalogs, installation plans, technical history, capability Disable/Restore
+controls and empty legacy counters are absent. Local Jobs routes, counts,
 execution controls, and the job-backed index-refresh action are absent in both profiles.
 
 In the browser, Lab is selected with `?profile=lab` before the hash route. The
 supported Tauri Lab command selects Lab natively while loading the same shared
 frontend. It shows a compact `Lab · isolated local data` badge and a My Data
 isolation warning. Advanced diagnostics is expanded so the complete technical
-summary and capability Disable/Restore controls are available against Lab-only
+summary, experimental pack manager and capability Disable/Restore controls are available against Lab-only
 state. Capability resolution and historical disabled preferences remain shared
 contracts; opening Stable diagnostics never resets those preferences. Controls are not
 duplicated between profiles.

@@ -36,7 +36,7 @@ The panel distinguishes direct data ownership from inherited containing context:
 | Verse | Parallel text, references, commentary, verse Language Study, verse Study Marks | When a verse is active |
 | Chapter | Reader-header Language Study entry | When a chapter is active |
 | Book | Reader-header Outline entry | When a book is active |
-| Global/user | My study data, backup/restore, app settings, advanced diagnostics | My Data in the reader header and home |
+| Global/user | Saved study, backup/restore, help and recovery | My Data in the reader header and home |
 
 A selected word retains its containing Verse controls. `Word` is the current self-control only for exact canonical word context; `Verse` is the current self-control for whole-verse context. Parallel, References, Commentary, and Language are actions rather than false current-context claims. Chapter and Book keep their valid scope semantics while remaining attached to their reader-header controls. Word detail must never imply that cross-references or commentary belong to the lexical entry itself.
 
@@ -44,15 +44,15 @@ A selected word retains its containing Verse controls. `Word` is the current sel
 
 ## My Data
 
-My Data is one stable global detail-history entry and follows this order: My study data, Backup and restore, App settings, and Advanced diagnostics. Reopening the current My Data view does not add a duplicate history entry. Global activation clears transient word/verse study context and retains the reader route. The existing Study panel launcher keeps the view reachable on mobile.
+My Data is one stable global detail-history entry and follows this order: Saved study, Backup and restore, and Help and recovery. Reopening the current My Data view does not add a duplicate history entry. Global activation clears transient word/verse study context and retains the reader route. The existing Study panel launcher keeps the view reachable on mobile.
 
-The summary prioritizes user-owned records: custom labels, tagged verses, Study Mark assertions, active Study Marks, personal meanings, and preserved legacy verse drafts. It states that storage belongs to the current browser, is not an online account, and requires user-downloaded backups for portability.
+The summary prioritizes user-owned records: populated Study Marks, Word interpretations and custom labels; preserved drafts remain available through backups and recovery help. It states that storage belongs to the current browser, is not an online account, and requires user-downloaded backups for portability.
 
 Backup download and merge/replace import preserve `bibleapp:user-data` version 3. Raw export and paste textareas are optional disclosures. Replace uses an accessible explicit confirmation, creates the existing pre-replace recovery backup, and supports Cancel/Escape without mutation. Validation happens before store mutation; malformed, foreign, or future-version data reports an error.
 
-App settings intentionally contains no package capability toggles. Theme remains in the global header. Stable Advanced diagnostics is collapsed and lazy by default. It retains storage authority, migration and failure messages, quarantined-record and recovery-backup counts, and physical-pack recovery, but does not render capability Disable/Restore controls or the technical summary's package-operation, logical installed-pack, assertion-event, and duplicate storage tiles. Raw values remain text.
+Theme remains in the global header. Stable Help and recovery is collapsed and lazy, with concise storage-failure help and nonzero recovery counts. Existing managed-data users can explicitly choose Use included data without deleting saved files or study records. It exposes no pack catalog, installation plans, technical histories or capability toggles. Opening recovery never changes mode.
 
-Lab opens Advanced diagnostics by default with the complete technical summary and capability manager, using isolated profile state. Capability resolution, structured unavailable states, historical `disabled_capability_ids`, package state, physical-pack behavior, and version-3 backups are unchanged by this presentation boundary.
+Lab opens Advanced diagnostics by default with the complete technical summary, experimental pack manager and capability manager, using isolated profile state. Capability resolution, structured unavailable states, historical `disabled_capability_ids`, package state, physical-pack behavior, and version-3 backups are unchanged by this presentation boundary.
 
 Local Jobs is retired in both Stable and Lab. No console, route, job counts, Run, Plan Review, Simulate, Requeue, or job-backed index refresh is exposed. Study Mark indexes derive directly on save and normalization. Valid historical jobs remain passive version-3 backup data, including payloads/results; saving marks, Inquiry notes, Meaning, and legacy drafts/red-letter ranges never queues or executes jobs.
 
@@ -164,6 +164,10 @@ IndexedDB initialization and migration have a three-second boundary. If the brow
 
 ## Executable validation
 
+- `tests/portable-backup-format.mjs` and `tests/portable-backup-roundtrip.mjs`: sparse version-3 serialization, populated/unknown history preservation, merge/replace and malformed-import atomicity.
+- `tests/current-feature-cleanup.mjs` and `app/tools/ui-hygiene.mjs`: owning-stylesheet duplicate selector/property checks and scoped naming.
+- `app/scripts/current-feature-cleanup-interaction-test.mjs`: Compact/Standard, light/dark, narrow/touch, Hebrew/Greek labels, source choices, exact save/cancel/remove, and non-destructive Stable recovery. Actual browser zoom remains separate from viewport tests.
+
 - `tests/ui-contracts.mjs`: availability, panel transitions, control schema, corrected data scopes, and token identity.
 - `tests/panel-context-model.mjs`: Word-first scope order, tool ownership, active-word API, shell ordering, full visible labels, responsive wrapping, and narrow sticky-offset contracts.
 - `tests/study-workspace-width.mjs`: exact width-mode normalization/defaults, fault-tolerant persistence, key isolation, follow/locked separation, and active-button state.
@@ -180,12 +184,12 @@ IndexedDB initialization and migration have a three-second boundary. If the brow
 - `app/scripts/interaction-test.mjs`: rendered interaction behavior, including reader text-span selection, favorite controls, editable target badges, source-token tagging, Favorites grouping, panel history, and cleanup, when the browser runner is available.
 ## Compact side-panel Study Marks contract
 
-The reader side panel is limited to the current exact Word (when present) and Verse context. Its selected-word summary is visually separated from a compact control row. Chapter Language Study and Book Outline remain reader-header actions. Study Marks is one reusable icon trigger backed by the canonical target-aware picker; Book, Chapter, Verse, selected English text, and exact source tokens preserve their existing separate semantic targets and Favorite remains the `favorite` tag assertion. Meaning is a separate action beside Study Marks on exact Language Study source-token cards and in the pinned exact-word Word row. It is absent from transient, lexicon-only, and whole-verse contexts and is not a Study Marks behavior.
+The reader side panel is limited to the current exact Word (when present) and Verse context. Its selected-word summary is visually separated from a compact control row. Chapter Language Study and Book Outline remain reader-header actions. Study Marks is one reusable icon trigger backed by the canonical target-aware picker; Book, Chapter, Verse, selected English text, and exact source tokens preserve their existing separate semantic targets and Favorite remains the `favorite` tag assertion. Interpretation is a separate action beside Study Marks on exact Language Study source-token cards and in the pinned exact-word Word row. It is absent from transient, lexicon-only, and whole-verse contexts and is not a Study Marks behavior.
 
 The reader verse number retains its inline picker as the canonical verse Study Marks control, while the adjacent ellipsis opens verse study tools. Book and Chapter use actual visible scope labels inside their shared triggers, not CSS-generated label text.
 
 Inside the detail pane, source-word and verse Study Marks open only after explicit button activation and use the shared contained tool surface layered over the existing work area. The surface shows the exact target label/preview, Favorite, every valid tag, and Manage tags. Opening, closing, Escape, and Cancel-like dismissal are data-neutral; an explicit toggle updates that exact canonical target immediately. The preserved work area becomes inert and `aria-hidden` without reflow or DOM replacement, and Close/Escape restores the original trigger or a stable same-target replacement after a legitimate rerender. Manage tags cleanly transitions to the full editor through the existing single detail-history entry.
 
-Meaning uses the same surface only through its explicit `presentation: "detail-pane"` contract; the default non-panel fixed-dialog presentation remains available. Contained Meaning retains exact `source_token` validation, lazy exact-English/lexicon suggestions, quick choices, Other/custom input, Save, Cancel, and Remove. Open/close/Cancel are data-neutral, while Save and Remove mutate only the exact canonical source token. Study Marks and Meaning remain separate tools that replace one another through the single overlay coordinator without stale Escape ownership.
+Interpretation uses the same surface only through its explicit `presentation: "detail-pane"` contract; the default non-panel fixed-dialog presentation remains available. Contained Interpretation retains exact `source_token` validation, lazy exact-English/lexicon suggestions, quick choices, Alternative wording input, Save, Cancel, and Remove. Open/close/Cancel are data-neutral, while Save and Remove mutate only the exact canonical source token. Study Marks and Interpretation remain separate tools that replace one another through the single overlay coordinator without stale Escape ownership.
 
 The reusable surface is a sibling of the preserved work area inside `.detail-workspace`; it never participates in `#detailContent` snapshots or adds panel height. Escape closes only the active contained tool. Detail replacement, Back, Forward, Clear/reset, route navigation, and mobile dismissal remove its ownership before any underlying detail snapshot or replacement.

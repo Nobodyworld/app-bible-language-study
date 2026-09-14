@@ -48,7 +48,7 @@
   min-width: 0;
   min-height: 0;
   max-width: 100%;
-  max-height: min(36dvh, 180px);
+  max-height: 45%;
   box-sizing: border-box;
   overflow-x: hidden;
   overflow-y: auto;
@@ -524,7 +524,7 @@
 
 @media (min-width: 641px) and (max-width: 768px) and (hover: hover) and (pointer: fine) {
   .detail-context {
-    max-height: min(32dvh, 160px);
+    max-height: min(32dvh, 160px, 45%);
   }
 
   .detail-floating-nav {

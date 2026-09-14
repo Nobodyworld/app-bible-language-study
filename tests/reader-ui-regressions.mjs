@@ -154,7 +154,9 @@ assert(
   "Chapter action labels must use measured reader-pane thresholds and retain the compact fallback.",
 );
 assert(
-  /@media\s*\(max-width:\s*640px\)[\s\S]*?\.chapter-favorite-actions \.scope-mark-button\s*{[\s\S]*?min-height:\s*44px;/.test(css) &&
+  cssRules(css).some((rule) => rule.selectors.includes(".scope-mark-button") &&
+    rule.contexts.includes("@media (max-width: 640px), (hover: none), (pointer: coarse)") &&
+    rule.declarations.some(({ property, value }) => property === "min-height" && value === "44px")) &&
     /\.chapter-actions\s*{[\s\S]*?gap:\s*4px;[\s\S]*?\.action-group\s*{[\s\S]*?gap:\s*4px;[\s\S]*?padding:\s*0;[\s\S]*?border:\s*0;/.test(css),
   "Mobile Book and Chapter marks must have real 44px targets while the 4+2 action groups remove duplicate chrome.",
 );

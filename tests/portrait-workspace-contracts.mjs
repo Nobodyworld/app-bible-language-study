@@ -170,9 +170,13 @@ assert(
   "Verse Study Marks must sit after the single Parallel action and before the remaining verse tools.",
 );
 assert(
-  /\.panel-context-navigation \.word-meaning-trigger\[aria-expanded="false"\]\s*{[\s\S]*?border:\s*0 !important;[\s\S]*?background:\s*transparent !important;[\s\S]*?color:\s*var\(--muted\) !important;/.test(css) &&
-    /\.panel-context-navigation \.word-meaning-trigger\[aria-expanded="true"\][\s\S]*?background:\s*rgba\(37, 99, 95, 0\.12\) !important;/.test(css),
-  "Meaning must remain visually neutral while closed and highlight only during interaction or expansion.",
+  cssRules(css).some((rule) => rule.selectors.includes(".verse-context-tabs.panel-context-navigation .word-meaning-trigger") &&
+    rule.declarations.some(({ property, value }) => property === "background" && value === "transparent")) &&
+    cssRules(css).some((rule) => rule.selectors.includes(".word-meaning-trigger") &&
+      rule.declarations.some(({ property, value }) => property === "color" && value === "var(--muted)")) &&
+    cssRules(css).some((rule) => rule.selectors.includes('.word-meaning-trigger[aria-expanded="true"]') &&
+      rule.declarations.some(({ property, value }) => property === "color" && value === "var(--accent-dark)")),
+  "Interpretation must remain visually neutral while closed and highlight during interaction or expansion without important overrides.",
 );
 
 assert(
