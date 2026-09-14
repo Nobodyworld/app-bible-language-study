@@ -312,7 +312,7 @@ async function importHistoricalPolls(client, mode) {
   await client.execute("const input = document.querySelector('.import-textarea'); input.value = JSON.stringify(arguments[0]); input.dispatchEvent(new Event('input', {bubbles:true})); return true;", [payload]);
   await client.execute("const button = [...document.querySelectorAll('button')].find(node => node.textContent === arguments[0]); if (!button) throw new Error('Import button missing'); button.click(); return true;", [mode === "merge" ? "Merge backup" : "Replace all local data"]);
   if (mode === "replace") await click(client, ".replace-confirmation button.danger-button");
-  await client.waitFor("return document.querySelector('.import-status')?.textContent.includes(arguments[0]);", [mode === "merge" ? "Backup merged" : "Backup replaced"]);
+  await client.waitFor("return document.querySelector('.import-status')?.textContent.includes(arguments[0]);", [mode === "merge" ? "Backup merged" : "Local data replaced"]);
   await client.execute("document.querySelector('.manual-json-panel').dispatchEvent(new Event('toggle')); return true;");
   await client.waitFor("return JSON.parse(document.querySelector('.export-textarea')?.value || '{}').stores?.polls?.events?.length === 605;");
   // Native writes are queued; observe this import on disk before closing.
