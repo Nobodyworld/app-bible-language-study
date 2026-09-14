@@ -13,15 +13,15 @@ export const PANEL_SCOPE_LABELS = Object.freeze({
 
 export const PANEL_CONTEXT_TOOL_MATRIX = Object.freeze({
   word: Object.freeze([
-    Object.freeze({ id: "strongs", shortLabel: "Word", label: "Word", scope: "word" }),
-    Object.freeze({ id: "hebrew", shortLabel: "Hebrew", label: "Hebrew concordance", scope: "word" }),
-    Object.freeze({ id: "greek", shortLabel: "Greek", label: "Greek concordance", scope: "word" }),
+    Object.freeze({ id: "strongs", shortLabel: "Definition", label: "Definition", scope: "word" }),
+    Object.freeze({ id: "hebrew", shortLabel: "Concordance", label: "Hebrew concordance", scope: "word" }),
+    Object.freeze({ id: "greek", shortLabel: "Concordance", label: "Greek concordance", scope: "word" }),
   ]),
   verse: Object.freeze([
-    Object.freeze({ id: "par", shortLabel: "Par", label: "Parallel", scope: "verse" }),
-    Object.freeze({ id: "refs", shortLabel: "Refs", label: "References", scope: "verse" }),
-    Object.freeze({ id: "commentary", shortLabel: "Cmt", label: "Commentary", scope: "verse" }),
-    Object.freeze({ id: "interlinear", shortLabel: "Int", label: "Language Study", scope: "verse" }),
+    Object.freeze({ id: "par", shortLabel: "Translations", label: "Parallel translations", scope: "verse" }),
+    Object.freeze({ id: "refs", shortLabel: "References", label: "References", scope: "verse" }),
+    Object.freeze({ id: "commentary", shortLabel: "Commentary", label: "Commentary", scope: "verse" }),
+    Object.freeze({ id: "interlinear", shortLabel: "Language", label: "Language Study", scope: "verse" }),
   ]),
   chapter: Object.freeze([]),
   book: Object.freeze([]),
