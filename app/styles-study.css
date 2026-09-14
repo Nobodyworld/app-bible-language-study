@@ -623,11 +623,14 @@
 }
 
 .original-language-verse-reference {
+  /* Context controls are outside detailContent, so its scrollport top is the
+     only sticky offset. Each verse section naturally hands off to the next. */
   position: sticky;
-  top: 48px;
+  top: 0;
+  align-self: start;
   z-index: 6;
   margin: -16px -16px 0;
-  padding: 12px 16px 10px;
+  padding: 10px 16px;
   border-bottom: 1px solid var(--line);
   background: var(--panel-alt);
   color: var(--text);
@@ -740,9 +743,11 @@
 
 .original-language-word-summary .token-english {
   color: var(--text);
-  font-size: 15px;
+  font-size: 1.25rem;
   font-weight: 800;
-  line-height: 1.35;
+  line-height: 1.4;
+  text-align: start;
+  overflow-wrap: anywhere;
 }
 
 .original-language-word-summary .token-gloss {
@@ -879,6 +884,11 @@
 @media (max-width: 768px) {
 .original-language-verse-card {
     padding: 12px;
+  }
+.original-language-verse-reference {
+    margin-inline: -12px;
+    margin-block-start: -12px;
+    padding-inline: 12px;
   }
 }
 

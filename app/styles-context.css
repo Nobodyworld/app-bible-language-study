@@ -6,10 +6,11 @@
   z-index: 2;
   flex: 0 0 auto;
   display: flex;
+  align-items: center;
   justify-content: flex-end;
-  gap: 5px;
-  min-height: 44px;
-  padding: 6px 12px 0;
+  gap: 4px;
+  min-height: 0;
+  padding: 0;
   pointer-events: auto;
 }
 
@@ -44,16 +45,18 @@
   position: relative;
   z-index: 20;
   display: block;
-  flex: 0 0 auto;
+  flex: 0 1 auto;
   min-width: 0;
   min-height: 0;
   max-width: 100%;
-  max-height: 45%;
+  /* A viewport bound is stable while the enclosing flex boxes reflow at zoom.
+     Very short windows may scroll this region; actions are never discarded. */
+  max-height: min(240px, 45dvh);
   box-sizing: border-box;
   overflow-x: hidden;
   overflow-y: auto;
   overscroll-behavior: contain;
-  padding: 6px 12px 4px;
+  padding: 4px 12px;
   background: var(--panel);
 }
 
@@ -80,12 +83,12 @@
 
 .verse-context-tabs.panel-context-navigation {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   width: 100%;
   max-width: 100%;
   min-width: 0;
   box-sizing: border-box;
-  padding: 7px;
+  padding: 6px;
   overflow: visible;
 }
 
@@ -97,27 +100,27 @@
   line-height: 1.35;
   text-overflow: ellipsis;
   white-space: nowrap;
-  padding-bottom: 5px;
+  padding-bottom: 4px;
   border-bottom: 1px solid var(--line);
 }
 
 .panel-context-groups {
   display: grid;
-  gap: 6px;
+  gap: 4px;
   min-width: 0;
 }
 
 .panel-context-group {
   display: grid;
-  grid-template-columns: minmax(0, 1fr);
+  grid-template-columns: 2.5rem minmax(0, 1fr);
   align-items: start;
-  gap: 2px;
+  gap: 4px;
   min-width: 0;
 }
 
 .panel-context-scope-label {
   margin: 0;
-  padding: 0;
+  padding: 9px 0 0;
   color: var(--muted);
   font-size: 10px;
   font-weight: 600;
@@ -515,28 +518,6 @@
     height: 44px;
     min-width: 44px;
     min-height: 44px;
-  }
-
-  .detail-floating-nav {
-    min-height: 56px;
-  }
-}
-
-@media (min-width: 641px) and (max-width: 768px) and (hover: hover) and (pointer: fine) {
-  .detail-context {
-    max-height: min(32dvh, 160px, 45%);
-  }
-
-  .detail-floating-nav {
-    min-height: 36px;
-    padding: 4px 10px 0;
-  }
-
-  .detail-nav-arrow {
-    width: 30px;
-    height: 30px;
-    min-width: 30px;
-    min-height: 30px;
   }
 }
 
