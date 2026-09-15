@@ -143,7 +143,7 @@ for (const [controlId, actionId] of Object.entries({
   const markup = index.match(new RegExp(`<button id="${controlId}"[\\s\\S]*?<\\/button>`))?.[0] || "";
   assert.ok(markup, `${controlId} must remain in the Reader toolbar`);
   const label = uiActionLabel(actionId);
-  assert.match(markup, new RegExp(`>${label.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}<`), `${controlId} visible label must match ${actionId}`);
+  assert.ok(markup.includes(`>${label}<`), `${controlId} visible label must match ${actionId}`);
 }
 
 console.log(
