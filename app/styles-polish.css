@@ -4,6 +4,16 @@
   --footnote-fg-hover: #224d80;
   --mark-surface: #eef5f4;
   --mark-surface-strong: #e6f1f0;
+  --speech-attribution-red: #9d2f2f;
+  --speech-attribution-red-surface: rgba(157, 47, 47, 0.09);
+  --speech-attribution-pink: #85456f;
+  --speech-attribution-pink-surface: rgba(133, 69, 111, 0.1);
+  --speech-attribution-gray: #66707a;
+  --speech-attribution-gray-surface: rgba(102, 112, 122, 0.11);
+  --speech-attribution-black: #2f3337;
+  --speech-attribution-black-surface: rgba(47, 51, 55, 0.08);
+  --interpretation-marker-fg: #315f62;
+  --interpretation-marker-surface: rgba(37, 99, 95, 0.09);
 }
 
 [data-theme="dark"] {
@@ -11,6 +21,16 @@
   --footnote-fg-hover: #b8d4ec;
   --mark-surface: #29342f;
   --mark-surface-strong: #2b3d39;
+  --speech-attribution-red: #ff9a9a;
+  --speech-attribution-red-surface: rgba(255, 154, 154, 0.12);
+  --speech-attribution-pink: #d7a0c3;
+  --speech-attribution-pink-surface: rgba(215, 160, 195, 0.13);
+  --speech-attribution-gray: #b3bbc3;
+  --speech-attribution-gray-surface: rgba(179, 187, 195, 0.12);
+  --speech-attribution-black: #eceff2;
+  --speech-attribution-black-surface: rgba(236, 239, 242, 0.08);
+  --interpretation-marker-fg: #8fd0c9;
+  --interpretation-marker-surface: rgba(78, 205, 193, 0.11);
 }
 
 /* Shared browser/Tauri baseline visual polish. Keep this presentation-only. */
@@ -41,5 +61,15 @@
     --ui-reader-row-hover: rgba(78, 205, 193, 0.045);
     --ui-control-shadow: 0 1px 2px rgba(0, 0, 0, 0.24);
     --ui-panel-shadow: 0 14px 34px rgba(0, 0, 0, 0.26);
+    --speech-attribution-red: #ff9a9a;
+    --speech-attribution-red-surface: rgba(255, 154, 154, 0.12);
+    --speech-attribution-pink: #d7a0c3;
+    --speech-attribution-pink-surface: rgba(215, 160, 195, 0.13);
+    --speech-attribution-gray: #b3bbc3;
+    --speech-attribution-gray-surface: rgba(179, 187, 195, 0.12);
+    --speech-attribution-black: #eceff2;
+    --speech-attribution-black-surface: rgba(236, 239, 242, 0.08);
+    --interpretation-marker-fg: #8fd0c9;
+    --interpretation-marker-surface: rgba(78, 205, 193, 0.11);
   }
 }
