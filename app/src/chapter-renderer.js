@@ -2,18 +2,23 @@ import { els, isDetailHoverLocked, setDetail, setStatus, sortedNumericKeys, text
 import { resolvePassageText } from "./data-service.js?v=pr13-live-qa-20260711e";
 import { referenceKey, refDomId, parseLocationFromHref } from "./references.js";
 import {
-  addRedLetterRange,
+  applySpeechAttributionRange,
+  clearSpeechAttribution,
   ensureStores,
-  getRedLetterRanges,
+  getSpeechAttributionRanges,
+  getTokenRendering,
   getTaggedTargetsForReference,
 } from "./stores.js?v=pr13-live-qa-20260711e";
 import {
+  createSourceTokenTarget,
   createTextSpanTarget,
   resolveTextSpanAnchor,
 } from "./semantic-targets.js?v=pr13-live-qa-20260711e";
 import { mapStrongChapterRanges, resolveSourceBearingPresentationSegment } from "./strongs.js";
 import { createStudyEmptyState, studyUnavailableLabel } from "./study-empty-state.js";
-import { interlinearTokenIdentity } from "./ui-contracts.js";
+import { interlinearTokenIdentity, uiActionContract } from "./ui-contracts.js";
+import { SPEECH_ATTRIBUTION_LEVELS, speechAttributionForSegment } from "./user-annotation-contracts.js";
+import { createInterpretationMarker, decorateSpeechAttributionElement } from "./user-annotation-presenter.js";
 import { resolveReferencePreviewPlacement } from "./reference-preview-placement.js";
 
 export function createChapterRenderer(ctx) {
@@ -158,7 +163,7 @@ export function createChapterRenderer(ctx) {
     return { start: expandedStart, end: expandedEnd };
   }
 
-  function selectedTextRange(verseText, body) {
+  function selectedTextRange(verseText, body, expandWords = true) {
     const selection = window.getSelection?.();
     if (!selection?.rangeCount || selection.isCollapsed) return null;
     const domRange = selection.getRangeAt(0);
@@ -172,7 +177,7 @@ export function createChapterRenderer(ctx) {
     const start = rawStart + leading;
     const end = rawEnd - trailing;
     if (end <= start) return null;
-    const expanded = expandToWordBoundaries(verseText, start, end);
+    const expanded = expandWords ? expandToWordBoundaries(verseText, start, end) : { start, end };
     return { ...expanded, text: verseText.slice(expanded.start, expanded.end) };
   }
 
@@ -181,6 +186,16 @@ export function createChapterRenderer(ctx) {
     selectionMenu = document.createElement("div");
     selectionMenu.className = "selection-action-menu";
     selectionMenu.hidden = true;
+    selectionMenu.setAttribute("role", "group");
+    selectionMenu.setAttribute("aria-label", "Selected text actions");
+    selectionMenu.addEventListener("keydown", (event) => {
+      if (event.key === "Escape") {
+        event.stopPropagation();
+        selectionMenu.hidden = true;
+        window.getSelection?.()?.removeAllRanges();
+        selectionMenu.__selectionBody?.querySelector("[tabindex]")?.focus({ preventScroll: true });
+      }
+    });
     document.body.append(selectionMenu);
     document.addEventListener("pointerdown", (event) => {
       if (!selectionMenu || selectionMenu.hidden) return;
@@ -418,6 +433,7 @@ export function createChapterRenderer(ctx) {
       return;
     }
     const menu = ensureSelectionMenu();
+    menu.__selectionBody = body;
     menu.replaceChildren();
     const target = createTextSpanTarget(
       key,
@@ -449,18 +465,66 @@ export function createChapterRenderer(ctx) {
     });
     marks.querySelector(".tag-picker-manage")?.addEventListener("click", clearSelection);
 
-    const red = document.createElement("button");
-    red.type = "button";
-    red.textContent = "Red letters";
-    red.addEventListener("click", () => {
-      addRedLetterRange(ctx.state, key, range);
+    const attribution = document.createElement("label");
+    attribution.className = "selection-speech-attribution";
+    const caption = document.createElement("span");
+    caption.textContent = "Speech attribution";
+    const choices = document.createElement("select");
+    choices.dataset.uiAction = "speech-attribution";
+    choices.setAttribute("aria-label", "Speech attribution — private annotation");
+    choices.title = "Your private annotation, not an attribution asserted by the app. Clear removes only this exact selected range.";
+    const ranges = getSpeechAttributionRanges(ctx.state, key);
+    const exactSelection = selectedTextRange(verseText, body, false);
+    // Retain the normal whole-word selection behavior while allowing an exact
+    // imported range inside a word to be changed or cleared without expanding it.
+    const speechRange = ranges.some((item) => item.start === exactSelection?.start && item.end === exactSelection?.end)
+      ? exactSelection : range;
+    const current = ranges.find((item) => item.start === speechRange.start && item.end === speechRange.end);
+    choices.setAttribute("aria-description", `Selected wording: ${speechRange.text}`);
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = "Choose attribution…";
+    placeholder.disabled = true;
+    choices.append(placeholder);
+    for (const level of Object.values(SPEECH_ATTRIBUTION_LEVELS)) {
+      const option = document.createElement("option");
+      option.value = level.id;
+      option.textContent = `${level.compactLabel} — ${level.label}`;
+      choices.append(option);
+    }
+    const clear = document.createElement("option");
+    clear.value = "clear";
+    clear.textContent = "Clear";
+    clear.disabled = !current;
+    choices.append(clear);
+    choices.value = current?.classification || "";
+    choices.addEventListener("change", () => {
+      if (choices.value === "clear") clearSpeechAttribution(ctx.state, key, speechRange);
+      else applySpeechAttributionRange(ctx.state, key, speechRange, choices.value);
       clearSelection();
+      const scrollTop = els.content.scrollTop;
+      const scrollLeft = els.content.scrollLeft;
       ctx.renderChapter();
+      els.content.scrollTo(scrollLeft, scrollTop);
+      const row = document.getElementById(refDomId(key));
+      const segment = [...(row?.querySelectorAll("[data-verse-char-start]") || [])]
+        .find((node) => Number(node.dataset.verseCharStart) <= speechRange.start && Number(node.dataset.verseCharEnd) > speechRange.start);
+      if (segment) {
+        if (!segment.hasAttribute("tabindex")) segment.tabIndex = -1;
+        segment.focus({ preventScroll: true });
+      }
     });
+    attribution.append(caption, choices);
 
     const study = document.createElement("button");
     study.type = "button";
-    study.textContent = "Study";
+    const studyAction = uiActionContract("language-study");
+    study.className = "ui-action-control";
+    study.dataset.uiAction = studyAction.id;
+    study.dataset.uiScope = "text_span";
+    study.textContent = studyAction.compactLabel;
+    study.title = studyAction.tip;
+    study.setAttribute("aria-label", studyAction.label);
     study.addEventListener("click", () => {
       const committedTarget = ctx.commitTextSpanSelection?.(target) || target;
       clearSelection();
@@ -470,7 +534,7 @@ export function createChapterRenderer(ctx) {
       });
     });
 
-    menu.append(marks, study, red);
+    menu.append(marks, study, attribution);
     placeSelectionMenu(menu, window.getSelection?.());
   }
 
@@ -532,10 +596,11 @@ export function createChapterRenderer(ctx) {
     if (tagColor) span.style.setProperty("--tag-color", tagColor);
   }
 
-  function appendTextSegment(parent, text, isRed, start, end, taggedTargets, activeRange = null) {
+  function appendTextSegment(parent, text, attribution, start, end, taggedTargets, activeRange = null) {
     const span = document.createElement("span");
-    span.className = isRed ? "reader-text-segment red-letter" : "reader-text-segment";
+    span.className = "reader-text-segment";
     span.textContent = text;
+    if (attribution) decorateSpeechAttributionElement(span, attribution);
     markTextSegment(span, start, end, taggedTargets, activeRange);
     parent.append(span);
   }
@@ -565,7 +630,7 @@ export function createChapterRenderer(ctx) {
     end,
     events,
     tokenRanges,
-    redRanges,
+    attributionRanges,
     taggedTargets,
     reference,
     activeRange = null,
@@ -581,7 +646,7 @@ export function createChapterRenderer(ctx) {
       boundaries.add(Math.max(start, range.start));
       boundaries.add(Math.min(end, range.end));
     });
-    redRanges.forEach((range) => {
+    attributionRanges.forEach((range) => {
       if (range.end <= start || range.start >= end) return;
       boundaries.add(Math.max(start, range.start));
       boundaries.add(Math.min(end, range.end));
@@ -611,12 +676,12 @@ export function createChapterRenderer(ctx) {
       if (next <= point) continue;
       const text = verseText.slice(point, next);
       const tokenRange = tokenRanges.find((range) => range.start <= point && range.end >= next);
-      const isRed = redRanges.some((range) => range.start <= point && range.end >= next);
+      const attribution = speechAttributionForSegment(attributionRanges, point, next);
       const segmentTargets = taggedTargets.filter(
         ({ resolved }) => resolved.char_start < next && resolved.char_end > point,
       );
       if (!tokenRange) {
-        appendTextSegment(parent, text, isRed, point, next, segmentTargets, activeRange);
+        appendTextSegment(parent, text, attribution, point, next, segmentTargets, activeRange);
         appendTargetBadges(parent, taggedTargets, next, reference);
         continue;
       }
@@ -627,6 +692,10 @@ export function createChapterRenderer(ctx) {
       token.setAttribute("role", "button");
       token.textContent = text;
       token.dataset.tooltip = strongTooltip(tokenRange.token);
+      token.dataset.uiAction = "definition";
+      token.dataset.uiScope = "source_token";
+      token.dataset.uiTip = uiActionContract("definition").tip;
+      token.classList.add("ui-action-control");
       token.dataset.tokenIndex = String(tokenRange.token.token_index ?? "");
       token.dataset.strongCode = tokenRange.token.strong_code || "";
       token.dataset.verse = String(tokenRange.verseContext?.verse || "");
@@ -639,8 +708,12 @@ export function createChapterRenderer(ctx) {
       });
       token.__bibleAppStrongToken = tokenRange.token;
       token.__bibleAppVerseContext = tokenRange.verseContext;
-      token.setAttribute("aria-label", `Open Strong's details for ${text.trim()}: ${token.dataset.tooltip}`);
-      if (isRed) token.classList.add("red-letter");
+      token.setAttribute("aria-label", `Definition for ${text.trim()}: ${token.dataset.tooltip}`);
+      if (attribution) {
+        decorateSpeechAttributionElement(token, attribution);
+        delete token.dataset.tooltip;
+      }
+      token.__interpretationEnd = next === tokenRange.end;
       const showHoverStrong = () => ctx.detailViews.showStrong(tokenRange.token, { hover: true, history: "replace" });
       token.addEventListener("mouseenter", showHoverStrong);
       token.addEventListener("mouseover", showHoverStrong);
@@ -790,9 +863,13 @@ export function createChapterRenderer(ctx) {
     const number = document.createElement("button");
     number.type = "button";
     number.className = "verse-number";
+    number.classList.add("ui-action-control");
+    number.dataset.uiAction = "translations";
+    number.dataset.uiScope = "verse";
+    number.dataset.uiTip = uiActionContract("translations").tip;
     number.textContent = verse;
-    number.title = "Verse Study Marks and parallel translations";
-    number.setAttribute("aria-label", `Verse ${verse}: Study Marks and parallel translations`);
+    number.title = uiActionContract("translations").tip;
+    number.setAttribute("aria-label", `Translations for verse ${verse}`);
     number.addEventListener("click", () => {
       ctx.highlightReaderContext?.({ verse, commit: true });
       void ctx.detailViews.showParallelVerse(reference, verse, verseText, {
@@ -838,7 +915,7 @@ export function createChapterRenderer(ctx) {
       });
 
     const tokenRanges = ctx.canUseCapability?.("strongs-overlay") ? chapterData.strongRangesByVerse?.[verse] || [] : [];
-    const redRanges = getRedLetterRanges(ctx.state, key);
+    const attributionRanges = getSpeechAttributionRanges(ctx.state, key);
     const taggedTextTargets = getTaggedTargetsForReference(ctx.state, key, {
       targetTypes: ["text_span"],
       translationId: ctx.state.translationId,
@@ -873,7 +950,7 @@ export function createChapterRenderer(ctx) {
           end,
           events,
           tokenRanges,
-          redRanges,
+          attributionRanges,
           taggedTextTargets,
           reference,
           activeRange,
@@ -992,6 +1069,7 @@ export function createChapterRenderer(ctx) {
     });
 
     ctx.syncChapterButtons();
+    refreshInterpretationMarkers();
     ctx.syncToolButtons();
     setStatus(`${ctx.state.verseBook.translation?.code || ctx.state.translationId.toUpperCase()} data loaded`);
 
@@ -1006,6 +1084,27 @@ export function createChapterRenderer(ctx) {
         window.setTimeout(() => target.classList.remove("target-verse"), 1600);
       }
     }
+  }
+
+  function refreshInterpretationMarkers() {
+    // Marker siblings never enter the character-offset spans used for selection.
+    const seen = new Set();
+    els.content.querySelectorAll(".interpretation-marker").forEach((marker) => marker.remove());
+    els.content.querySelectorAll(".strong-token").forEach((fragment) => {
+      if (!fragment.__interpretationEnd) return;
+      const token = fragment.__bibleAppStrongToken;
+      const key = referenceKey(ctx.state.bookId, ctx.state.chapter, fragment.dataset.verse);
+      const target = createSourceTokenTarget(key, token, ctx.state.translationId);
+      if (!target || seen.has(target.target_id)) return;
+      const record = getTokenRendering(ctx.state, target);
+      if (!record) return;
+      const marker = createInterpretationMarker(record);
+      if (!marker) return;
+      seen.add(target.target_id);
+      marker.dataset.targetId = target.target_id;
+      marker.dataset.uiScope = "source_token";
+      fragment.after(marker);
+    });
   }
 
   function clearTextSpanHighlight() {
@@ -1067,6 +1166,7 @@ export function createChapterRenderer(ctx) {
   return {
     applyTextSpanHighlight,
     clearTextSpanHighlight,
+    refreshInterpretationMarkers,
     renderChapter,
   };
 }

@@ -126,9 +126,9 @@ try {
     await page.locator('.interlinear-picker').waitFor();
     await locked(page, `${theme}/chapter entry`);
     await passiveInteractions(page, `${theme}/chapter entry`, '.interlinear-picker h3');
-    await page.getByRole('button', { name: 'Inspect', exact: true }).first().click();
+    await page.locator('.interlinear-picker [data-ui-action="language-study"]').first().click();
     await page.locator(`${section(1)} .original-language-word-card`).first().waitFor();
-    await passiveInteractions(page, `${theme}/chapter Inspect`, '.original-language-study-intro');
+    await passiveInteractions(page, `${theme}/chapter Language`, '.original-language-study-intro');
 
     await page.locator('#clearDetail').click();
     assert.equal(await page.locator('#detailPane').getAttribute('data-panel-mode'), 'follow', 'Clear must release the Language lock');

@@ -51,6 +51,7 @@ import {
   CONTROL_STATES,
   DETAIL_VIEW_IDS,
   resolveControlState,
+  uiActionContract,
 } from "./src/ui-contracts.js?v=pr13-live-qa-20260711e";
 import { dismissContainedDetailTool } from "./src/detail-tool-surface.js";
 import {
@@ -504,6 +505,7 @@ const ctx = {
     renderer.renderChapter();
     if (readerContext?.verse) restoreReaderHighlightFromContext(readerContext);
   },
+  refreshInterpretationMarkers: () => renderer.refreshInterpretationMarkers(),
   syncChapterButtons,
   syncFavoriteButtons,
   syncToolButtons,
@@ -1016,6 +1018,8 @@ function syncToolButtons() {
     });
     button.disabled = control.disabled && key !== "search";
     button.setAttribute("aria-busy", dataset?.status === "loading" ? "true" : "false");
+    const action = uiActionContract(button.dataset.uiAction);
+    button.dataset.uiTip = action.tip;
     if (control.state === CONTROL_STATES.capabilityUnavailable) {
       button.title = studyUnavailableLabel(key);
     } else if (control.state === CONTROL_STATES.dataUnavailable) {
@@ -1028,9 +1032,10 @@ function syncToolButtons() {
     } else if (dataset?.status === "loading") {
       button.title = `Loading ${fallbackTitle} data...`;
     } else {
-      button.title = fallbackTitle;
+      button.title = action.tip;
     }
-    button.setAttribute("aria-label", button.title);
+    button.setAttribute("aria-label", action.label);
+    button.setAttribute("aria-description", button.title);
     button.dataset.unavailable = control.disabled ? "true" : "false";
     button.dataset.controlState = control.state;
   });
@@ -1070,17 +1075,22 @@ function showHomePage(options = {}) {
     action();
   };
   const actions = [
-    ["Continue reading", () => void navigateToRoute(currentRoute(), { replace: true })],
-    ["Search", runWithReaderData(detailViews.showSearch)],
-    ["Study Marks", runWithReaderData(detailViews.showTagIndex)],
-    ["My Data", runWithReaderData(detailViews.showMyData)],
+    [null, () => void navigateToRoute(currentRoute(), { replace: true })],
+    ["search", runWithReaderData(detailViews.showSearch)],
+    ["study-marks", runWithReaderData(detailViews.showTagIndex)],
+    ["my-data", runWithReaderData(detailViews.showMyData)],
   ];
-  const actionFeatures = { Search: "search", "Study Marks": "study-marks", "My Data": "my-data" };
-  actions.filter(([label]) => !actionFeatures[label] || featureEnabled(state.featureProfile, actionFeatures[label])).forEach(([label, action]) => {
+  actions.filter(([id]) => !id || featureEnabled(state.featureProfile, uiActionContract(id).featureId)).forEach(([id, action]) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "home-action";
-    button.textContent = label;
+    const contract = uiActionContract(id);
+    button.textContent = contract?.label || "Continue reading";
+    if (contract) {
+      button.classList.add("ui-action-control");
+      button.dataset.uiAction = id;
+      button.title = contract.tip;
+    }
     button.addEventListener("click", action);
     grid.append(button);
   });
@@ -1296,9 +1306,10 @@ function bindEvents() {
 
   function maybeDisengageLockedDetail(event) {
     if (event.target.closest?.("#detailToolSurface")) return;
+    if (event.target.closest?.(".verse-body") && !window.getSelection()?.isCollapsed) return;
     if (
       !event.target.closest?.(
-        "button, a, input, select, textarea, summary, label, [role='button'], .verse-context-tabs, .detail-floating-nav, .strong-token, .language-word-hover, .language-letter-hover, .letter-unit, .morphology-help",
+        "button, a, input, select, textarea, summary, label, [role='button'], .verse-context-tabs, .detail-floating-nav, .strong-token, .speech-attribution, .user-annotation-tooltip-layer, .language-word-hover, .language-letter-hover, .letter-unit, .morphology-help",
       )
     ) {
       disengageDetailFollow();

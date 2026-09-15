@@ -26,6 +26,18 @@ remove, or reclassify a maintained test.
 
 ## Focused Aliases
 
+`npm run test:user-annotations` covers legacy speech-attribution normalization,
+four-state apply/change/clear, overlap resolution, unknown-field preservation,
+v3 portable backup merge/replace, exact-token lookup, and browser/native adapter
+restart and Stable/Lab isolation. `npm run test:annotation-browser` runs the
+isolated rendered annotation journey and is included in `test:browser`: real
+mouse selection, keyboard selection control, touch/hover/focus previews,
+split-token marker create/update/delete, IndexedDB reload and profile isolation,
+canonical dynamic actions and compact/standard/expanded/narrow themes.
+`ANNOTATION_SCREENSHOT_DIR` optionally writes screenshots outside the repository.
+The native `storage::tests` include an on-disk annotation round-trip with separate
+Stable/Lab roots; adapter and disk tests do not imply WebView restart acceptance.
+
 `npm run test:cleanup` runs the isolated current-feature browser checks in the
 browser aggregate: Compact/Standard, light/dark, narrow/touch, Hebrew/Greek
 labels, source-labeled Interpretation choices, save/cancel/remove, and explicit

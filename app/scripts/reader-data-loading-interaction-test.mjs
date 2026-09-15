@@ -89,6 +89,7 @@ async function captureControl(page, selector) {
   return page.locator(selector).evaluate((control) => ({
     ariaBusy: control.getAttribute("aria-busy"),
     ariaLabel: control.getAttribute("aria-label"),
+    ariaDescription: control.getAttribute("aria-description"),
     title: control.title,
     disabled: control.disabled,
     controlState: control.dataset.controlState,
@@ -370,7 +371,8 @@ try {
   assert(
     competingLoadingControl.ariaBusy === "true" &&
       competingLoadingControl.title === "Loading Language Study data..." &&
-      competingLoadingControl.ariaLabel === "Loading Language Study data..." &&
+      competingLoadingControl.ariaLabel === "Language Study" &&
+      competingLoadingControl.ariaDescription === competingLoadingControl.title &&
       !competingLoadingControl.disabled &&
       competingLoadingControl.controlState === "enabled" &&
       competingLoadingControl.unavailable === "false",
@@ -395,7 +397,7 @@ try {
   const competingLoadedControl = await captureControl(page, "#showInterlinear");
   assert(
     competingLoadedControl.ariaBusy === "false" &&
-      competingLoadedControl.title === "Language Study" &&
+      competingLoadedControl.title === "Explore original-language words, morphology, and related details." &&
       competingLoadedControl.ariaLabel === "Language Study" &&
       !competingLoadedControl.disabled &&
       competingLoadedControl.controlState === "enabled" &&
@@ -445,7 +447,8 @@ try {
   assert(
     failingLoadingControl.ariaBusy === "true" &&
       failingLoadingControl.title === "Loading Language Study data..." &&
-      failingLoadingControl.ariaLabel === "Loading Language Study data..." &&
+      failingLoadingControl.ariaLabel === "Language Study" &&
+      failingLoadingControl.ariaDescription === failingLoadingControl.title &&
       !failingLoadingControl.disabled,
     `held failing Language Study control did not expose loading state: ${JSON.stringify(failingLoadingControl)}`,
   );
@@ -464,7 +467,8 @@ try {
   assert(
     failingErrorControl.ariaBusy === "false" &&
       failingErrorControl.title === "Language Study data could not be loaded. Select to retry." &&
-      failingErrorControl.ariaLabel === failingErrorControl.title &&
+      failingErrorControl.ariaLabel === "Language Study" &&
+      failingErrorControl.ariaDescription === failingErrorControl.title &&
       !failingErrorControl.disabled &&
       failingErrorControl.controlState === "enabled" &&
       failingErrorControl.unavailable === "false",
@@ -481,7 +485,7 @@ try {
   const failingLoadedControl = await captureControl(page, "#showInterlinear");
   assert(
     failingLoadedControl.ariaBusy === "false" &&
-      failingLoadedControl.title === "Language Study" &&
+      failingLoadedControl.title === "Explore original-language words, morphology, and related details." &&
       failingLoadedControl.ariaLabel === "Language Study" &&
       !failingLoadedControl.disabled &&
       failingLoadedControl.controlState === "enabled" &&

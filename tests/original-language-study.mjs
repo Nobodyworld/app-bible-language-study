@@ -3,6 +3,7 @@
 import assert from "node:assert/strict";
 import { readAppStyles } from "./helpers/app-styles.mjs";
 import { readFile } from "node:fs/promises";
+import { uiActionContract } from "../app/src/ui-contracts.js";
 
 const [index, styles, flow, strongReferenceControl, app, interlinearView, emptyState, dom] = await Promise.all([
   readFile(new URL("../app/index.html", import.meta.url), "utf8"),
@@ -15,9 +16,13 @@ const [index, styles, flow, strongReferenceControl, app, interlinearView, emptyS
   readFile(new URL("../app/src/dom.js", import.meta.url), "utf8"),
 ]);
 
+const languageAction = uiActionContract("language-study");
+const languageControl = index.match(/<button id="showInterlinear"[\s\S]*?<\/button>/)?.[0] || "";
 assert(
-  /id="showInterlinear"[\s\S]*?title="Original language study"[\s\S]*?>Language Study</.test(index),
-  "The side-panel tool must present the feature as Language Study.",
+  languageControl.includes(`data-ui-action="${languageAction.id}"`) &&
+    languageControl.includes(`title="${languageAction.tip}"`) &&
+    languageControl.includes(`>${languageAction.label}<`),
+  "The Language Study control must use its canonical action, visible name, and quick tip.",
 );
 assert(
   /original-language-study-flow\.js\?v=pr13-live-qa-20260711e/.test(index),

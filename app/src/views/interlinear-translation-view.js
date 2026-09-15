@@ -21,7 +21,8 @@ import { getTokenRenderings, getWorkspaceVerse, setTokenRendering, setVerseDraft
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
 import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
 import { createStudyEmptyState } from "../study-empty-state.js";
-import { interlinearTokenIdentity } from "../ui-contracts.js";
+import { interlinearTokenIdentity, uiActionContract } from "../ui-contracts.js";
+import { refreshWordMeaningControls } from "../word-meaning.js?v=pr13-live-qa-20260711e";
 import {
   createSourceTokenTarget,
   normalizeTarget,
@@ -349,6 +350,11 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     strong.textContent = token.strong_code || "No Strong's";
     if (token.strong_code) {
       strong.type = "button";
+      strong.classList.add("ui-action-control");
+      strong.dataset.uiAction = "definition";
+      strong.dataset.uiScope = "source_token";
+      strong.title = uiActionContract("definition").tip;
+      strong.setAttribute("aria-label", `Definition for ${token.strong_code}`);
       strong.disabled = !ctx.canUseCapability?.("strongs-overlay");
       strong.addEventListener("click", (event) => {
         if (!ctx.canUseCapability?.("strongs-overlay")) return;
@@ -472,6 +478,8 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
       input.value = renderings[token.token_index]?.rendering || "";
       input.addEventListener("change", () => {
         setTokenRendering(ctx.state, options.referenceKey, token, input.value.trim());
+        ctx.refreshInterpretationMarkers?.();
+        refreshWordMeaningControls();
       });
       label.append(labelText, input);
       card.append(label);
@@ -741,8 +749,12 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
         li.append(ctx.createReferenceButton(reference, { book_id: ctx.state.bookId, chapter: ctx.state.chapter, verse_start: verse }));
         const inspect = document.createElement("button");
         inspect.type = "button";
-        inspect.className = "mini-button";
-        inspect.textContent = "Inspect";
+        inspect.className = "mini-button ui-action-control";
+        inspect.dataset.uiAction = "language-study";
+        inspect.dataset.uiScope = "verse";
+        inspect.textContent = uiActionContract("language-study").compactLabel;
+        inspect.title = uiActionContract("language-study").tip;
+        inspect.setAttribute("aria-label", `Language Study for ${reference}`);
         inspect.addEventListener("click", () => void showInterlinearVerse(reference, verse));
         li.append(inspect);
       }),

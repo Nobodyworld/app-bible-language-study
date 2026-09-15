@@ -114,7 +114,7 @@ try {
     await page.getByRole("button", { name: "Add alternative wording", exact: true }).click();
     await input.fill("Fixture interpretation");
     await input.press("Enter");
-    await page.locator("#detailContext .word-meaning-badge").filter({ hasText: "Fixture interpretation" }).waitFor();
+    await page.locator('#detailContext .word-meaning-badge[aria-label*="Fixture interpretation"]').waitFor();
     await trigger.click();
     await page.getByRole("button", { name: "Remove", exact: true }).click();
     assert.equal(await page.locator("#detailContext .word-meaning-badge").count(), 0);

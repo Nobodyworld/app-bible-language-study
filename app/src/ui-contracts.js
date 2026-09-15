@@ -25,6 +25,103 @@ export const DETAIL_VIEW_IDS = Object.freeze({
   tags: "tags",
 });
 
+const defineUiAction = (value) => Object.freeze({
+  compactLabel: value.label,
+  ...value,
+});
+
+export const UI_ACTION_CONTRACTS = Object.freeze({
+  definition: defineUiAction({
+    id: "definition",
+    featureId: "strongs",
+    viewId: DETAIL_VIEW_IDS.strongs,
+    label: "Definition",
+    tip: "Open definition and Strong's details for this word.",
+  }),
+  translations: defineUiAction({
+    id: "translations",
+    featureId: "parallel-translations",
+    viewId: DETAIL_VIEW_IDS.parallel,
+    label: "Translations",
+    tip: "Compare this verse across translations.",
+  }),
+  references: defineUiAction({
+    id: "references",
+    featureId: "cross-references",
+    viewId: DETAIL_VIEW_IDS.references,
+    label: "References",
+    tip: "Open cross-references for this verse.",
+  }),
+  commentary: defineUiAction({
+    id: "commentary",
+    featureId: "commentary",
+    viewId: DETAIL_VIEW_IDS.commentary,
+    label: "Commentary",
+    tip: "Open commentary for this verse.",
+  }),
+  "language-study": defineUiAction({
+    id: "language-study",
+    featureId: "language-study",
+    viewId: DETAIL_VIEW_IDS.languageStudy,
+    label: "Language Study",
+    compactLabel: "Language",
+    tip: "Explore original-language words, morphology, and related details.",
+  }),
+  outline: defineUiAction({
+    id: "outline",
+    featureId: "outlines",
+    viewId: DETAIL_VIEW_IDS.outline,
+    label: "Outline",
+    tip: "Open the book outline.",
+  }),
+  search: defineUiAction({
+    id: "search",
+    featureId: "search",
+    viewId: DETAIL_VIEW_IDS.search,
+    label: "Search",
+    tip: "Search this book.",
+  }),
+  "study-marks": defineUiAction({
+    id: "study-marks",
+    featureId: "study-marks",
+    viewId: DETAIL_VIEW_IDS.studyMarks,
+    label: "Study Marks",
+    tip: "Open saved marks and labels.",
+  }),
+  tags: defineUiAction({
+    id: "tags",
+    featureId: "study-marks",
+    viewId: DETAIL_VIEW_IDS.tags,
+    label: "Tags",
+    tip: "Edit tags for this target.",
+  }),
+  "my-data": defineUiAction({
+    id: "my-data",
+    featureId: "my-data",
+    viewId: DETAIL_VIEW_IDS.myData,
+    label: "My Data",
+    tip: "Open saved study data, backup, and recovery.",
+  }),
+  interpretation: defineUiAction({
+    id: "interpretation",
+    featureId: "meaning",
+    viewId: DETAIL_VIEW_IDS.meaning,
+    label: "Interpretation",
+    tip: "Review source wording or save an alternative interpretation for this word.",
+  }),
+});
+
+export function uiActionContract(actionId) {
+  const normalized = String(actionId || "").trim().toLowerCase();
+  return UI_ACTION_CONTRACTS[normalized] || null;
+}
+
+export function uiActionLabel(actionId, { compact = false } = {}) {
+  const action = uiActionContract(actionId);
+  if (!action) return "";
+  return compact ? action.compactLabel : action.label;
+}
+
 const DETAIL_VIEW_ID_SET = new Set(Object.values(DETAIL_VIEW_IDS));
 
 export function normalizeDetailViewId(viewId) {
@@ -58,48 +155,56 @@ export const STUDY_CONTROL_SCHEMA = Object.freeze({
     capabilityId: "search",
     dataScope: "book",
     action: "showSearch",
+    uiActionId: "search",
     lockOnActivate: true,
   },
   sidePanelOutline: {
     capabilityId: "outlines",
     dataScope: "book",
     action: "showOutline",
+    uiActionId: "outline",
     lockOnActivate: true,
   },
   sidePanelInterlinear: {
     capabilityId: "interlinear",
     dataScope: "chapter",
     action: "showInterlinearChapter",
+    uiActionId: "language-study",
     lockOnActivate: true,
   },
   verseParallel: {
     capabilityId: null,
     dataScope: "verse",
     action: "showParallelVerse",
+    uiActionId: "translations",
     lockOnActivate: true,
   },
   verseReferences: {
     capabilityId: "crossrefs",
     dataScope: "verse",
     action: "showCrossrefs",
+    uiActionId: "references",
     lockOnActivate: true,
   },
   verseCommentary: {
     capabilityId: "commentary",
     dataScope: "verse",
     action: "showCommentary",
+    uiActionId: "commentary",
     lockOnActivate: true,
   },
   verseInterlinear: {
     capabilityId: "interlinear",
     dataScope: "verse",
     action: "showInterlinearVerse",
+    uiActionId: "language-study",
     lockOnActivate: true,
   },
   verseTags: {
     capabilityId: null,
     dataScope: "verse",
     action: "showTagEditor",
+    uiActionId: "tags",
     lockOnActivate: true,
   },
 });

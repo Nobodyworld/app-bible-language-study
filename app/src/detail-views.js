@@ -7,7 +7,7 @@ import { createStrongsView } from "./views/strongs-view.js?v=pr13-live-qa-202607
 import { createTagsView } from "./views/tags-view.js?v=pr13-live-qa-20260711e";
 import { createUserDataView } from "./views/user-data-view.js?v=pr13-live-qa-20260711e";
 import { setDetail } from "./dom.js?v=pr13-live-qa-20260711e";
-import { createWordMeaningControl } from "./word-meaning.js?v=pr13-live-qa-20260711e";
+import { createWordMeaningControl, refreshWordMeaningControls } from "./word-meaning.js?v=pr13-live-qa-20260711e";
 
 function studyMarkBadgeOptions(options = {}) {
   return {
@@ -57,7 +57,15 @@ export function createDetailViews(ctx) {
   });
   const referenceViews = createReferenceViews(ctx);
   const tagsView = createTagsView(ctx);
-  const renderWordMeaningControl = (options = {}) => createWordMeaningControl({ state: ctx.state, ...options });
+  const renderWordMeaningControl = (options = {}) => createWordMeaningControl({
+    state: ctx.state,
+    ...options,
+    onChange: (change) => {
+      ctx.refreshInterpretationMarkers?.();
+      refreshWordMeaningControls();
+      options.onChange?.(change);
+    },
+  });
 
   return {
     clearStrongPin: strongsView.clearStrongPin,

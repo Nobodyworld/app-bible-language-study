@@ -19,6 +19,13 @@ import {
 } from "./semantic-targets.js?v=pr13-live-qa-20260711e";
 import { aggregatePollResponses, normalizePollResponse } from "./semantic-polls.js";
 import { createDefaultPackageStore, normalizePackageStore } from "./package-state.js";
+import {
+  clearSpeechAttributionRange,
+  normalizeSpeechAttributionRange,
+  normalizeSpeechAttributionRanges,
+  speechAttributionContract,
+  upsertSpeechAttributionRange,
+} from "./user-annotation-contracts.js";
 
 const USER_DATA_EXPORT_KIND = "bibleapp:user-data";
 const USER_DATA_EXPORT_VERSION = 3;
@@ -226,8 +233,7 @@ function normalizeWorkspaceStore(value = {}) {
   const store = { ...fallback, ...(value || {}) };
   store.verse_drafts = store.verse_drafts && typeof store.verse_drafts === "object" ? store.verse_drafts : {};
   store.token_renderings = normalizeTokenRenderingCollection(store.token_renderings);
-  store.red_letter_ranges =
-    store.red_letter_ranges && typeof store.red_letter_ranges === "object" ? store.red_letter_ranges : {};
+  store.red_letter_ranges = mergeSpeechAttributionCollections({}, store.red_letter_ranges);
   store.conflicts = Array.isArray(store.conflicts) ? store.conflicts.slice(-100) : [];
   store.job_events = normalizeJobEvents(store.job_events);
   store.version = fallback.version;
@@ -666,6 +672,38 @@ function mergeTokenRenderings(current, incoming) {
   return merged;
 }
 
+function normalizedAttribution(value) {
+  return value && typeof value === "object" ? normalizeSpeechAttributionRange(value) : null;
+}
+
+// Keep opaque historical records as backup data; only valid ranges participate
+// in rendering and exact-range operations. Never discard their extra fields.
+function mergeSpeechAttributionLists(current = [], incoming = []) {
+  const exact = new Map();
+  const opaque = [];
+  for (const value of [...current, ...incoming]) {
+    const range = normalizedAttribution(value);
+    if (!range) { opaque.push(value); continue; }
+    const key = `${range.start}:${range.end}`;
+    const previous = exact.get(key);
+    const previousTime = Date.parse(previous?.updated_at || "");
+    const incomingTime = Date.parse(range.updated_at || "");
+    const keepPrevious = Number.isFinite(previousTime) && Number.isFinite(incomingTime) && previousTime > incomingTime;
+    exact.set(key, keepPrevious ? { ...range, ...previous } : { ...previous, ...range });
+  }
+  return [...normalizeSpeechAttributionRanges([...exact.values()]), ...opaque];
+}
+
+function mergeSpeechAttributionCollections(current = {}, incoming = {}) {
+  const merged = { ...(current || {}) };
+  for (const [key, value] of Object.entries(incoming || {})) {
+    merged[key] = Array.isArray(value)
+      ? mergeSpeechAttributionLists(Array.isArray(merged[key]) ? merged[key] : [], value)
+      : value;
+  }
+  return merged;
+}
+
 function mergePackageStores(current, incoming) {
   return normalizeLocalPackageStore({
     ...current,
@@ -807,15 +845,17 @@ export function importUserData(state, payload, mode = "merge") {
     });
     state.workspaceStore = normalizeWorkspaceStore({
       ...state.workspaceStore,
+      ...incoming.workspaceStore,
       verse_drafts: { ...(state.workspaceStore.verse_drafts || {}), ...(incoming.workspaceStore.verse_drafts || {}) },
       token_renderings: mergeTokenRenderings(
         state.workspaceStore.token_renderings,
         incoming.workspaceStore.token_renderings,
       ),
-      red_letter_ranges: {
-        ...(state.workspaceStore.red_letter_ranges || {}),
-        ...(incoming.workspaceStore.red_letter_ranges || {}),
-      },
+      red_letter_ranges: mergeSpeechAttributionCollections(
+        state.workspaceStore.red_letter_ranges,
+        incoming.workspaceStore.red_letter_ranges,
+      ),
+      conflicts: [...state.workspaceStore.conflicts, ...incoming.workspaceStore.conflicts],
       job_events: mergeHistoryEvents(state.workspaceStore.job_events, incoming.workspaceStore.job_events, null),
     });
     state.assertionStore = normalizeAssertionStore({
@@ -983,6 +1023,12 @@ export function getTokenRendering(state, targetOrKey, token = null) {
   const location = tokenRenderingLocation(state, targetOrKey, token);
   if (!location) return null;
   const current = state.workspaceStore.token_renderings[location.referenceKey]?.[location.tokenIndex] || null;
+  // A neighboring translation or changed source token must not borrow a saved
+  // rendering merely because its verse and numeric token index happen to match.
+  if (current && (
+    (current.target_id && current.target_id !== location.target.target_id) ||
+    (current.strong_code && location.target.token?.strong_code && current.strong_code !== location.target.token.strong_code)
+  )) return null;
   return current
     ? normalizeTokenRendering(current, {
         target: location.target,
@@ -993,28 +1039,65 @@ export function getTokenRendering(state, targetOrKey, token = null) {
 }
 
 export function getRedLetterRanges(state, key) {
+  return getSpeechAttributionRanges(state, key);
+}
+
+export function getSpeechAttributionRanges(state, key) {
   ensureStores(state);
-  return state.workspaceStore.red_letter_ranges[key] || [];
+  const ranges = state.workspaceStore.red_letter_ranges[key];
+  return Array.isArray(ranges) ? ranges.map(normalizedAttribution).filter(Boolean) : [];
+}
+
+export function applySpeechAttributionRange(state, key, range, classification = range?.classification || "red") {
+  ensureStores(state);
+  const next = normalizedAttribution(range);
+  const contract = speechAttributionContract(classification);
+  if (!next || !contract) return false;
+  const stored = state.workspaceStore.red_letter_ranges[key];
+  if (stored !== undefined && !Array.isArray(stored)) return false;
+  const ranges = getSpeechAttributionRanges(state, key);
+  const previous = ranges.find((item) => item.start === next.start && item.end === next.end);
+  const updated = {
+    ...previous,
+    ...range,
+    start: next.start,
+    end: next.end,
+    classification: contract.id,
+    source: previous?.source || next.source,
+    revision: nextRevision(previous),
+    updated_at: nowIso(),
+  };
+  state.workspaceStore.red_letter_ranges[key] = [
+    ...upsertSpeechAttributionRange(ranges, updated),
+    ...(stored || []).filter((value) => !normalizedAttribution(value)),
+  ];
+  saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
+  return true;
+}
+
+export function changeSpeechAttributionRange(state, key, range, classification) {
+  const target = normalizedAttribution(range);
+  if (!target || !getSpeechAttributionRanges(state, key).some((item) => item.start === target.start && item.end === target.end)) return false;
+  return applySpeechAttributionRange(state, key, range, classification);
+}
+
+export function clearSpeechAttribution(state, key, range) {
+  const target = normalizedAttribution(range);
+  const ranges = getSpeechAttributionRanges(state, key);
+  if (!target || !ranges.some((item) => item.start === target.start && item.end === target.end)) return false;
+  const stored = state.workspaceStore.red_letter_ranges[key];
+  const remaining = [
+    ...clearSpeechAttributionRange(ranges, target),
+    ...stored.filter((value) => !normalizedAttribution(value)),
+  ];
+  if (remaining.length) state.workspaceStore.red_letter_ranges[key] = remaining;
+  else delete state.workspaceStore.red_letter_ranges[key];
+  saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
+  return true;
 }
 
 export function addRedLetterRange(state, key, range) {
-  ensureStores(state);
-  const start = Number(range?.start);
-  const end = Number(range?.end);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return false;
-  const ranges = state.workspaceStore.red_letter_ranges[key] || [];
-  ranges.push({
-    start,
-    end,
-    text: String(range?.text || ""),
-    source: "user",
-    updated_at: nowIso(),
-  });
-  state.workspaceStore.red_letter_ranges[key] = ranges
-    .sort((a, b) => a.start - b.start || a.end - b.end)
-    .filter((item, index, all) => index === 0 || item.start !== all[index - 1].start || item.end !== all[index - 1].end);
-  saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
-  return true;
+  return applySpeechAttributionRange(state, key, range, "red");
 }
 
 export function setVerseDraft(state, key, draftText, options = {}) {

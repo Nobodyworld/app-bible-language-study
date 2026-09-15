@@ -6,7 +6,7 @@ import {
 } from "../stores.js?v=pr13-live-qa-20260711e";
 import { setDetail } from "../dom.js?v=pr13-live-qa-20260711e";
 import { resolveCapabilities } from "../capabilities.js";
-import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
+import { DETAIL_VIEW_IDS, uiActionContract } from "../ui-contracts.js";
 import { setCapabilityDisabled } from "../package-state.js";
 import { compactUserDataBackup } from "../portable-backup.js";
 import { renderPhysicalPackManager } from "./physical-pack-view.js";
@@ -20,6 +20,9 @@ function renderSummaryGrid(rows) {
     item.className = `user-data-summary-item${action ? " summary-link" : ""}`;
     if (action) {
       item.type = "button";
+      item.classList.add("ui-action-control");
+      item.dataset.uiAction = "study-marks";
+      item.title = uiActionContract("study-marks").tip;
       item.setAttribute("aria-label", `${label}: ${value}. Open Study Marks.`);
       item.addEventListener("click", action);
     }
