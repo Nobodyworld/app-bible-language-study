@@ -1235,12 +1235,12 @@ async function runQa(page) {
   pass("inline reader target geometry, hit testing, dense chapter coverage, and floating-arrow gutters");
 
   const visibleChapterTools = [
-    { selector: '#showSearch', accessibleName: 'Search this book', detailTitle: 'Search' },
+    { selector: '#showSearch', accessibleName: 'Search', detailTitle: 'Search' },
     ...(qaDevice === 'mobile'
       ? [{ selector: '#openStudyPanel', accessibleName: 'Study panel', detailState: 'visible locked study panel' }]
       : []),
     { selector: '#showInterlinear', accessibleName: 'Language Study', detailTitle: 'Language Study' },
-    { selector: '#showOutline', accessibleName: 'Book outline', detailTitle: 'Outline' },
+    { selector: '#showOutline', accessibleName: 'Outline', detailTitle: 'Outline' },
     { selector: '#showTags', accessibleName: 'Study Marks', detailTitle: 'Study Marks' },
     { selector: '#showMyData', accessibleName: 'My Data', detailTitle: 'My Data' },
   ];

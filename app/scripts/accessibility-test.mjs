@@ -123,8 +123,8 @@ function checkRenderer(source) {
     "Verse study trigger must have an accessible label.",
   );
   assert(
-    /number\.setAttribute\(\s*["']aria-label["']/.test(source) && /Study Marks and parallel translations/.test(source),
-    "Verse number must describe its canonical Study Marks and parallel-translation roles.",
+    /number\.setAttribute\(\s*["']aria-label["']/.test(source) && /Translations for verse/.test(source) && /number\.dataset\.uiAction = "translations"/.test(source),
+    "Verse number must describe its canonical Translations action and exact verse scope.",
   );
   assert(
     /button\.addEventListener\("focus", showPreview\)/.test(source),
@@ -134,7 +134,7 @@ function checkRenderer(source) {
   return {
     strongTokenKeyboardActivation: true,
     verseStudyAriaLabel: true,
-    verseNumberStudyMarksAriaLabel: true,
+    verseNumberTranslationsAriaLabel: true,
     focusReferencePreview: true,
     touchSelectionMenu: true,
   };

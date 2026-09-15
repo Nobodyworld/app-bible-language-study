@@ -4,6 +4,7 @@ import {
   speechAttributionContract,
   speechAttributionPreview,
 } from "./user-annotation-contracts.js";
+import { uiActionContract } from "./ui-contracts.js";
 
 const tooltipLayers = new WeakMap();
 let tooltipSequence = 0;
@@ -16,6 +17,33 @@ function ensureTooltipLayer(documentObject) {
   layer.setAttribute("role", "tooltip");
   layer.hidden = true;
   documentObject.body.append(layer);
+  const reposition = () => {
+    const target = layer.__annotationTarget;
+    if (!target) return;
+    if (!target.isConnected) hideTooltip(layer);
+    else positionTooltip(layer, target);
+  };
+  documentObject.defaultView.addEventListener("resize", reposition);
+  documentObject.defaultView.addEventListener("scroll", reposition, true);
+  documentObject.addEventListener("pointerdown", (event) => {
+    layer.__selectingText = Boolean(event.target.closest?.(".verse-body"));
+    if (!layer.contains(event.target) && !layer.__annotationTarget?.contains(event.target)) hideTooltip(layer);
+    if (layer.__selectingText) hideTooltip(layer);
+  }, true);
+  documentObject.addEventListener("pointerup", () => { layer.__selectingText = false; });
+  documentObject.addEventListener("pointercancel", () => { layer.__selectingText = false; });
+  documentObject.addEventListener("selectionchange", () => {
+    if (!documentObject.defaultView.getSelection()?.isCollapsed) hideTooltip(layer);
+  });
+  new documentObject.defaultView.MutationObserver(reposition).observe(documentObject.body, { childList: true, subtree: true });
+  layer.addEventListener("mouseenter", () => clearTimeout(layer.__hideTimer));
+  layer.addEventListener("mouseleave", () => hideTooltip(layer));
+  documentObject.addEventListener("keydown", (event) => {
+    if (event.key === "Escape" && !layer.hidden) {
+      event.stopPropagation();
+      hideTooltip(layer);
+    }
+  }, true);
   tooltipLayers.set(documentObject, layer);
   return layer;
 }
@@ -82,6 +110,8 @@ function hideTooltip(layer, target = null) {
 function showTooltip(target, preview) {
   if (!preview || !target?.isConnected) return;
   const layer = ensureTooltipLayer(target.ownerDocument);
+  if (layer.__selectingText || !target.ownerDocument.defaultView.getSelection()?.isCollapsed) return;
+  clearTimeout(layer.__hideTimer);
   layer.__annotationTarget = target;
   renderTooltip(layer, preview);
   layer.hidden = false;
@@ -91,18 +121,41 @@ function showTooltip(target, preview) {
 export function wireUserAnnotationPreview(target, preview, { onActivate = null } = {}) {
   if (!target || !preview) return target;
   const layer = ensureTooltipLayer(target.ownerDocument);
+  target.__userAnnotationPreview = preview;
+  target.__userAnnotationActivate = onActivate;
   target.setAttribute("aria-describedby", layer.id);
-  target.addEventListener("mouseenter", () => showTooltip(target, preview));
-  target.addEventListener("mouseleave", () => hideTooltip(layer, target));
-  target.addEventListener("focus", () => showTooltip(target, preview));
+  if (layer.__annotationTarget === target) showTooltip(target, preview);
+  if (target.__userAnnotationWired) return target;
+  target.__userAnnotationWired = true;
+  target.addEventListener("mouseenter", () => showTooltip(target, target.__userAnnotationPreview));
+  target.addEventListener("mouseleave", () => {
+    if (target.ownerDocument.activeElement === target) return;
+    layer.__hideTimer = setTimeout(() => hideTooltip(layer, target), 140);
+  });
+  target.addEventListener("focus", () => showTooltip(target, target.__userAnnotationPreview));
   target.addEventListener("blur", () => hideTooltip(layer, target));
   target.addEventListener("keydown", (event) => {
-    if (event.key === "Escape") hideTooltip(layer, target);
+    if (event.key === "Escape" && target.__userAnnotationPreview) {
+      event.stopPropagation();
+      hideTooltip(layer, target);
+    }
   });
-  if (typeof onActivate === "function") {
-    target.addEventListener("click", (event) => onActivate(event, target));
-  }
+  target.addEventListener("click", (event) => {
+    if (!target.__userAnnotationPreview) return;
+    if (typeof target.__userAnnotationActivate === "function") {
+      hideTooltip(layer, target);
+      target.__userAnnotationActivate(event, target);
+    } else showTooltip(target, target.__userAnnotationPreview);
+  });
   return target;
+}
+
+export function clearUserAnnotationPreview(target) {
+  target.__userAnnotationPreview = null;
+  target.__userAnnotationActivate = null;
+  target.removeAttribute("aria-describedby");
+  const layer = tooltipLayers.get(target.ownerDocument);
+  if (layer) hideTooltip(layer, target);
 }
 
 export function decorateSpeechAttributionElement(element, range) {
@@ -114,6 +167,8 @@ export function decorateSpeechAttributionElement(element, range) {
   element.dataset.speechAttribution = normalized.classification;
   element.dataset.userAnnotation = "speech-attribution";
   element.title = preview.accessibleText;
+  if (!element.hasAttribute("tabindex")) element.tabIndex = 0;
+  element.setAttribute("aria-description", preview.accessibleText);
   wireUserAnnotationPreview(element, preview);
   return element;
 }
@@ -131,8 +186,10 @@ export function createInterpretationMarker(record, {
   marker.dataset.uiAction = "interpretation";
   marker.dataset.userAnnotation = "interpretation";
   marker.textContent = visibleLabel;
+  marker.dataset.uiTip = uiActionContract("interpretation").tip;
   marker.title = preview.accessibleText;
-  marker.setAttribute("aria-label", preview.accessibleText);
+  marker.setAttribute("aria-label", `Interpretation. ${preview.accessibleText}`);
+  marker.addEventListener("click", (event) => event.stopPropagation());
   wireUserAnnotationPreview(marker, preview, { onActivate });
   return marker;
 }

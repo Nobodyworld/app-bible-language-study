@@ -93,7 +93,7 @@ export const UI_ACTION_CONTRACTS = Object.freeze({
     featureId: "study-marks",
     viewId: DETAIL_VIEW_IDS.tags,
     label: "Tags",
-    tip: "Edit tags for this verse.",
+    tip: "Edit tags for this target.",
   }),
   "my-data": defineUiAction({
     id: "my-data",

@@ -46,7 +46,11 @@ The normalized user record should contain:
 }
 ```
 
-The containing workspace key already supplies the exact translation/reference identity. If a future migration moves these records to explicit semantic targets, old v3 records remain readable.
+The existing workspace key supplies the `book:chapter:verse` reference; legacy
+speech ranges do not encode a translation ID. This slice retains that storage
+behavior. Do not infer translation identity from the range key. If a future
+migration moves these records to explicit semantic targets, old v3 records
+remain readable.
 
 ### Legacy red-letter compatibility
 
@@ -60,6 +64,13 @@ Existing `workspace.red_letter_ranges` records are valid historical user data. O
 - bundled/source-provided red-letter presentation remains separate.
 
 The compatibility `addRedLetterRange()` API may remain temporarily as a wrapper for applying `classification: "red"` while newer code uses the generalized attribution API.
+
+The generalized store APIs are `getSpeechAttributionRanges()`,
+`applySpeechAttributionRange()`, `changeSpeechAttributionRange()` and
+`clearSpeechAttribution()`. Exact-range updates and imports retain extra fields;
+opaque historical records remain in backups without participating in rendering.
+When an exact imported range ends inside a word, selecting it permits changing
+or clearing that range without expanding it into a neighboring annotation.
 
 ### Range overlap
 

@@ -202,7 +202,7 @@ async function main() {
     assert.equal(selection.start, 0);
     assert.equal(selection.end, phrase.length);
     await page.waitForFunction(() => !document.querySelector(".selection-action-menu")?.hidden);
-    await page.locator(".selection-action-menu button", { hasText: "Study" }).click();
+    await page.locator('.selection-action-menu [data-ui-action="language-study"]').click();
     await page.waitForFunction(() =>
       document.querySelector("#detailTitle")?.textContent === "Language Study" &&
       Boolean(document.querySelector(".language-study-selection-summary")) &&

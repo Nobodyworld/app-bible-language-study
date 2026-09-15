@@ -59,7 +59,7 @@ assert.equal(sideTools, "", "Chapter and Book tool groups must not reserve side-
 assert.equal((chapterTools.match(/id="showMyData"/g) || []).length, 1, "Workspace tools must expose exactly one My Data control.");
 assert(!/id="showJobs"|>Processing<|id="showUserData"|>Study Data</.test(chapterTools), "Processing and Study Data must not remain header controls.");
 assert(
-  /\["My Data", runWithReaderData\(detailViews\.showMyData\)\]/.test(app) &&
+  /\["my-data", runWithReaderData\(detailViews\.showMyData\)\]/.test(app) &&
     !/\["Jobs"|\["Data"/.test(app),
   "Home must expose one My Data action without Jobs or Data duplicates.",
 );

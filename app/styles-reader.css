@@ -1,4 +1,22 @@
 /* Reader rows, inline tokens and chapter/navigation controls; responsive and state rules stay with their owner. */
+.speech-attribution {
+  color: var(--speech-attribution-color);
+  text-decoration-line: underline;
+  text-decoration-style: dotted;
+  text-decoration-color: currentColor;
+  text-underline-offset: 0.2em;
+}
+
+.speech-attribution-red { --speech-attribution-color: var(--speech-attribution-red); }
+.speech-attribution-pink { --speech-attribution-color: var(--speech-attribution-pink); }
+.speech-attribution-gray { --speech-attribution-color: var(--speech-attribution-gray); }
+.speech-attribution-black { --speech-attribution-color: var(--speech-attribution-black); }
+
+.speech-attribution:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 .chapter-actions {
   display: flex;
   justify-content: flex-end;

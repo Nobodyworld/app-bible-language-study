@@ -7,9 +7,16 @@ import { normalizeTarget } from "./semantic-targets.js?v=pr13-live-qa-20260711e"
 import { activateOverlay, deactivateOverlay, isActiveOverlay } from "./overlay-coordinator.js?v=pr13-live-qa-20260711e";
 import { closeContainedDetailTool, openContainedDetailTool } from "./detail-tool-surface.js";
 import { WORD_INTERPRETATION_COPY as COPY, meaningChoiceSourceLabel } from "./study-copy.js";
+import { interpretationPreview } from "./user-annotation-contracts.js";
+import { clearUserAnnotationPreview, wireUserAnnotationPreview } from "./user-annotation-presenter.js";
+import { uiActionContract } from "./ui-contracts.js";
 
 export const CUSTOM_MEANING_MAX_LENGTH = 180;
 let meaningControlSequence = 0;
+
+export function refreshWordMeaningControls(documentObject = document) {
+  documentObject.querySelectorAll(".word-meaning-control").forEach((root) => root.__refreshInterpretation?.());
+}
 
 export function normalizeMeaningValue(value) {
   return String(value || "").trim();
@@ -83,14 +90,15 @@ export function createWordMeaningControl({
   root.dataset.detailRestore = "word-meaning";
   const trigger = document.createElement("button");
   trigger.type = "button";
-  trigger.className = "word-meaning-trigger";
+  trigger.className = "word-meaning-trigger ui-action-control";
+  trigger.dataset.uiAction = "interpretation";
+  trigger.dataset.uiScope = "source_token";
+  trigger.dataset.uiTip = uiActionContract("interpretation").tip;
   trigger.textContent = COPY.action;
   trigger.setAttribute("aria-haspopup", "dialog");
   trigger.setAttribute("aria-expanded", "false");
   trigger.setAttribute("aria-label", `${COPY.action} for ${label}`);
   trigger.dataset.wordMeaningTargetId = sourceTarget.target_id;
-  const badgeHost = document.createElement("span");
-  badgeHost.className = "word-meaning-badge-host";
   const menu = document.createElement("div");
   const menuId = `word-meaning-${++meaningControlSequence}-${sourceTarget.target_id.replace(/[^a-z0-9_-]+/gi, "-")}`;
   menu.className = contained ? "word-meaning-contained" : "word-meaning-menu";
@@ -103,7 +111,7 @@ export function createWordMeaningControl({
     menu.setAttribute("aria-label", `${COPY.title} for ${label}`);
     trigger.setAttribute("aria-controls", menuId);
   }
-  root.append(trigger, badgeHost);
+  root.append(trigger);
   if (!contained) root.append(menu);
   const sources = { exactMappedEnglish: normalizeMeaningValue(exactMappedEnglish), lexicon: null };
   let open = false;
@@ -135,24 +143,18 @@ export function createWordMeaningControl({
   };
   const notify = (record, action) => onChange?.({ record, action, target: sourceTarget });
   const refreshBadge = () => {
-    const saved = getTokenRendering(state, sourceTarget)?.rendering || "";
-    badgeHost.replaceChildren();
-    if (!saved) return;
-    const badge = document.createElement("button");
-    badge.type = "button";
-    badge.className = "word-meaning-badge";
-    badge.textContent = saved;
-    badge.title = `Edit word interpretation: ${saved}`;
-    badge.setAttribute("aria-label", `${saved}. Edit word interpretation for ${label}`);
-    badge.dataset.wordMeaningTargetId = sourceTarget.target_id;
-    if (contained) {
-      badge.setAttribute("aria-haspopup", "dialog");
-      badge.setAttribute("aria-expanded", "false");
-      badge.setAttribute("aria-controls", "detailToolSurface");
-    }
-    badge.addEventListener("click", () => openPicker(badge));
-    badgeHost.append(badge);
+    const preview = interpretationPreview(getTokenRendering(state, sourceTarget) || {});
+    trigger.classList.toggle("word-meaning-badge", Boolean(preview));
+    trigger.classList.toggle("interpretation-marker", Boolean(preview));
+    clearUserAnnotationPreview(trigger);
+    trigger.title = preview?.accessibleText || uiActionContract("interpretation").tip;
+    trigger.setAttribute("aria-label", preview ? `Interpretation for ${label}. ${preview.accessibleText}` : `${COPY.action} for ${label}`);
+    if (preview) {
+      trigger.dataset.userAnnotation = "interpretation";
+      wireUserAnnotationPreview(trigger, preview, { onActivate: () => {} });
+    } else delete trigger.dataset.userAnnotation;
   };
+  root.__refreshInterpretation = refreshBadge;
   const save = (value) => {
     const record = setTokenRendering(state, sourceTarget, value);
     if (record) notify(record, "saved");

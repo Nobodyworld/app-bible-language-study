@@ -155,6 +155,20 @@ assert.match(contextSource, /action\.tip\s*\|\|/, "dynamic contextual actions mu
 assert.match(contextSource, /marks\.dataset\.uiAction\s*=\s*"study-marks"/, "dynamic Study Marks controls must share the Study Marks action identity");
 assert.match(contextSource, /trigger\.dataset\.uiAction\s*=\s*"interpretation"/, "dynamic Interpretation controls must share the Interpretation action identity");
 
+const runtimeSources = Object.fromEntries([
+  "app.js", "src/chapter-renderer.js", "src/views/tags-view.js", "src/views/user-data-view.js",
+  "src/views/interlinear-translation-view.js", "src/word-meaning.js",
+].map(path => [path, readFileSync(new URL(`../app/${path}`, import.meta.url), "utf8")]));
+assert.match(runtimeSources["app.js"], /button\.dataset\.uiAction = id/);
+assert.match(runtimeSources["app.js"], /button\.setAttribute\("aria-label", action\.label\)/, "loading/disabled descriptions must not rename the primary action");
+assert.match(runtimeSources["src/views/tags-view.js"], /trigger\.dataset\.uiAction = "study-marks"/);
+assert.match(runtimeSources["src/views/tags-view.js"], /manage\.textContent = uiActionContract\("tags"\)\.label/);
+assert.equal(uiActionContract("tags").tip, "Edit tags for this target.", "Book/Chapter/source-token editors must not describe their target as a verse");
+assert.match(runtimeSources["src/views/user-data-view.js"], /item\.dataset\.uiAction = "study-marks"/);
+assert.match(runtimeSources["src/views/interlinear-translation-view.js"], /inspect\.dataset\.uiAction = "language-study"/);
+assert.match(runtimeSources["src/word-meaning.js"], /trigger\.dataset\.uiAction = "interpretation"/);
+assert.match(runtimeSources["src/chapter-renderer.js"], /study\.textContent = studyAction\.compactLabel/);
+
 console.log(
   JSON.stringify(
     {

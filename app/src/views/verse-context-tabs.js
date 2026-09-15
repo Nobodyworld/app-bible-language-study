@@ -243,7 +243,10 @@ function appendActionButton(ctx, controls, action, reference, verse, wordContext
   button.dataset.visibleLabel = action.label;
   button.dataset.panelScope = action.scope;
   button.dataset.panelAction = action.id;
-  if (action.actionId) button.dataset.uiAction = action.actionId;
+  if (action.actionId) {
+    button.dataset.uiAction = action.actionId;
+    button.dataset.uiTip = action.tip;
+  }
   button.dataset.controlState = control.state;
   button.dataset.unavailable = control.disabled ? "true" : "false";
   const reactivatableCurrent = action.current && action.reactivatableCurrent === true;
@@ -392,7 +395,7 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
                 const contract = uiActionContract("interpretation");
                 trigger.dataset.uiAction = "interpretation";
                 trigger.classList.add("ui-action-control");
-                if (contract?.tip) trigger.title = contract.tip;
+                if (contract?.tip && !trigger.dataset.userAnnotation) trigger.title = contract.tip;
               }
               controls.append(meaning);
             }

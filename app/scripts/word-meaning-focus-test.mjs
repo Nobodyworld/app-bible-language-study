@@ -641,7 +641,7 @@ async function runProfile(browser, url, profile) {
     await page.locator("#detailToolContent .word-meaning-save").click();
     await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
     await waitFor(page, ({ targetId, value }) => [...document.querySelectorAll(".word-meaning-badge")]
-      .some((badge) => badge.dataset.wordMeaningTargetId === targetId && badge.textContent === value), {
+      .some((badge) => badge.dataset.wordMeaningTargetId === targetId && badge.dataset.userAnnotation === "interpretation" && badge.getAttribute("aria-label")?.includes(value)), {
       targetId: firstTargetId,
       value: firstValue,
     });
@@ -662,7 +662,7 @@ async function runProfile(browser, url, profile) {
     await page.locator("#detailToolContent .word-meaning-save").click();
     await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true);
     await waitFor(page, ({ targetId, value }) => [...document.querySelectorAll(".word-meaning-badge")]
-      .some((badge) => badge.dataset.wordMeaningTargetId === targetId && badge.textContent === value), {
+      .some((badge) => badge.dataset.wordMeaningTargetId === targetId && badge.dataset.userAnnotation === "interpretation" && badge.getAttribute("aria-label")?.includes(value)), {
       targetId: secondTargetId,
       value: secondValue,
     });
@@ -741,7 +741,7 @@ async function runProfile(browser, url, profile) {
     await page.locator("#detailForward").click();
     await waitFor(page, ({ targetId, value }) => document.querySelector("#detailTitle")?.textContent === "Language Study" &&
       [...document.querySelectorAll(".word-meaning-badge")]
-        .some((badge) => badge.dataset.wordMeaningTargetId === targetId && badge.textContent === value), {
+        .some((badge) => badge.dataset.wordMeaningTargetId === targetId && badge.dataset.userAnnotation === "interpretation" && badge.getAttribute("aria-label")?.includes(value)), {
       targetId: secondTargetId,
       value: secondValue,
     });
