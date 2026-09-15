@@ -156,6 +156,85 @@ Persistent annotation controls participate in `app/src/ui-contracts.js`:
 - static and dynamic entries share presentation where practical;
 - scope-specific wording is deliberate, not a duplicate action registry.
 
+## Translation identity decision and cross-translation discovery
+
+Owner clarification on 2026-09-15, before the preceding Codex handoff was sent:
+use the existing translation ID to isolate these records, while allowing the
+reader to discover saved work from another translation. This section refines
+that handoff; it does not assert that the two runtime repairs are complete.
+
+### Reuse existing identity; do not add a new ID system
+
+`semantic-targets.js` already includes normalized `translation_id` and
+`edition_id` in targets, and includes the translation in canonical `target_id`.
+Reuse those IDs (for example `bsb` and `kjv`), not display labels or a second
+translation registry. The current app-level identity is sufficient for this
+slice; a future source/edition revision still needs anchor-drift checks.
+
+The logical keys are:
+
+- Interpretation: translation + reference + exact source-token target.
+- Speech attribution: translation + reference + exact character range, with
+  saved selected-text verification before rendering or changing the range.
+
+Translation ID is one part of the key, not a key for the entire translation.
+Merely storing a `translation_id` property is insufficient: physical storage
+must permit two translations at the same verse/index or offsets to coexist.
+Use full canonical target IDs where applicable, or an equivalent composite key
+inside the existing workspace fields. Route read/save/update/delete, overlap,
+merge/replace, backup/recovery and raw collection consumers through that same
+identity. Capture the identity when the user opens/selects a target; a later
+translation switch or asynchronous completion must not retarget the write.
+
+Preserve populated legacy input before normalizing it. Use translation metadata
+actually present in a saved record/target; never use the open translation or a
+BSB fallback to guess a historical record's missing identity. Unscoped records
+remain recoverable as "Translation not recorded" until explicitly associated.
+Backward import of v3 backups is required. Do not promise that an older build
+can read a new storage representation losslessly; test and document the boundary.
+
+### Discovery is not applying an annotation to another translation
+
+Use a small derived indicator beside the existing verse Study Marks affordance,
+not a new global toolbar. Proposed visible copy for rendered review:
+`Saved in BSB · 2`. Its accessible description explains that two annotations
+exist for this passage in BSB. For several translations, use one grouped control
+with a clear label such as `Saved in 2 other translations`.
+
+An expanded preview/list identifies the originating translation, saved passage,
+annotation type, speech classification or alternative wording, and the original
+stored quotation/source wording when available. Do not invent an English
+quotation for an old interpretation record that only retains source-language
+wording. Use the same label/action/presentation consistently at every entry.
+Hover/focus may preview; click/tap opens the list. An explicit `Open in BSB`
+action navigates to the original translation and exact saved context, with a
+return path; the preview itself must not navigate, unlock Study or change data.
+
+Derive presence and counts from canonical saved records. A rebuildable in-memory
+index is allowed; a second persisted Study Mark/tag/assertion is not. Creating,
+updating, deleting, importing and restoring records must update the indicator.
+Count each canonical record once, not each rendered fragment. Current-translation
+markers remain distinct from this other-translation discovery control. Reuse
+Study Marks styling/placement, not its manual-tag semantics or storage.
+
+Group by the app's established passage/reference correspondence. Do not assume
+identical word numbers, English spellings, or raw verse numbers in editions with
+different numbering establish equivalence. Where correspondence is unavailable,
+show the saved reference without claiming an alignment or attaching a word mark.
+Never transfer colors/interpretations into the open translation automatically.
+Missing/corrupt/stale original targets must remain discoverable with honest
+availability messaging and no guessed destination or annotation application.
+
+### Required focused cases
+
+Prove independent BSB/KJV annotations at identical numeric token indices and
+character offsets through save/change/delete, reload, merge, replace and recovery.
+Verify cross-translation discovery is read-only, profile-isolated, deduplicated,
+updates after deletion/import, and vanishes when no other-translation records
+remain. Cover unscoped legacy records, mismatched text snapshots, missing source
+translation, and a translation switch while a save/preview is pending. Retain
+all existing action consistency, CSS, keyboard/touch and zoom acceptance.
+
 ## Validation and current checkpoint
 
 At `9d71e25245796fdb357e25c312eec85d375ed1ac`, Codex reported focused static,
