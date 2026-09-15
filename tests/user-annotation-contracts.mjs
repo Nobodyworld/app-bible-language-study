@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 
+import "./user-annotation-validation.mjs";
 import assert from "node:assert/strict";
 import {
   addRedLetterRange, applySpeechAttributionRange, changeSpeechAttributionRange,

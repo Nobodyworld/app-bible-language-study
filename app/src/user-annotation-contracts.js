@@ -39,16 +39,29 @@ export const SPEECH_ATTRIBUTION_LEVELS = Object.freeze({
 
 export function speechAttributionContract(classification) {
   const id = String(classification || "").trim().toLowerCase();
-  return SPEECH_ATTRIBUTION_LEVELS[id] || null;
+  return Object.hasOwn(SPEECH_ATTRIBUTION_LEVELS, id) ? SPEECH_ATTRIBUTION_LEVELS[id] : null;
+}
+
+function characterOffset(value) {
+  if (typeof value !== "number" && (typeof value !== "string" || !value.trim())) return null;
+  const offset = Number(value);
+  return Number.isSafeInteger(offset) && offset >= 0 ? offset : null;
 }
 
 export function normalizeSpeechAttributionRange(range = {}, { legacyDefault = "red" } = {}) {
-  const start = Number(range.start);
-  const end = Number(range.end);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return null;
-  const classification = speechAttributionContract(range.classification)?.id
-    || speechAttributionContract(legacyDefault)?.id
-    || "red";
+  if (!range || typeof range !== "object" || Array.isArray(range)) return null;
+  const start = characterOffset(range.start);
+  const end = characterOffset(range.end);
+  if (start === null || end === null || end <= start) return null;
+  // Only a missing classification is legacy red. An unknown explicit value is
+  // opaque backup data, not permission to assert a different attribution.
+  const contract = speechAttributionContract(
+    Object.hasOwn(range, "classification") ? range.classification : legacyDefault,
+  );
+  if (!contract) return null;
+  const classification = contract.id;
+  const revision = Number(range.revision ?? 1);
+  if (!Number.isSafeInteger(revision) || revision < 1) return null;
   return {
     ...range,
     start,
@@ -56,7 +69,7 @@ export function normalizeSpeechAttributionRange(range = {}, { legacyDefault = "r
     text: String(range.text || ""),
     classification,
     source: range.source || "user",
-    revision: Math.max(1, Number(range.revision || 1)),
+    revision,
     updated_at: String(range.updated_at || ""),
   };
 }
@@ -91,9 +104,9 @@ function updatedTime(range) {
 }
 
 export function speechAttributionForSegment(ranges, start, end) {
-  const segmentStart = Number(start);
-  const segmentEnd = Number(end);
-  if (!Number.isFinite(segmentStart) || !Number.isFinite(segmentEnd) || segmentEnd <= segmentStart) return null;
+  const segmentStart = characterOffset(start);
+  const segmentEnd = characterOffset(end);
+  if (segmentStart === null || segmentEnd === null || segmentEnd <= segmentStart) return null;
   const candidates = normalizeSpeechAttributionRanges(ranges)
     .filter((range) => range.start <= segmentStart && range.end >= segmentEnd)
     .sort((a, b) => {
@@ -123,6 +136,7 @@ export function speechAttributionPreview(range = {}) {
 }
 
 export function interpretationPreview(record = {}) {
+  if (!record || typeof record !== "object" || Array.isArray(record)) return null;
   const saved = String(record.rendering || "").trim();
   if (!saved) return null;
   const original = String(record.original || record.target?.token?.original || "").trim();

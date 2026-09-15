@@ -178,6 +178,19 @@ function persistedState(stores, targetId) {
   };
 }
 
+async function waitForSavedInterpretation(client, targetId) {
+  // The compact badge names the action; the saved value remains in its preview.
+  // Require the exact token, not an unrelated badge with coincidentally equal text.
+  await client.waitFor(`
+    const markers = [...document.querySelectorAll('#detailContent .word-meaning-control .word-meaning-badge[data-ui-action="interpretation"]')]
+      .filter(node => node.dataset.wordMeaningTargetId === arguments[0]);
+    return document.querySelector('#detailTitle')?.textContent === 'Language Study'
+      && markers.length === 1
+      && markers[0].textContent.trim() === 'Interpretation'
+      && markers[0].getAttribute('aria-label')?.includes('Saved interpretation: ' + arguments[1] + '.');
+  `, [targetId, MEANING], 45_000);
+}
+
 async function firstLaunch(client, screenshotPath) {
   await client.waitFor("return document.readyState === 'complete' && Boolean(document.querySelector('#chapterTitle'));", [], 45_000);
   await installErrorCapture(client);
@@ -209,7 +222,7 @@ async function firstLaunch(client, screenshotPath) {
   await client.waitFor("return Boolean(document.querySelector('#detailToolContent .word-meaning-custom-input')); ");
   await client.execute("const input = document.querySelector('#detailToolContent .word-meaning-custom-input'); input.value = arguments[0]; input.dispatchEvent(new Event('input', {bubbles:true})); return input.value;", [MEANING]);
   await click(client, "#detailToolContent .word-meaning-save");
-  await client.waitFor("return [...document.querySelectorAll('.word-meaning-badge')].some(node => node.textContent.trim() === arguments[0]);", [MEANING]);
+  await waitForSavedInterpretation(client, targetId);
 
   let persisted;
   const deadline = Date.now() + 20_000;
@@ -236,7 +249,7 @@ async function secondLaunch(client, targetId, screenshotPath) {
   await click(client, ".verse-row:has(.verse-study-button) .verse-study-button");
   await client.waitFor("return Boolean(document.querySelector(\"#detailContext .verse-context-tab[data-visible-label='Language Study']\"));");
   await click(client, "#detailContext .verse-context-tab[data-visible-label='Language Study']");
-  await client.waitFor("return document.querySelector('#detailTitle')?.textContent === 'Language Study' && [...document.querySelectorAll('.word-meaning-badge')].some(node => node.textContent.trim() === arguments[0]);", [MEANING], 45_000);
+  await waitForSavedInterpretation(client, targetId);
   const escaped = JSON.stringify(targetId);
   const openedMarks = await client.execute(`const control = [...document.querySelectorAll('#detailContent .word-meaning-control')].find(node => node.dataset.targetId === ${escaped}); const button = control?.closest('.interlinear-token')?.querySelector('.study-marks-trigger'); if (!button) return false; button.click(); return true;`);
   assert.equal(openedMarks, true);

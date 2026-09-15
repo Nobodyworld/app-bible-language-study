@@ -30,58 +30,71 @@ The user applies a classification at their own discretion.
 
 Visible color values are theme tokens and may be adjusted for contrast. The semantic IDs above must remain stable.
 
-### Persistent record
+### Persistent record and identity
 
-The normalized user record should contain:
+New user records must retain translation, reference, selected text and offsets,
+as well as classification, source, revision and timestamp. For example:
 
 ```json
 {
+  "translation_id": "bsb",
+  "reference_key": "john:1:1",
   "classification": "red",
   "start": 0,
-  "end": 12,
-  "text": "selected text",
+  "end": 16,
+  "text": "In the beginning",
   "source": "user",
   "revision": 1,
   "updated_at": "ISO-8601 timestamp"
 }
 ```
 
-The existing workspace key supplies the `book:chapter:verse` reference; legacy
-speech ranges do not encode a translation ID. This slice retains that storage
-behavior. Do not infer translation identity from the range key. If a future
-migration moves these records to explicit semantic targets, old v3 records
-remain readable.
+The workspace reference key alone does not identify a translation. Read, apply,
+change, clear, exact-range merge and overlap resolution must use the same full
+identity. A BSB annotation cannot color or replace a KJV annotation merely
+because the reference and offsets match. Verify the saved text against the
+current text at its anchor before rendering. Mismatched/out-of-bounds anchors
+remain preserved records, not permission to color unrelated words.
+
+Legacy ranges without translation identity remain readable as historical backup
+data. Do not invent a translation on load or silently bind the same record to
+whichever translation happens to be open. A legacy record without a safely
+established anchor must remain recoverable and unclassified by translation until
+an explicit user action establishes that identity. Preserve original fields.
 
 ### Legacy red-letter compatibility
 
-Existing `workspace.red_letter_ranges` records are valid historical user data. On read, a record with no classification is treated as `red`. Migration must be non-destructive:
+Existing `workspace.red_letter_ranges` records are valid historical user data.
+A record with **no classification property** is legacy red. An explicit unknown
+classification is opaque data, never silently converted into red. Invalid,
+negative, fractional or unsafe offsets do not participate in rendering. Unknown
+records and fields must survive backup normalization without reinterpretation.
 
 - old ranges remain importable;
 - old exact range/text values are preserved;
-- merge does not duplicate the same exact range/classification;
-- reclassification updates the exact user range rather than layering contradictory duplicates;
-- clearing a classification removes only that user annotation;
+- merge does not duplicate the same exact identity;
+- reclassification updates only the exact user range in its translation;
+- clearing removes only that user annotation, not a neighboring or foreign range;
 - bundled/source-provided red-letter presentation remains separate.
 
-The compatibility `addRedLetterRange()` API may remain temporarily as a wrapper for applying `classification: "red"` while newer code uses the generalized attribution API.
+The compatibility `addRedLetterRange()` API may remain as a wrapper for applying
+`classification: "red"` while newer code uses the generalized attribution API.
 
 The generalized store APIs are `getSpeechAttributionRanges()`,
 `applySpeechAttributionRange()`, `changeSpeechAttributionRange()` and
-`clearSpeechAttribution()`. Exact-range updates and imports retain extra fields;
-opaque historical records remain in backups without participating in rendering.
-When an exact imported range ends inside a word, selecting it permits changing
-or clearing that range without expanding it into a neighboring annotation.
+`clearSpeechAttribution()`. When an exact imported range ends inside a word,
+selecting it permits changing or clearing that range without expanding it into
+a neighboring annotation.
 
 ### Range overlap
 
 Rendering must segment on all relevant boundaries, but persistence should stay simple:
 
-- identical `start/end` => one user record, newest classification wins;
-- contained/overlapping different ranges may coexist;
-- the renderer chooses the most specific active range for a segment; if specificity ties, the most recently updated record wins;
-- a user must be able to clear the exact selected range without deleting neighboring annotations.
-
-This rule prevents text corruption while allowing nuanced user decisions.
+- identical translation/reference/start/end => one user record, newest classification wins;
+- different translations never collide or participate in one another's overlap resolution;
+- contained/overlapping different ranges within one translation may coexist;
+- the renderer chooses the most specific anchored range; equal specificity uses the most recent update;
+- clearing an exact selected range does not delete neighboring annotations.
 
 ### Reader presentation
 
@@ -93,68 +106,80 @@ Use CSS classes/data attributes such as:
 - `speech-attribution speech-attribution-black`
 - `data-speech-attribution="red|pink|gray|black"`
 
-Every annotated fragment exposes an accessible label/tooltip identifying it as a **user** attribution annotation. `black` must remain visibly identifiable even where ordinary Reader text is already dark; use a subtle underline/background/marker rather than color alone.
-
-Selection UI should offer the four states plus Clear. A compact three-state workflow remains possible simply by not using `black`.
+Every annotated fragment exposes an accessible label/tooltip identifying it as a
+**user** attribution annotation. `black` remains identifiable on ordinary dark
+text through a non-color affordance. Selection offers four states plus Clear.
 
 ## Interpretation marker
 
-### Source of truth
+### Source of truth and identity
 
-`workspace.token_renderings` remains the only persistence authority. Do not create a parallel Study Mark/tag assertion solely to remember that an interpretation exists.
+`workspace.token_renderings` remains the only persistence authority. Do not
+create a parallel Study Mark/tag assertion solely to remember an interpretation.
 
-A marker exists exactly when the canonical source-token target has a normalized rendering record.
+The canonical target includes translation. Verse plus numeric token index is not
+a complete identity: saving a second translation must not overwrite the first;
+get/update/delete and merge must address the exact same target. Apply equivalent
+source-identity guards to writes and deletes, not just reads. Any representation
+change within this workspace store must preserve v3 imports and populated data.
 
 ### Marker content
 
-The compact visible marker uses the canonical `interpretation` UI action identity. Its hover/focus preview contains:
+The compact visible marker uses the canonical `interpretation` UI action identity.
+Its hover/focus preview contains:
 
-- `Interpretation` heading/label;
+- the Interpretation label;
 - saved alternative wording (`record.rendering`);
 - original/source wording (`record.original` or canonical token original);
 - Strong's code when present;
 - copy making clear this is the user's saved alternative wording.
 
-The marker itself should not replace the Reader word with the saved rendering.
+The marker does not replace Reader Scripture with the saved rendering.
 
-### Placement and deduplication
+### Placement and interaction
 
-A source token may be split into multiple DOM fragments by range boundaries. Render **one** marker for the exact token, preferably after the fragment that ends at the token's canonical end boundary. Never render one marker per fragment.
+Render one marker for each exact token within each reading/study surface, not one
+per fragment created by range boundaries. Prefer the canonical token end.
+Language Study derives its marker from the same saved record.
 
-The same principle applies inside Language Study: the existing saved-rendering badge can adopt the shared Interpretation marker presentation, but both surfaces derive from the same record.
-
-### Interaction
-
-- Hover and keyboard focus show a viewport-safe preview.
-- Touch gets an explicit activation/focus fallback rather than hover-only information.
-- If the exact token can safely reopen the existing Interpretation editor, activation may do so.
-- Updating/removing the saved rendering updates/removes every derived marker immediately.
-- Marker interaction must not disturb Reader route/scroll or unintentionally unlock a locked Study view.
+Hover and keyboard focus show a viewport-safe preview. Touch has an explicit
+activation/focus path. Safe editor activation retains exact target and focus.
+Updating/removing a record updates all its markers without disturbing Reader
+route/scroll or unintentionally unlocking Study.
 
 ## Shared action identity and quick tips
 
-Persistent annotation controls also participate in the canonical action system from `app/src/ui-contracts.js`:
+Persistent annotation controls participate in `app/src/ui-contracts.js`:
 
-- `data-ui-action` identifies semantic actions rather than DOM-specific buttons.
-- full and compact labels come from one contract;
-- quick tips come from one contract;
-- dynamic and static entry points should share presentation classes/tokens where practical;
-- context-specific labels are allowed only when they intentionally describe different scope.
+- `data-ui-action` identifies semantic actions, not DOM-specific buttons;
+- full/compact labels and quick tips have one owner;
+- static and dynamic entries share presentation where practical;
+- scope-specific wording is deliberate, not a duplicate action registry.
 
-## Validation matrix
+## Validation and current checkpoint
 
-Before PR #127 becomes Ready, focused validation must cover:
+At `9d71e25245796fdb357e25c312eec85d375ed1ac`, Codex reported focused static,
+browser, backup and native storage/adapter PASS results. Connector review found
+that translation/anchor isolation and cross-target save/delete/merge were not
+covered. **These remain integration blockers, not completed owner-review gates.**
+The previous text saying unscoped translation behavior could simply be retained
+is superseded by the identity requirements above.
 
-- legacy red-letter migration;
-- all speech-attribution states, update, clear, overlap, reload;
-- v3 backup/export/merge/replace/recovery;
-- browser and native persistence/isolation;
-- Interpretation marker create/update/delete and exact-token deduplication;
-- hover/focus/touch preview behavior;
-- dynamic/static action identity drift checks;
-- light/dark and compact/standard/expanded/narrow layouts;
-- actual zoom-sensitive layouts;
-- CSS ownership/hygiene;
-- no Reader route/scroll/Study-lock regression.
+`tests/user-annotation-validation.mjs`, imported by the existing annotation suite,
+adds negative cases for unknown classifications, inherited property names,
+malformed offsets and null input. Full storage tests must also prove those opaque
+records survive merge/replace and that independent translations remain intact.
+
+Before Ready, complete identity/anchor repair and focused browser/native tests,
+then one applicable aggregate checkpoint. Native unit/adapter restart is not an
+installed WebView restart. Use an isolated actual candidate for native acceptance
+or the existing final hosted desktop lifecycle; do not touch an owner's live
+profile or repeat full installer runs during draft iteration. Record actual
+browser-menu zoom separately from viewport emulation.
+
+Keep repeated-action naming, CSS hygiene, profile isolation, backups, marker
+create/update/delete, light/dark, keyboard/touch, and Reader lock/history coverage.
+Update desktop and public-capture expectations with the actual compact marker;
+do not restore old product UI merely to satisfy stale tests.
 
 Related: #126, #128, #129, PR #127.
