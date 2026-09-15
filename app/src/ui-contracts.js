@@ -88,6 +88,13 @@ export const UI_ACTION_CONTRACTS = Object.freeze({
     label: "Study Marks",
     tip: "Open saved marks and labels.",
   }),
+  tags: defineUiAction({
+    id: "tags",
+    featureId: "study-marks",
+    viewId: DETAIL_VIEW_IDS.tags,
+    label: "Tags",
+    tip: "Edit tags for this verse.",
+  }),
   "my-data": defineUiAction({
     id: "my-data",
     featureId: "my-data",
@@ -197,7 +204,7 @@ export const STUDY_CONTROL_SCHEMA = Object.freeze({
     capabilityId: null,
     dataScope: "verse",
     action: "showTagEditor",
-    uiActionId: "study-marks",
+    uiActionId: "tags",
     lockOnActivate: true,
   },
 });
