@@ -148,6 +148,13 @@ for (const [controlId, actionId] of Object.entries({
   assert.ok(markup.includes(`>${label}<`), `${controlId} visible label must match ${actionId}`);
 }
 
+const contextSource = readFileSync(new URL("../app/src/views/verse-context-tabs.js", import.meta.url), "utf8");
+assert.match(contextSource, /button\.dataset\.uiAction\s*=\s*action\.actionId/, "dynamic contextual actions must expose canonical action identity");
+assert.match(contextSource, /button\.className\s*=\s*\["verse-context-tab",\s*"ui-action-control"/, "dynamic contextual actions must use the shared repeated-action hook");
+assert.match(contextSource, /action\.tip\s*\|\|/, "dynamic contextual actions must reuse canonical quick tips");
+assert.match(contextSource, /marks\.dataset\.uiAction\s*=\s*"study-marks"/, "dynamic Study Marks controls must share the Study Marks action identity");
+assert.match(contextSource, /trigger\.dataset\.uiAction\s*=\s*"interpretation"/, "dynamic Interpretation controls must share the Interpretation action identity");
+
 console.log(
   JSON.stringify(
     {
@@ -156,6 +163,7 @@ console.log(
       ui_actions_checked: Object.keys(UI_ACTION_CONTRACTS).length,
       repeated_panel_actions_checked: 5,
       static_action_controls_checked: 5,
+      dynamic_action_contracts_checked: 5,
     },
     null,
     2,
