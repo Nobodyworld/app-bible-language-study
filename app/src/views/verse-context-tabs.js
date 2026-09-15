@@ -1,5 +1,5 @@
 import { studyUnavailableLabel } from "../study-empty-state.js";
-import { CONTROL_STATES, normalizeDetailViewId, resolveControlState } from "../ui-contracts.js";
+import { CONTROL_STATES, normalizeDetailViewId, resolveControlState, uiActionContract } from "../ui-contracts.js";
 import {
   PANEL_SCOPE_LABELS,
   isPanelActionCurrent,
@@ -238,11 +238,12 @@ function appendActionButton(ctx, controls, action, reference, verse, wordContext
   const scopeLabel = PANEL_SCOPE_LABELS[action.scope];
   const button = document.createElement("button");
   button.type = "button";
-  button.className = action.current ? "verse-context-tab active" : "verse-context-tab";
+  button.className = ["verse-context-tab", "ui-action-control", action.current ? "active" : ""].filter(Boolean).join(" ");
   button.textContent = action.shortLabel;
   button.dataset.visibleLabel = action.label;
   button.dataset.panelScope = action.scope;
   button.dataset.panelAction = action.id;
+  if (action.actionId) button.dataset.uiAction = action.actionId;
   button.dataset.controlState = control.state;
   button.dataset.unavailable = control.disabled ? "true" : "false";
   const reactivatableCurrent = action.current && action.reactivatableCurrent === true;
@@ -261,10 +262,12 @@ function appendActionButton(ctx, controls, action, reference, verse, wordContext
     button.setAttribute("aria-label", `${scopeLabel} scope, ${action.label}: ${unavailableMessage}`);
     button.setAttribute("aria-disabled", "true");
   } else if (action.current) {
-    button.title = `Current ${scopeLabel.toLowerCase()} view: ${action.label}`;
+    button.title = action.tip
+      ? `Current ${scopeLabel.toLowerCase()} view: ${action.label}. ${action.tip}`
+      : `Current ${scopeLabel.toLowerCase()} view: ${action.label}`;
     button.setAttribute("aria-label", `${scopeLabel} scope, current view: ${action.label} for ${reference}`);
   } else {
-    button.title = `${scopeLabel} scope: ${action.label}`;
+    button.title = action.tip || `${scopeLabel} scope: ${action.label}`;
     button.setAttribute("aria-label", `${scopeLabel} scope, ${action.label} for ${reference}`);
   }
 
@@ -364,6 +367,8 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
               },
             });
             marks.dataset.panelAction = "study-marks";
+            marks.dataset.uiAction = "study-marks";
+            marks.classList.add("ui-action-control");
             controls.append(marks);
           }
           relatedTools.forEach(appendTool);
@@ -381,6 +386,14 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
             });
             if (meaning) {
               meaning.dataset.panelAction = "meaning";
+              meaning.dataset.uiAction = "interpretation";
+              const trigger = meaning.querySelector(".word-meaning-trigger");
+              if (trigger) {
+                const contract = uiActionContract("interpretation");
+                trigger.dataset.uiAction = "interpretation";
+                trigger.classList.add("ui-action-control");
+                if (contract?.tip) trigger.title = contract.tip;
+              }
               controls.append(meaning);
             }
           }
@@ -408,6 +421,8 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
             },
           });
           marks.dataset.panelAction = "study-marks";
+          marks.dataset.uiAction = "study-marks";
+          marks.classList.add("ui-action-control");
           controls.append(marks);
         }
         relatedTools.forEach(appendTool);
