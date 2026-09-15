@@ -1,4 +1,4 @@
-import { DETAIL_VIEW_IDS, normalizeDetailViewId } from "./ui-contracts.js";
+import { DETAIL_VIEW_IDS, normalizeDetailViewId, uiActionContract } from "./ui-contracts.js";
 import { resolveStrongLanguage } from "./strong-section-lifecycle.js";
 
 export const PANEL_SCOPE_ORDER = Object.freeze(["word", "verse", "chapter", "book", "global"]);
@@ -11,17 +11,28 @@ export const PANEL_SCOPE_LABELS = Object.freeze({
   global: "Settings",
 });
 
+function contractedTool(actionId, overrides = {}) {
+  const contract = uiActionContract(actionId);
+  return Object.freeze({
+    actionId,
+    shortLabel: contract?.compactLabel || contract?.label || actionId,
+    label: contract?.label || actionId,
+    tip: contract?.tip || "",
+    ...overrides,
+  });
+}
+
 export const PANEL_CONTEXT_TOOL_MATRIX = Object.freeze({
   word: Object.freeze([
-    Object.freeze({ id: "strongs", shortLabel: "Definition", label: "Definition", scope: "word" }),
+    contractedTool("definition", { id: "strongs", scope: "word" }),
     Object.freeze({ id: "hebrew", shortLabel: "Concordance", label: "Hebrew concordance", scope: "word" }),
     Object.freeze({ id: "greek", shortLabel: "Concordance", label: "Greek concordance", scope: "word" }),
   ]),
   verse: Object.freeze([
-    Object.freeze({ id: "par", shortLabel: "Translations", label: "Parallel translations", scope: "verse" }),
-    Object.freeze({ id: "refs", shortLabel: "References", label: "References", scope: "verse" }),
-    Object.freeze({ id: "commentary", shortLabel: "Commentary", label: "Commentary", scope: "verse" }),
-    Object.freeze({ id: "interlinear", shortLabel: "Language", label: "Language Study", scope: "verse" }),
+    contractedTool("translations", { id: "par", scope: "verse" }),
+    contractedTool("references", { id: "refs", scope: "verse" }),
+    contractedTool("commentary", { id: "commentary", scope: "verse" }),
+    contractedTool("language-study", { id: "interlinear", scope: "verse" }),
   ]),
   chapter: Object.freeze([]),
   book: Object.freeze([]),
