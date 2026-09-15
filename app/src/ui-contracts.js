@@ -25,6 +25,96 @@ export const DETAIL_VIEW_IDS = Object.freeze({
   tags: "tags",
 });
 
+const defineUiAction = (value) => Object.freeze({
+  compactLabel: value.label,
+  ...value,
+});
+
+export const UI_ACTION_CONTRACTS = Object.freeze({
+  definition: defineUiAction({
+    id: "definition",
+    featureId: "strongs",
+    viewId: DETAIL_VIEW_IDS.strongs,
+    label: "Definition",
+    tip: "Open definition and Strong's details for this word.",
+  }),
+  translations: defineUiAction({
+    id: "translations",
+    featureId: "parallel-translations",
+    viewId: DETAIL_VIEW_IDS.parallel,
+    label: "Translations",
+    tip: "Compare this verse across translations.",
+  }),
+  references: defineUiAction({
+    id: "references",
+    featureId: "cross-references",
+    viewId: DETAIL_VIEW_IDS.references,
+    label: "References",
+    tip: "Open cross-references for this verse.",
+  }),
+  commentary: defineUiAction({
+    id: "commentary",
+    featureId: "commentary",
+    viewId: DETAIL_VIEW_IDS.commentary,
+    label: "Commentary",
+    tip: "Open commentary for this verse.",
+  }),
+  "language-study": defineUiAction({
+    id: "language-study",
+    featureId: "language-study",
+    viewId: DETAIL_VIEW_IDS.languageStudy,
+    label: "Language Study",
+    compactLabel: "Language",
+    tip: "Explore original-language words, morphology, and related details.",
+  }),
+  outline: defineUiAction({
+    id: "outline",
+    featureId: "outlines",
+    viewId: DETAIL_VIEW_IDS.outline,
+    label: "Outline",
+    tip: "Open the book outline.",
+  }),
+  search: defineUiAction({
+    id: "search",
+    featureId: "search",
+    viewId: DETAIL_VIEW_IDS.search,
+    label: "Search",
+    tip: "Search this book.",
+  }),
+  "study-marks": defineUiAction({
+    id: "study-marks",
+    featureId: "study-marks",
+    viewId: DETAIL_VIEW_IDS.studyMarks,
+    label: "Study Marks",
+    tip: "Open saved marks and labels.",
+  }),
+  "my-data": defineUiAction({
+    id: "my-data",
+    featureId: "my-data",
+    viewId: DETAIL_VIEW_IDS.myData,
+    label: "My Data",
+    tip: "Open saved study data, backup, and recovery.",
+  }),
+  interpretation: defineUiAction({
+    id: "interpretation",
+    featureId: "meaning",
+    viewId: DETAIL_VIEW_IDS.meaning,
+    label: "Interpretation",
+    tip: "Review source wording or save an alternative interpretation for this word.",
+  }),
+});
+
+export function uiActionContract(actionId) {
+  const normalized = String(actionId || "").trim().toLowerCase();
+  return UI_ACTION_CONTRACTS[normalized] || null;
+}
+
+export function uiActionLabel(actionId, { compact = false } = {}) {
+  const action = uiActionContract(actionId);
+  if (!action) return "";
+  return compact ? action.compactLabel : action.label;
+}
+
 const DETAIL_VIEW_ID_SET = new Set(Object.values(DETAIL_VIEW_IDS));
 
 export function normalizeDetailViewId(viewId) {
