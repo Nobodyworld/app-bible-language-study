@@ -142,6 +142,8 @@ for (const [controlId, actionId] of Object.entries({
 })) {
   const markup = index.match(new RegExp(`<button id="${controlId}"[\\s\\S]*?<\\/button>`))?.[0] || "";
   assert.ok(markup, `${controlId} must remain in the Reader toolbar`);
+  assert.ok(markup.includes(`data-ui-action="${actionId}"`), `${controlId} must expose its canonical action identity`);
+  assert.ok(markup.includes("ui-action-control"), `${controlId} must use the shared repeated-action hook`);
   const label = uiActionLabel(actionId);
   assert.ok(markup.includes(`>${label}<`), `${controlId} visible label must match ${actionId}`);
 }
@@ -153,6 +155,7 @@ console.log(
       controls_checked: Object.keys(STUDY_CONTROL_SCHEMA).length,
       ui_actions_checked: Object.keys(UI_ACTION_CONTRACTS).length,
       repeated_panel_actions_checked: 5,
+      static_action_controls_checked: 5,
     },
     null,
     2,
