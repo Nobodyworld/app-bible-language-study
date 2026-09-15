@@ -79,8 +79,12 @@ async function openManager(page) {
   await page.locator("#showMyData").click();
   const diagnostics = page.locator(".advanced-diagnostics");
   await diagnostics.waitFor({ state: "visible" });
-  if (!(await diagnostics.getAttribute("open"))) await diagnostics.locator(":scope > summary").click();
+  if (!(await diagnostics.evaluate((node) => node.open))) await diagnostics.locator(":scope > summary").click();
   await page.locator("[data-physical-pack-manager='true']").waitFor({ state: "visible" });
+  await page.waitForFunction(() => {
+    const rect = document.querySelector(".physical-pack-manager")?.getBoundingClientRect();
+    return rect && rect.left >= 0 && rect.right <= innerWidth + 1;
+  });
 }
 
 async function waitCompleted(page, label) {
@@ -102,7 +106,7 @@ async function planAndConfirm(page, packId, triggerName, confirmName, completion
 
 async function registryRecords(page) {
   return page.evaluate(async () => new Promise((resolveRecords, reject) => {
-    const request = indexedDB.open("bibleapp-physical-packs", 1);
+    const request = indexedDB.open("bibleapp-physical-packs-lab", 1);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -189,7 +193,7 @@ async function delayNextStartupVerification(page, milliseconds = 6000) {
 async function seedCorruptRollbackClaim(page) {
   return page.evaluate(async () => {
     const database = await new Promise((resolveDatabase, reject) => {
-      const request = indexedDB.open("bibleapp-physical-packs", 1);
+      const request = indexedDB.open("bibleapp-physical-packs-lab", 1);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolveDatabase(request.result);
     });
@@ -199,7 +203,7 @@ async function seedCorruptRollbackClaim(page) {
       get.onerror = () => reject(get.error);
       get.onsuccess = () => resolveRecord(get.result);
     });
-    const rollbackCacheName = `bibleapp-pack:test-invalid-rollback:${Date.now()}`;
+    const rollbackCacheName = `bibleapp-pack:lab:test-invalid-rollback:${Date.now()}`;
     const activeCache = await caches.open(record.active_cache);
     const rollbackCache = await caches.open(rollbackCacheName);
     for (const request of await activeCache.keys()) {
@@ -238,7 +242,7 @@ async function seedCorruptRollbackClaim(page) {
 async function seedValidRollbackClaim(page) {
   return page.evaluate(async () => {
     const database = await new Promise((resolveDatabase, reject) => {
-      const request = indexedDB.open("bibleapp-physical-packs", 1);
+      const request = indexedDB.open("bibleapp-physical-packs-lab", 1);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => resolveDatabase(request.result);
     });
@@ -248,7 +252,7 @@ async function seedValidRollbackClaim(page) {
       get.onerror = () => reject(get.error);
       get.onsuccess = () => resolveRecord(get.result);
     });
-    const rollbackCacheName = `bibleapp-pack:test-valid-rollback:${Date.now()}`;
+    const rollbackCacheName = `bibleapp-pack:lab:test-valid-rollback:${Date.now()}`;
     const activeCache = await caches.open(record.active_cache);
     const rollbackCache = await caches.open(rollbackCacheName);
     for (const request of await activeCache.keys()) {
@@ -282,7 +286,7 @@ async function seedValidRollbackClaim(page) {
 
 async function makePersistedActiveIncompatible(page) {
   await page.evaluate(async () => new Promise((resolveMutation, reject) => {
-    const request = indexedDB.open("bibleapp-physical-packs", 1);
+    const request = indexedDB.open("bibleapp-physical-packs-lab", 1);
     request.onerror = () => reject(request.error);
     request.onsuccess = () => {
       const database = request.result;
@@ -339,7 +343,7 @@ try {
   page.on("requestfailed", (request) => failedRequests.push(`${request.method()} ${request.url()} ${request.failure()?.errorText || "failed"}`));
   page.on("response", (response) => { if (response.status() >= 400) httpErrors.push(`${response.status()} ${response.url()}`); });
 
-  await page.goto(`${url}?physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json#/read/bsb/genesis/1`, { waitUntil: "load" });
+  await page.goto(`${url}?profile=lab&physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json#/read/bsb/genesis/1`, { waitUntil: "load" });
   await waitReady(page);
   await page.locator(".strong-token[data-strong-code]").first().click();
   await page.waitForFunction(() => document.querySelector(".detail-pane")?.dataset.panelMode === "locked");
@@ -478,7 +482,7 @@ try {
 
   await page.evaluate(async () => {
     const record = await new Promise((resolveRecord, reject) => {
-      const request = indexedDB.open("bibleapp-physical-packs", 1);
+      const request = indexedDB.open("bibleapp-physical-packs-lab", 1);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const tx = request.result.transaction("pack_records", "readonly");
@@ -514,7 +518,7 @@ try {
 
   const mutateActiveSearch = async (mode) => page.evaluate(async (mutationMode) => {
     const record = await new Promise((resolveRecord, reject) => {
-      const request = indexedDB.open("bibleapp-physical-packs", 1);
+      const request = indexedDB.open("bibleapp-physical-packs-lab", 1);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const tx = request.result.transaction("pack_records", "readonly");
@@ -575,7 +579,7 @@ try {
 
   await page.evaluate(async () => {
     const record = await new Promise((resolveRecord, reject) => {
-      const request = indexedDB.open("bibleapp-physical-packs", 1);
+      const request = indexedDB.open("bibleapp-physical-packs-lab", 1);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const get = request.result.transaction("pack_records", "readonly").objectStore("pack_records").get("search-verses");
@@ -621,7 +625,7 @@ try {
   await waitCompleted(page, "Catalog refresh");
   await page.evaluate(async () => {
     const record = await new Promise((resolveRecord, reject) => {
-      const request = indexedDB.open("bibleapp-physical-packs", 1);
+      const request = indexedDB.open("bibleapp-physical-packs-lab", 1);
       request.onerror = () => reject(request.error);
       request.onsuccess = () => {
         const get = request.result.transaction("pack_records", "readonly").objectStore("pack_records").get("search-verses");
@@ -776,7 +780,7 @@ try {
   strictPage.on("pageerror", (error) => pageErrors.push(`strict: ${error.message}`));
   strictPage.on("requestfailed", (request) => failedRequests.push(`strict: ${request.method()} ${request.url()} ${request.failure()?.errorText || "failed"}`));
   strictPage.on("response", (response) => { if (response.status() >= 400) httpErrors.push(`strict: ${response.status()} ${response.url()}`); });
-  await strictPage.goto(`${url}?physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json#/read/bsb/genesis/1`, { waitUntil: "load" });
+  await strictPage.goto(`${url}?profile=lab&physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json#/read/bsb/genesis/1`, { waitUntil: "load" });
   await waitReady(strictPage);
   await openManager(strictPage);
   await strictPage.getByRole("button", { name: "Refresh catalog", exact: true }).click();
@@ -813,7 +817,7 @@ try {
   quotaPage.on("pageerror", (error) => pageErrors.push(`quota: ${error.message}`));
   quotaPage.on("requestfailed", (request) => failedRequests.push(`quota: ${request.method()} ${request.url()} ${request.failure()?.errorText || "failed"}`));
   quotaPage.on("response", (response) => { if (response.status() >= 400) httpErrors.push(`quota: ${response.status()} ${response.url()}`); });
-  await quotaPage.goto(`${url}?physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json`, { waitUntil: "load" });
+  await quotaPage.goto(`${url}?profile=lab&physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json`, { waitUntil: "load" });
   await waitReady(quotaPage);
   await openManager(quotaPage);
   await quotaPage.getByRole("button", { name: "Refresh catalog", exact: true }).click();
@@ -839,7 +843,7 @@ try {
   unknownStoragePage.on("pageerror", (error) => pageErrors.push(`unknown-storage: ${error.message}`));
   unknownStoragePage.on("requestfailed", (request) => failedRequests.push(`unknown-storage: ${request.method()} ${request.url()} ${request.failure()?.errorText || "failed"}`));
   unknownStoragePage.on("response", (response) => { if (response.status() >= 400) httpErrors.push(`unknown-storage: ${response.status()} ${response.url()}`); });
-  await unknownStoragePage.goto(`${url}?physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json`, { waitUntil: "load" });
+  await unknownStoragePage.goto(`${url}?profile=lab&physicalPackCatalog=data/physical-pack-fixtures/catalog-v1.json`, { waitUntil: "load" });
   await waitReady(unknownStoragePage);
   await openManager(unknownStoragePage);
   await unknownStoragePage.getByRole("button", { name: "Refresh catalog", exact: true }).click();
@@ -863,7 +867,7 @@ try {
   mobilePage.on("pageerror", (error) => pageErrors.push(`mobile: ${error.message}`));
   mobilePage.on("requestfailed", (request) => failedRequests.push(`mobile: ${request.method()} ${request.url()} ${request.failure()?.errorText || "failed"}`));
   mobilePage.on("response", (response) => { if (response.status() >= 400) httpErrors.push(`mobile: ${response.status()} ${response.url()}`); });
-  await mobilePage.goto(url, { waitUntil: "load" });
+  await mobilePage.goto(`${url}?profile=lab`, { waitUntil: "load" });
   await waitReady(mobilePage);
   await openManager(mobilePage);
   await assertContained(mobilePage, "mobile-device");

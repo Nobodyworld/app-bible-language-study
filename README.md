@@ -3,7 +3,7 @@
 > **PUBLIC PREVIEW — ACTIVE DEVELOPMENT**
 >
 > The static reader is functional and actively developed. The flexible study
-> workspace, personal Meaning, Study Marks, and My Data remain evolving product
+> workspace, Word interpretation, Study Marks, and My Data remain evolving product
 > surfaces. This repository does not promise a production release or stable API.
 >
 > Application code, tests, scripts, schemas, and tooling are MIT-licensed.
@@ -92,18 +92,26 @@ defects were resolved under issues #39, #40, and #42.
 - Favorite remains the canonical `favorite` assertion, with applicable tags at
   each supported scope.
 - A Study Marks dashboard for reviewing tagged and favorited targets.
-- Personal Meaning is separate from Study Marks and applies only to exact
+- Word interpretation is separate from Study Marks and applies only to exact
   canonical source-token identity.
-- One My Data surface organized as My study data, Backup and restore, App
-  settings and Advanced diagnostics. Stable diagnostics is collapsed and lazy
-  by default, with storage status, recovery information, and physical-pack recovery.
+- One My Data surface organized as Saved study, Backup and restore, and
+  Help and recovery. Only populated Study Marks, Word interpretations and
+  custom-label counts are shown. Help stays collapsed until requested.
 
-Study Marks and personal Meaning remain separate user tools. Stable My Data
+Study Marks and Word interpretation remain separate user tools. Stable My Data
 does not expose capability Disable/Restore controls or technical summary counts.
-The complete capability manager and technical summary remain available in Lab.
+The experimental pack manager, capability controls and technical summary remain
+available in Lab. Existing Stable managed-data profiles can choose Use included
+data under Help and recovery without deleting saved files or study records.
+Study navigation uses Definition, Concordance and Interpretation under Word;
+Translations, References, Commentary and Language belong to Verse. Interpretation
+separates source-labeled suggestions from saved alternative wording, which is a
+study aid and does not change the Bible text.
 Portable exports retain kind `bibleapp:user-data` and version `3`, including
 sparse legacy compatibility, recovery backups before replacement, and
-all-or-nothing rejection of malformed imports. Browser-local data is not an
+all-or-nothing rejection of malformed imports. Ordinary backups omit only known
+empty retired/default metadata; populated histories, custom labels and recovery
+records remain preserved. Browser-local data is not an
 account; users should download backups they care about.
 
 ### Resilience and accessibility
@@ -130,13 +138,20 @@ On desktop, the study workspace offers Compact, Standard, and Expanded widths,
 with Standard as the default. The reader and study workspace scroll
 independently, so longer study material does not displace the reading location.
 At 768px and below, the workspace continues to use the full-screen mobile drawer.
+An open Study session stays open when the viewport crosses that breakpoint.
+Back/Forward share the Study header with Clear/Hide, and context controls have
+their own bounded scroll region so the content retains reading space.
+Language Study opens Locked from either entry point. Ordinary text clicks,
+scrolling and Reader-word hover preserve that view; Clear, history and deliberate
+tool choices remain available. Verse headings stick beneath the controls and
+hand off to the next verse, with larger English phrases in Word Meaning cards.
 
 The contextual workspace hierarchy is `Word → Verse`. Word is present only for
 exact canonical word or source-token context; Verse retains its parallel,
 reference, commentary, Language Study, and Study Marks actions. Chapter Language
 Study and Book Outline remain reader-header actions rather than persistent
 workspace groups. The shared detail pane preserves panel lock, highlight, and
-history behavior. Exact-token Meaning and Study Marks open in contained surfaces
+history behavior. Exact-token Interpretation and Study Marks open in contained surfaces
 inside the workspace while the underlying work area is inert.
 
 ## Screenshots
@@ -168,11 +183,11 @@ technical, while the product surface they show is Language Study.
 | Study Marks | [Contained exact-token Favorite workflow](docs/images/study-marks.png) | [Dark Study Marks index with the seeded exact-token Favorite](docs/images/study-marks-dark.png) |
 
 - [Populated search results](docs/images/search.png)
-- [Contained exact-source-token Meaning surface with saved `origin`](docs/images/meaning.png)
+- [Contained exact-source-token Interpretation surface with saved `origin`](docs/images/meaning.png)
 
 ### My Data
 
-- [My study data summary](docs/images/my-data.png)
+- [Saved study summary](docs/images/my-data.png)
 - [Backup and restore controls](docs/images/my-data-backup-restore.png)
 
 ## Run Locally
@@ -339,7 +354,7 @@ repository-security posture.
 - The complete automated browser suite is Edge-focused; focused Chrome and
   broader manual Edge/Chrome evidence are maintained separately.
 - The bundled package increases clone and checkout size.
-- The flexible study workspace, Meaning, Study Marks, and My Data interfaces are
+- The flexible study workspace, Interpretation, Study Marks, and My Data interfaces are
   active-development surfaces rather than stable APIs.
 - Bundled data should be redistributed only after reviewing the included source
   notices and manifest.
@@ -351,7 +366,7 @@ separate from a stable release, release tag, API promise, or blanket relicensing
 of bundled data.
 
 Flexible `Word → Verse` context, workspace width and independent-scrolling
-behavior, unified target-aware Study Marks, exact source-token Meaning,
+behavior, unified target-aware Study Marks, exact source-token Interpretation,
 consolidated My Data, documentation reconciliation, maintained screenshots,
 broader browser QA, hover-first evidence, and the package/runtime performance
 classification are complete.

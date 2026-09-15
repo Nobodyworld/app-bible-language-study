@@ -108,8 +108,8 @@ export const FEATURE_REGISTRY = Object.freeze([
   }),
   descriptor({
     id: "meaning",
-    label: "Meaning",
-    description: "Personal meanings for exact canonical source-token identity.",
+    label: "Word interpretation",
+    description: "Source-labeled suggested and alternative wording for exact canonical source-token identity.",
     lifecycle: "core",
     dependencies: ["language-study"],
     providers: ["view:meaning"],
@@ -123,7 +123,7 @@ export const FEATURE_REGISTRY = Object.freeze([
   descriptor({
     id: "my-data",
     label: "My Data",
-    description: "Portable backup, restore, settings, maintenance, and recovery access.",
+    description: "Saved study information, portable backup, restore, and concise recovery help.",
     lifecycle: "core",
     dependencies: ["study-marks", "meaning"],
     providers: ["view:my-data", "contract:user-data-v3"],
@@ -134,7 +134,7 @@ export const FEATURE_REGISTRY = Object.freeze([
     unavailableBehavior: "required",
     cleanupAuthority: "recovery-backups-only",
     migrationAuthority: "user-storage-adapter",
-    testOwners: ["app/scripts/user-data-semantic-test.mjs", "app/scripts/recovery-scenarios-test.mjs"],
+    testOwners: ["app/scripts/user-data-semantic-test.mjs", "app/scripts/recovery-scenarios-test.mjs", "tests/portable-backup-format.mjs", "tests/portable-backup-roundtrip.mjs", "app/scripts/current-feature-cleanup-interaction-test.mjs"],
   }),
   descriptor({
     id: "search",
@@ -202,7 +202,7 @@ export const FEATURE_REGISTRY = Object.freeze([
   descriptor({
     id: "physical-pack-management",
     label: "Physical Pack Management",
-    description: "Recovery and experimental management for verified physical data packs.",
+    description: "Experimental Lab management for verified physical data packs; Stable retains non-destructive recovery to included data.",
     lifecycle: "frozen",
     dependencies: ["my-data"],
     providers: ["diagnostic:physical-packs"],

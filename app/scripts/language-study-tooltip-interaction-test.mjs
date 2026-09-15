@@ -535,13 +535,13 @@ async function runDesktopViewport(browser, baseUrl, iteration, mode) {
     );
     assert.deepEqual(errors.consoleErrors, [], `${mode} iteration ${iteration}: browser console errors`);
     assert.deepEqual(errors.pageErrors, [], `${mode} iteration ${iteration}: uncaught page errors`);
-    const backgroundDisengage = await assertBackgroundDisengage(
+    const backgroundLock = await assertBackgroundLock(
       page,
       `${mode} iteration ${iteration} background`,
       false,
     );
     return {
-      backgroundDisengage,
+      backgroundLock,
       consoleErrors: errors.consoleErrors,
       iteration,
       languageFocus,
@@ -627,7 +627,7 @@ function assertTouchEventTrace(trace, label, { exactToken = false } = {}) {
   assert(completed?.tooltipVisible, `${label}: tooltip was not visible after tap completion: ${JSON.stringify(trace)}`);
 }
 
-async function assertBackgroundDisengage(page, label, touch) {
+async function assertBackgroundLock(page, label, touch) {
   const title = page.locator("#detailTitle");
   const box = await title.boundingBox();
   assert(box, `${label}: non-interactive panel background has no rectangle`);
@@ -638,13 +638,14 @@ async function assertBackgroundDisengage(page, label, touch) {
   }
   await page.waitForFunction(
     () =>
-      document.querySelector(".detail-pane")?.dataset.panelMode === "follow" &&
-      document.querySelector(".detail-pane")?.dataset.hoverLocked === "false",
+      document.querySelector(".detail-pane")?.dataset.panelMode === "locked" &&
+      document.querySelector(".detail-pane")?.dataset.hoverLocked === "true",
   );
   const state = await panelState(page);
-  assert.equal(state.route, START_ROUTE, `${label}: background disengage changed route`);
-  assert.equal(state.title, "Language Study", `${label}: background disengage changed detail title`);
-  assert.equal(state.targetIdentity, "verse:1:token:3", `${label}: background disengage changed exact token content`);
+  assertLockedLanguageStudy(state, `${label}: ordinary text must retain Locked mode`);
+  assert.equal(state.route, START_ROUTE, `${label}: background click changed route`);
+  assert.equal(state.title, "Language Study", `${label}: background click changed detail title`);
+  assert.equal(state.targetIdentity, "verse:1:token:3", `${label}: background click changed exact token content`);
   return state;
 }
 
@@ -706,13 +707,13 @@ async function runTouchIteration(browser, baseUrl, iteration) {
     );
     assert.deepEqual(errors.consoleErrors, [], `touch iteration ${iteration}: browser console errors`);
     assert.deepEqual(errors.pageErrors, [], `touch iteration ${iteration}: uncaught page errors`);
-    const backgroundDisengage = await assertBackgroundDisengage(
+    const backgroundLock = await assertBackgroundLock(
       page,
       `touch iteration ${iteration} background`,
       true,
     );
     return {
-      backgroundDisengage,
+      backgroundLock,
       consoleErrors: errors.consoleErrors,
       iteration,
       languageTrace,

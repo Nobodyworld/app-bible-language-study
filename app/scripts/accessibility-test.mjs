@@ -72,7 +72,9 @@ function checkIndex(indexHtml) {
 }
 
 function checkMyData(source) {
-  assert(/heading\.textContent = "My Data"/.test(source), "My Data panel must have a top-level visible heading.");
+  assert(/setDetail\("My Data", wrap, \{ viewId: DETAIL_VIEW_IDS\.myData \}\)/.test(source), "My Data must use the shared panel heading.");
+  assert(/title\.textContent = "Saved study"/.test(source), "Saved study must retain its visible section heading.");
+  assert(!/heading\.textContent = "My Data"/.test(source), "My Data must not duplicate the shared panel heading inside its content.");
   assert(/setAttribute\("role", "alertdialog"\)/.test(source), "Replace confirmation must expose alertdialog semantics.");
   assert(/setAttribute\("aria-modal", "true"\)/.test(source), "Replace confirmation must be modal to assistive technology.");
   assert(/setAttribute\("aria-labelledby", "replace-confirmation-title"\)/.test(source), "Replace confirmation must have an accessible name.");

@@ -1,6 +1,6 @@
 # Test Inventory and Disposition
 
-Reviewed: 2026-09-13
+Reviewed: 2026-09-14
 
 ## Authority
 
@@ -25,6 +25,16 @@ remove, or reclassify a maintained test.
 | `npm run desktop:build` | Unsigned Windows x64 NSIS release build; it is intentionally outside ordinary browser verification. |
 
 ## Focused Aliases
+
+`npm run test:cleanup` runs the isolated current-feature browser checks in the
+browser aggregate: Compact/Standard, light/dark, narrow/touch, Hebrew/Greek
+labels, source-labeled Interpretation choices, save/cancel/remove, and explicit
+Stable managed-mode recovery with saved bytes and study data preserved. Optional
+`CLEANUP_SCREENSHOT_DIR` writes focused screenshots outside the repository.
+`npm run ui:hygiene` checks same-context selectors/properties and visible labels
+using the maintained stylesheet parser. The new backup format, backup round-trip
+and cleanup naming tests run through `tests/run.mjs` in the static aggregate.
+Actual 175%/200% browser zoom remains separate from CSS viewport coverage.
 
 `tests/stylesheet-ownership.mjs` runs in `test:static`. It verifies the shared
 stylesheet load/staging order, component structural ownership, conditional
@@ -67,6 +77,7 @@ composition above:
 | `npm run test:word-meaning` | `tests/word-meaning.mjs`. |
 | `npm run test:word-meaning-focus` | `app/scripts/word-meaning-focus-test.mjs`. |
 | `npm run test:study-workspace` | `app/scripts/study-workspace-interaction-test.mjs`. |
+| `npm run test:study-followup` | `app/scripts/study-pane-followup-interaction-test.mjs`; header history, content space, live desktop/drawer reflow, both Language entry points staying Locked, sticky verse handoff, prominent English phrases, Clear and deliberate navigation. CSS viewport checks do not prove actual browser zoom. |
 | `npm run test:study-header-artwork` | `app/scripts/study-header-artwork-interaction-test.mjs`; exact width-icon centering, Clear/Hide label-icon alignment, right-side Hide/Show direction, theme/forced-colors rendering, and hide/show state transitions. |
 | `npm run test:reader-data-loading` | `app/scripts/reader-data-loading-interaction-test.mjs`. |
 | `npm run test:reliability` | Pack commit/removal failure injection and uninstall-preservation assertion self-tests; included once through `test:domain`. |
@@ -185,7 +196,7 @@ entry.
 | `app/scripts/reader-data-loading-interaction-test.mjs` | Desktop | Deferred reader-dataset request boundaries, first/repeat activation, stale-route suppression, retry behavior, reader-core preservation, and browser-error checks. |
 | `app/scripts/frozen-highlight-interaction-test.mjs` | Edge desktop, portrait, narrow, mobile/touch, light/dark, forced colors, and reduced motion | Locked/frozen reader-to-panel highlighting; exact phrase preservation through pointer, keyboard, touch, and same-verse tools; informational alignment semantics; browser-owned indexed Reader history with panel-only Detail history; truthful detail reset; zero/moderate/deep scroll restoration; long-chapter stability; responsive containment; and browser-error health. |
 | `app/scripts/original-language-study-interaction-test.mjs` | Desktop | Rendered Language Study data, lazy enhancement, references, history, and tooltip containment. |
-| `app/scripts/language-study-tooltip-interaction-test.mjs` | Desktop, narrow, mobile-width, and optional touch mode | Exact H3068 Language Study readiness plus morphology and original-language mark tooltip interaction, containment, dismissal, repositioning, and state non-mutation. |
+| `app/scripts/language-study-tooltip-interaction-test.mjs` | Desktop, narrow, mobile-width, and optional touch mode | Exact H3068 Language Study readiness plus morphology and original-language mark tooltip interaction, containment, dismissal, repositioning, and state non-mutation; ordinary background clicks retain Locked mode. |
 | `app/scripts/strong-preview-hydration-test.mjs` | Desktop and narrow layouts | Eager G227 origin labels, separate source-prose preservation, both destinations, delayed/stale/missing/failed resolution and cache reuse; G4771 boundaries, H4912 code visibility, G4151 Compare, tooltip hydration, wrapping and reflow. |
 | `app/scripts/panel-context-interaction-test.mjs` | Desktop, narrow, and mobile; light/dark | Compact context, scope inheritance, explicit contained Study Marks, stable underlay, focus restoration, responsive layout, and browser-error checks. |
 | `app/scripts/word-meaning-focus-test.mjs` | Desktop and mobile | Contained Meaning and Study Marks overlay coordination, exact-target save/remove, data-neutral dismissal, lifecycle cleanup, focus restoration, and a controlled delayed-frame regression proving initial tool focus cannot steal subsequent Clear focus. |

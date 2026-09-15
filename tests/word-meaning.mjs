@@ -67,7 +67,7 @@ assert.deepEqual(
   "the saved rendering must not be offered again as a quick choice",
 );
 assert.equal(Object.keys(priorityModel).at(-1), "other", "Other must be the final model field");
-assert.deepEqual(priorityModel.other, { value: "other", label: "Other", source: "custom" });
+assert.deepEqual(priorityModel.other, { value: "other", label: "Add alternative wording", source: "custom" });
 
 const dedupedModel = buildWordMeaningChoiceModel({
   savedRendering: "  Chosen meaning ",

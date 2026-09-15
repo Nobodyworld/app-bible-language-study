@@ -435,8 +435,8 @@ async function main() {
     await waitFor(page, () => document.querySelectorAll(".strong-token").length > 0);
     await click(page, ".strong-token");
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Strong's");
-    await waitFor(page, () => [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Int"));
-    await clickButtonByText(page, "Int");
+    await waitFor(page, () => [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Language"));
+    await clickButtonByText(page, "Language");
     await waitFor(page, () => Boolean(document.querySelector(".original-language-related-link")));
     // Lazy enhancement can insert earlier superscription links after this
     // interaction. Keep the identity actually hovered instead of rereading first().

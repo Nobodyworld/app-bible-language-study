@@ -169,10 +169,11 @@ export function renderPhysicalPackManager(ctx) {
   let busy = false;
   let activeAbort = null;
   let latestSnapshot = manager.snapshot();
-  const preservedReaderSelection = captureReaderSelection();
+  let preservedReaderSelection = captureReaderSelection();
 
   const run = async (label, action, focusKey = null) => {
     if (busy) return;
+    preservedReaderSelection = captureReaderSelection();
     busy = true;
     activeAbort = new AbortController();
     live.className = "physical-pack-live-status";
@@ -201,6 +202,9 @@ export function renderPhysicalPackManager(ctx) {
   };
 
   const openPlan = async (packId, action, trigger) => {
+    // Lab mounts this view before My Data restores the Reader selection.
+    // Preserve the selection at the user's action, not only at construction.
+    preservedReaderSelection = captureReaderSelection();
     try {
       const plan = await manager.plan(packId, action);
       if (action === "remove" && plan.blocked_by?.length) {

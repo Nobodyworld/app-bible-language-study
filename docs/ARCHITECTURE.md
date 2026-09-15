@@ -113,14 +113,14 @@ paths under the Tauri resource directory. See `docs/DESKTOP.md`.
 
 Study Marks remains target-aware across Book, Chapter, Verse, selected text,
 and exact source tokens. Favorite remains the canonical `favorite` assertion.
-Meaning is separate from Study Marks and is stored only for exact canonical
+Word interpretation is separate from Study Marks and is stored only for exact canonical
 source-token identity.
 
-My Data is the single ordinary entry for My study data, Backup and restore, App
-settings and Advanced diagnostics. Stable diagnostics stays collapsed and lazy,
-retaining storage authority, migration and failure messages, quarantined-record
-and recovery-backup counts, and physical-pack recovery. Lab additionally renders
-the complete technical summary and capability manager. This is a presentation
+My Data is the single ordinary entry for Saved study, Backup and restore, and
+Help and recovery. Stable help stays collapsed and lazy, with concise recovery
+information and an explicit Use included data action for existing managed mode.
+The action keeps separately saved bytes and personal study records. Lab renders
+the experimental pack manager, complete technical summary and capability manager. This is a presentation
 boundary: capability resolution, structured unavailable states, package state,
 and historical `disabled_capability_ids` retain their existing behavior and
 version-3 backup compatibility. Local Jobs is retired in both profiles;
@@ -189,7 +189,7 @@ by physical source/version, identifies permitted bundled fallback, and preserves
 structured errors when fallback is forbidden. Search, Commentary, and other views do not acquire Cache Storage or
 physical-registry logic.
 
-My Data → Advanced diagnostics renders the management surface. It exposes
+Lab My Data → Advanced diagnostics renders the management surface. It exposes
 mode, catalog, immutable version, expected/verified totals, provenance,
 operation history, progress, plan/confirmation, focus restoration, repair,
 rollback, removal, and cleanup without creating a new primary destination.

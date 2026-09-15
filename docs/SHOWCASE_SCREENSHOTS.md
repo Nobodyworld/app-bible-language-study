@@ -30,8 +30,8 @@ its two PNG filenames retain the internal `interlinear` term.
 | [Search](images/search.png) | Deterministic `discernment` query with three populated results. |
 | [Contained Study Marks](images/study-marks.png) | Light contained exact-token Study Marks workflow with Favorite selected. |
 | [Dark Study Marks index](images/study-marks-dark.png) | Dark target-aware index with the seeded exact-token Favorite. |
-| [Contained Meaning](images/meaning.png) | John 1:1 exact-source-token Meaning surface with saved `origin` plus exact-English and lexicon choices. |
-| [My Data summary](images/my-data.png) | My study data counts reflect the seeded Meaning and Study Mark; Advanced diagnostics is collapsed. |
+| [Contained Interpretation](images/meaning.png) | John 1:1 exact-source-token Interpretation surface with saved `origin` plus exact-English and lexicon choices. |
+| [My Data summary](images/my-data.png) | Saved study counts reflect the seeded word interpretation and Study Mark; Help and recovery is collapsed. |
 | [My Data backup and restore](images/my-data-backup-restore.png) | Download, merge, and replace controls are framed without exposing a large raw JSON payload. |
 | [Mobile Verse study](images/mobile.png) | Light 390×844 Psalm 118:4 state with the full-screen Verse study drawer and Cross References controls open. |
 | [Dark mobile My Data](images/mobile-dark.png) | Dark 390×844 John 1:1 full-screen drawer with the populated My Data summary readable. |

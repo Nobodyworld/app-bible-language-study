@@ -81,7 +81,7 @@ assert(
 
 assert(/html\s*{\s*overflow-x:\s*clip;/.test(css), "The document must not create a sticky-breaking horizontal overflow container.");
 assert(/body\s*{[\s\S]*?overflow-x:\s*clip;/.test(css), "The body must not create a sticky-breaking horizontal overflow container.");
-assert(/\.detail-pane\s*{[\s\S]*?position:\s*sticky;[\s\S]*?top:\s*76px;[\s\S]*?height:\s*calc\(100dvh - 88px\);/.test(css), "Desktop detail panel must remain viewport-sticky and tall.");
+assert(/\.detail-pane\s*{[\s\S]*?position:\s*sticky;[\s\S]*?top:\s*76px;[\s\S]*?height:\s*calc\(var\(--study-viewport-block-size, 100dvh\) - 88px\);/.test(css), "Desktop detail panel must remain viewport-sticky and use the responsive viewport height.");
 assert(/\.strong-sticky-summary\s*{[\s\S]*?position:\s*static;/.test(css), "Strong summary must not create a second sticky scrolling region.");
 assert(/renderInlineTagPicker/.test(renderer), "Reader verse numbers must retain the canonical inline Study Marks picker.");
 assert(!/verse-study-marks-button/.test(renderer), "Reader rows must not render a duplicate Study Marks trigger beside the verse number.");
@@ -154,7 +154,9 @@ assert(
   "Chapter action labels must use measured reader-pane thresholds and retain the compact fallback.",
 );
 assert(
-  /@media\s*\(max-width:\s*640px\)[\s\S]*?\.chapter-favorite-actions \.scope-mark-button\s*{[\s\S]*?min-height:\s*44px;/.test(css) &&
+  cssRules(css).some((rule) => rule.selectors.includes(".scope-mark-button") &&
+    rule.contexts.includes("@media (max-width: 640px), (hover: none), (pointer: coarse)") &&
+    rule.declarations.some(({ property, value }) => property === "min-height" && value === "44px")) &&
     /\.chapter-actions\s*{[\s\S]*?gap:\s*4px;[\s\S]*?\.action-group\s*{[\s\S]*?gap:\s*4px;[\s\S]*?padding:\s*0;[\s\S]*?border:\s*0;/.test(css),
   "Mobile Book and Chapter marks must have real 44px targets while the 4+2 action groups remove duplicate chrome.",
 );
@@ -174,9 +176,11 @@ assert(
 );
 assert(/\.reader-floating-nav\s*{[\s\S]*?top:\s*176px;/.test(css), "Floating chapter navigation must sit below the reader header.");
 assert(
-  /\.detail-floating-nav\s*{[\s\S]*?position:\s*relative;[\s\S]*?flex:\s*0 0 auto;[\s\S]*?min-height:\s*44px;[\s\S]*?padding:\s*6px 12px 0;/.test(css) &&
+  /\.detail-floating-nav\s*{[\s\S]*?position:\s*relative;[\s\S]*?flex:\s*0 0 auto;[\s\S]*?min-height:\s*0;[\s\S]*?padding:\s*0;/.test(css) &&
+    index.indexOf('class="detail-header-actions"') < index.indexOf('class="detail-floating-nav"') &&
+    index.indexOf('class="detail-floating-nav"') < index.indexOf('id="detailWorkArea"') &&
     /\.detail-nav-arrow\s*{[\s\S]*?width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?min-width:\s*32px;[\s\S]*?min-height:\s*32px;/.test(css),
-  "Detail history controls must remain in source-order flow with compact desktop targets that cannot be overlapped by contextual navigation.",
+  "Detail history must share the header with compact desktop targets and reserve no separate body row.",
 );
 assert(
   (index.match(/class="scope-mark-control"/g) || []).length === 2 &&

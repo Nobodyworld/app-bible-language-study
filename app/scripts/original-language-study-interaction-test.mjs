@@ -171,8 +171,8 @@ async function main() {
         strongTransliteration.symbols.every((symbol) => symbol.tabIndex === 0 && !symbol.label.includes("not exact pronunciation")),
       `Strong's transliteration guidance is incomplete: ${JSON.stringify(strongTransliteration)}`,
     );
-    await waitFor(page, () => [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Int"));
-    await clickButtonByText(page, "Int");
+    await waitFor(page, () => [...document.querySelectorAll("button")].some((button) => button.textContent.trim() === "Language"));
+    await clickButtonByText(page, "Language");
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study");
     await waitFor(page, () => Boolean(document.querySelector(".interlinear-verse-section[data-original-language-study='true']")));
     await waitFor(page, () => Boolean(document.querySelector(".original-language-word-origin")));
@@ -342,7 +342,7 @@ async function main() {
     await waitFor(page, () => document.querySelectorAll(".strong-token").length > 0);
     await click(page, ".strong-token");
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Strong's");
-    await clickButtonByText(page, "Int");
+    await clickButtonByText(page, "Language");
     await waitFor(page, () => Boolean(document.querySelector(".interlinear-verse-section[data-original-language-study='true']")));
     const greekState = await page.evaluate(() => ({
       heading: document.querySelector(".original-language-source-card > .original-language-section-label")?.textContent.trim() || "",

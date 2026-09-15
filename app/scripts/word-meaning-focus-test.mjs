@@ -431,12 +431,12 @@ async function runProfile(browser, url, profile) {
     }, profile.mobile);
     await waitFor(page, () =>
       [...document.querySelectorAll("#detailContext .verse-context-tab")].some(
-        (button) => button.textContent.trim() === "Int" && !button.disabled,
+        (button) => button.textContent.trim() === "Language" && !button.disabled,
       ),
     );
 
     stage = "open Language Study";
-    await page.locator("#detailContext .verse-context-tab").filter({ hasText: /^Int$/ }).first().click();
+    await page.locator("#detailContext .verse-context-tab").filter({ hasText: /^Language$/ }).first().click();
     await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study");
     await waitFor(page, () =>
       document.querySelectorAll('.interlinear-verse-section[data-verse="1"] .word-meaning-control').length >= 2,
@@ -717,8 +717,8 @@ async function runProfile(browser, url, profile) {
       await waitFor(page, () => document.querySelector("#detailTitle")?.textContent !== "Language Study");
       await page.locator(".verse-study-button").first().evaluate((button) => button.click());
       await waitFor(page, () => [...document.querySelectorAll("#detailContext .verse-context-tab")]
-        .some((button) => button.textContent.trim() === "Int" && !button.disabled));
-      await page.locator("#detailContext .verse-context-tab").filter({ hasText: /^Int$/ }).first().click();
+        .some((button) => button.textContent.trim() === "Language" && !button.disabled));
+      await page.locator("#detailContext .verse-context-tab").filter({ hasText: /^Language$/ }).first().click();
       await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Language Study" &&
         document.querySelectorAll('.interlinear-verse-section[data-verse="1"] .word-meaning-control').length >= 2);
     }
@@ -733,9 +733,7 @@ async function runProfile(browser, url, profile) {
     await secondMeaning.focus();
     await secondMeaning.press("Enter");
     await waitFor(page, (targetId) => document.querySelector("#detailToolSurface")?.dataset.targetId === targetId, secondTargetId);
-    await page.evaluate(() => {
-      document.querySelector("#detailBack")?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
-    });
+    await page.locator(".detail-header-actions #detailBack").click();
     await waitFor(page, () => document.querySelector("#detailToolSurface")?.hidden === true &&
       document.querySelector("#detailForward")?.disabled === false);
     await assertSurfaceClosed(page, profile, "detail Back");
@@ -805,8 +803,8 @@ async function runProfile(browser, url, profile) {
         button.click();
       }, profile.mobile);
       await waitFor(page, () => [...document.querySelectorAll("#detailContext .verse-context-tab")]
-        .some((button) => button.textContent.trim() === "Int" && !button.disabled));
-      await page.locator("#detailContext .verse-context-tab").filter({ hasText: /^Int$/ }).first().click();
+        .some((button) => button.textContent.trim() === "Language" && !button.disabled));
+      await page.locator("#detailContext .verse-context-tab").filter({ hasText: /^Language$/ }).first().click();
       await waitFor(page, () => Boolean(document.querySelector("button.word-meaning-trigger")));
       clearMeaning = page.locator("button.word-meaning-trigger").first();
     }

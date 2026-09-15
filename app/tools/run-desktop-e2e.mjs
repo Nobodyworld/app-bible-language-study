@@ -265,17 +265,26 @@ async function checkRetiredJobUi(client) {
       text: panel.textContent,
     };
   `);
-  assert.match(diagnostics.storageHealth, /Storage authority:.*migration:/i, "Native storage authority and migration information must remain available");
-  assert.match(diagnostics.text, /Quarantined assertions/);
-  assert.match(diagnostics.text, /Import backups/);
   if (PROFILE_ID === "lab") {
+    assert.match(diagnostics.storageHealth, /Storage authority:.*migration:/i, "Native Lab must retain storage authority and migration diagnostics");
+    assert.match(diagnostics.text, /Quarantined assertions/);
+    assert.match(diagnostics.text, /Import backups/);
     assert.equal(diagnostics.capabilityManager, true, "Native Lab must retain capability diagnostics");
     assert.ok(diagnostics.capabilityButtons > 0, "Native Lab must retain capability mutation controls");
     for (const label of ["Package ops", "Installed packs", "Assertion events"]) assert.ok(diagnostics.text.includes(label), `Native Lab must retain ${label}`);
   } else {
+    assert.match(
+      diagnostics.storageHealth,
+      /Keep a downloaded backup before clearing browser or app storage\./i,
+      "Native Stable recovery help must stay user-facing instead of exposing storage internals",
+    );
     assert.equal(diagnostics.capabilityManager, false, "Expanded native Stable must not create a capability manager");
     assert.equal(diagnostics.capabilityButtons, 0, "Native Stable must not expose capability mutation controls");
-    assert.doesNotMatch(diagnostics.text, /Package ops|Installed packs|Assertion events|Diagnostic capability controls/, "Native Stable must omit implementation-only summary clutter");
+    assert.doesNotMatch(
+      diagnostics.text,
+      /Storage authority:|migration:|Quarantined assertions|Import backups|Package ops|Installed packs|Assertion events|Diagnostic capability controls/,
+      "Native Stable must omit implementation-only storage and package diagnostics",
+    );
   }
   const absent = await client.execute("return !document.querySelector('.job-action, .job-payload, .maintenance-section') && !/Local job console|Tag jobs|Workspace jobs|Plan Review|Simulate|Requeue|Refresh Study Marks index/.test(document.querySelector('#detailContent').textContent);");
   assert.equal(absent, true, "Retired job UI must be absent from native diagnostics");
@@ -303,7 +312,7 @@ async function importHistoricalPolls(client, mode) {
   await client.execute("const input = document.querySelector('.import-textarea'); input.value = JSON.stringify(arguments[0]); input.dispatchEvent(new Event('input', {bubbles:true})); return true;", [payload]);
   await client.execute("const button = [...document.querySelectorAll('button')].find(node => node.textContent === arguments[0]); if (!button) throw new Error('Import button missing'); button.click(); return true;", [mode === "merge" ? "Merge backup" : "Replace all local data"]);
   if (mode === "replace") await click(client, ".replace-confirmation button.danger-button");
-  await client.waitFor("return document.querySelector('.import-status')?.textContent.includes(arguments[0]);", [mode === "merge" ? "Backup merged" : "Backup replaced"]);
+  await client.waitFor("return document.querySelector('.import-status')?.textContent.includes(arguments[0]);", [mode === "merge" ? "Backup merged" : "Local data replaced"]);
   await client.execute("document.querySelector('.manual-json-panel').dispatchEvent(new Event('toggle')); return true;");
   await client.waitFor("return JSON.parse(document.querySelector('.export-textarea')?.value || '{}').stores?.polls?.events?.length === 605;");
   // Native writes are queued; observe this import on disk before closing.

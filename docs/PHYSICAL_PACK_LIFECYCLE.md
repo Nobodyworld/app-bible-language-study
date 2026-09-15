@@ -147,10 +147,16 @@ the structured `incompatible_version` error instead.
 
 ## My Data management UI
 
-Controls live only under **My Data → Advanced diagnostics → Physical study
+Experimental controls live only in **Lab → My Data → Advanced diagnostics → Physical study
 packs**. The surface shows runtime mode, catalog URL/version, storage support,
 desired/active state, immutable version, file and byte totals, operation
 history, failure, notice, and provenance.
+
+Stable exposes only an explicit **Use included data** recovery action for
+profiles already in managed mode, under **My Data → Help and recovery**. Opening
+that surface does not change modes. Using it preserves separately saved files,
+registry records and personal study data; pack bytes are not part of a personal
+backup. Ordinary bundled-data profiles have no pack controls.
 
 Every mutation starts with a plan dialog. Escape and Cancel are data-neutral and
 restore focus. Install/update/repair expose live progress and cancellation.

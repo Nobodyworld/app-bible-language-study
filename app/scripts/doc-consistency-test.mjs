@@ -19,6 +19,7 @@ const DOCUMENT_CLASSIFICATIONS = new Set([
 ]);
 
 const DOCUMENT_MODEL = Object.freeze([
+  { path: "docs/CURRENT_FEATURE_CLEANUP.md", classification: "maintained", roles: ["current-status", "ui-contract", "test-inventory"] },
   { path: "docs/STYLESHEET_OWNERSHIP.md", classification: "maintained", roles: ["technical", "ui-contract", "test-inventory"] },
   { path: ".github/PULL_REQUEST_TEMPLATE.md", classification: "maintained", roles: ["policy"] },
   { path: "AGENTS.md", classification: "maintained", roles: ["policy"] },
@@ -357,11 +358,11 @@ async function checkCurrentDocumentContracts() {
     },
     {
       path: "app/docs/README.md",
-      required: [/reader/i, /Language Study/, /Study Marks/, /Meaning/, /My Data/],
+      required: [/reader/i, /Language Study/, /Study Marks/, /Interpretation/, /My Data/],
     },
     {
       path: "app/docs/UI_FUNCTIONALITY_SCHEMA.md",
-      required: [/Word\s*→\s*Verse/, /Meaning is a separate action/i, /bibleapp:user-data/, /Advanced diagnostics/],
+      required: [/Word\s*→\s*Verse/, /Interpretation is a separate action/i, /bibleapp:user-data/, /Advanced diagnostics/],
       forbidden: [/Language Study control and Translation workspace require/i],
     },
     {
@@ -388,7 +389,7 @@ async function checkCurrentDocumentContracts() {
         /current, manually reviewed, accepted public-preview evidence/i,
         /generated filename inventory/i,
         /Public descriptions use Language Study/i,
-        /My study data counts reflect the seeded Meaning and Study Mark/i,
+        /Saved study counts reflect the seeded word interpretation and Study Mark/i,
         /Light 390×844 Psalm 118:4 state with the full-screen Verse study drawer and Cross References controls open/i,
         /Dark 390×844 John 1:1 full-screen drawer with the populated My Data summary readable/i,
       ],

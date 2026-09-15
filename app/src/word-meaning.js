@@ -4,15 +4,9 @@ import {
   setTokenRendering,
 } from "./stores.js?v=pr13-live-qa-20260711e";
 import { normalizeTarget } from "./semantic-targets.js?v=pr13-live-qa-20260711e";
-import {
-  activateOverlay,
-  deactivateOverlay,
-  isActiveOverlay,
-} from "./overlay-coordinator.js?v=pr13-live-qa-20260711e";
-import {
-  closeContainedDetailTool,
-  openContainedDetailTool,
-} from "./detail-tool-surface.js";
+import { activateOverlay, deactivateOverlay, isActiveOverlay } from "./overlay-coordinator.js?v=pr13-live-qa-20260711e";
+import { closeContainedDetailTool, openContainedDetailTool } from "./detail-tool-surface.js";
+import { WORD_INTERPRETATION_COPY as COPY, meaningChoiceSourceLabel } from "./study-copy.js";
 
 export const CUSTOM_MEANING_MAX_LENGTH = 180;
 let meaningControlSequence = 0;
@@ -35,12 +29,8 @@ function uniqueMeaningEntries(entries) {
 }
 
 export function buildWordMeaningChoiceModel({
-  savedRendering = "",
-  exactMappedEnglish = "",
-  english = "",
-  gloss = "",
-  lexiconShortDefinition = "",
-  lexiconMeaning = "",
+  savedRendering = "", exactMappedEnglish = "", english = "", gloss = "",
+  lexiconShortDefinition = "", lexiconMeaning = "",
 } = {}) {
   const entries = uniqueMeaningEntries([
     { value: savedRendering, source: "saved", current: true },
@@ -54,7 +44,7 @@ export function buildWordMeaningChoiceModel({
     saved: current?.value || "",
     choices: entries,
     quickChoices: entries.filter((entry) => !entry.current),
-    other: { value: "other", label: "Other", source: "custom" },
+    other: { value: "other", label: COPY.customAction, source: "custom" },
   };
 }
 
@@ -70,9 +60,8 @@ function focusTrigger(trigger) {
 }
 
 function candidateModel(state, target, token, sources) {
-  const saved = getTokenRendering(state, target)?.rendering || "";
   return buildWordMeaningChoiceModel({
-    savedRendering: saved,
+    savedRendering: getTokenRendering(state, target)?.rendering || "",
     exactMappedEnglish: sources.exactMappedEnglish,
     english: token?.english,
     gloss: token?.gloss,
@@ -82,80 +71,54 @@ function candidateModel(state, target, token, sources) {
 }
 
 export function createWordMeaningControl({
-  state,
-  target,
-  token = {},
-  exactMappedEnglish = "",
-  loadExactMappedEnglish = null,
-  loadLexicon = null,
-  label = "source token",
-  onChange = null,
-  presentation = "popover",
+  state, target, token = {}, exactMappedEnglish = "", loadExactMappedEnglish = null,
+  loadLexicon = null, label = "source token", onChange = null, presentation = "popover",
 } = {}) {
   const sourceTarget = validateSourceTokenMeaningTarget(target);
   if (!state || !sourceTarget) return null;
   const contained = presentation === "detail-pane";
-
   const root = document.createElement("div");
   root.className = "word-meaning-control";
   root.dataset.targetId = sourceTarget.target_id;
   root.dataset.detailRestore = "word-meaning";
-
   const trigger = document.createElement("button");
   trigger.type = "button";
   trigger.className = "word-meaning-trigger";
-  trigger.textContent = "Meaning";
+  trigger.textContent = COPY.action;
   trigger.setAttribute("aria-haspopup", "dialog");
   trigger.setAttribute("aria-expanded", "false");
-  trigger.setAttribute("aria-label", `Choose a personal meaning for ${label}`);
+  trigger.setAttribute("aria-label", `${COPY.action} for ${label}`);
   trigger.dataset.wordMeaningTargetId = sourceTarget.target_id;
-
   const badgeHost = document.createElement("span");
   badgeHost.className = "word-meaning-badge-host";
-
   const menu = document.createElement("div");
   const menuId = `word-meaning-${++meaningControlSequence}-${sourceTarget.target_id.replace(/[^a-z0-9_-]+/gi, "-")}`;
   menu.className = contained ? "word-meaning-contained" : "word-meaning-menu";
-  if (contained) {
-    trigger.setAttribute("aria-controls", "detailToolSurface");
-  } else {
+  if (contained) trigger.setAttribute("aria-controls", "detailToolSurface");
+  else {
     menu.id = menuId;
     menu.hidden = true;
     menu.tabIndex = -1;
     menu.setAttribute("role", "dialog");
-    menu.setAttribute("aria-label", `Personal meaning for ${label}`);
+    menu.setAttribute("aria-label", `${COPY.title} for ${label}`);
     trigger.setAttribute("aria-controls", menuId);
   }
-
   root.append(trigger, badgeHost);
   if (!contained) root.append(menu);
-
-  const sources = {
-    exactMappedEnglish: normalizeMeaningValue(exactMappedEnglish),
-    lexicon: null,
-  };
+  const sources = { exactMappedEnglish: normalizeMeaningValue(exactMappedEnglish), lexicon: null };
   let open = false;
   let editingCustom = false;
   let loadingExact = false;
   let loadingLexicon = false;
   let pendingChoiceFocus = null;
-  const overlayOwner = {
-    document,
-    isConnected: () => root.isConnected && open,
-    close: (options) => close(options),
-  };
-
+  const overlayOwner = { document, isConnected: () => root.isConnected && open, close: (options) => close(options) };
   const removeGlobalListeners = () => {
     document.removeEventListener("pointerdown", onOutsidePointerDown, true);
     window.removeEventListener("resize", positionMenu);
     window.removeEventListener("scroll", positionMenu, true);
   };
-
   const close = ({ restoreFocus = false, fromSurface = false, reason = "meaning-close" } = {}) => {
-    if (contained && open && !fromSurface) {
-      closeContainedDetailTool({ restoreFocus, reason });
-      return;
-    }
+    if (contained && open && !fromSurface) { closeContainedDetailTool({ restoreFocus, reason }); return; }
     deactivateOverlay(overlayOwner);
     if (!open) return;
     open = false;
@@ -170,11 +133,7 @@ export function createWordMeaningControl({
     removeGlobalListeners();
     if (!contained && restoreFocus) focusTrigger(trigger);
   };
-
-  const notify = (record, action) => {
-    onChange?.({ record, action, target: sourceTarget });
-  };
-
+  const notify = (record, action) => onChange?.({ record, action, target: sourceTarget });
   const refreshBadge = () => {
     const saved = getTokenRendering(state, sourceTarget)?.rendering || "";
     badgeHost.replaceChildren();
@@ -183,8 +142,8 @@ export function createWordMeaningControl({
     badge.type = "button";
     badge.className = "word-meaning-badge";
     badge.textContent = saved;
-    badge.title = `Edit personal meaning: ${saved}`;
-    badge.setAttribute("aria-label", `Edit personal meaning ${saved} for ${label}`);
+    badge.title = `Edit word interpretation: ${saved}`;
+    badge.setAttribute("aria-label", `${saved}. Edit word interpretation for ${label}`);
     badge.dataset.wordMeaningTargetId = sourceTarget.target_id;
     if (contained) {
       badge.setAttribute("aria-haspopup", "dialog");
@@ -194,35 +153,32 @@ export function createWordMeaningControl({
     badge.addEventListener("click", () => openPicker(badge));
     badgeHost.append(badge);
   };
-
   const save = (value) => {
     const record = setTokenRendering(state, sourceTarget, value);
     if (record) notify(record, "saved");
     refreshBadge();
     return record;
   };
-
   const remove = () => {
     if (!deleteTokenRendering(state, sourceTarget)) return false;
     notify(null, "removed");
     refreshBadge();
     return true;
   };
-
   const showCustomEditor = () => {
     editingCustom = true;
     menu.replaceChildren();
     const title = document.createElement("h5");
-    title.textContent = "Custom meaning";
+    title.textContent = COPY.customTitle;
     const hint = document.createElement("p");
     hint.className = "word-meaning-hint";
-    hint.textContent = `Use up to ${CUSTOM_MEANING_MAX_LENGTH} characters. Nothing is saved until you choose Save.`;
+    hint.textContent = `${COPY.boundary} Use up to ${CUSTOM_MEANING_MAX_LENGTH} characters. Nothing is saved until you choose Save.`;
     const input = document.createElement("input");
     input.type = "text";
     input.className = "word-meaning-custom-input";
     input.maxLength = CUSTOM_MEANING_MAX_LENGTH;
     input.value = getTokenRendering(state, sourceTarget)?.rendering || "";
-    input.setAttribute("aria-label", `Custom personal meaning for ${label}`);
+    input.setAttribute("aria-label", `${COPY.customTitle} for ${label}`);
     const status = document.createElement("p");
     status.className = "word-meaning-validation";
     status.hidden = true;
@@ -239,70 +195,60 @@ export function createWordMeaningControl({
     cancelButton.textContent = "Cancel";
     const submit = () => {
       const value = normalizeMeaningValue(input.value);
-      if (!value) {
-        status.hidden = false;
-        status.textContent = "Enter a meaning before saving.";
-        input.focus();
-        return;
-      }
+      if (!value) { status.hidden = false; status.textContent = COPY.required; input.focus(); return; }
       save(value);
       close({ restoreFocus: true });
     };
     saveButton.addEventListener("click", submit);
     cancelButton.addEventListener("click", () => close({ restoreFocus: true }));
-    input.addEventListener("keydown", (event) => {
-      if (event.key === "Enter") {
-        event.preventDefault();
-        submit();
-      }
-    });
+    input.addEventListener("keydown", (event) => { if (event.key === "Enter") { event.preventDefault(); submit(); } });
     actions.append(saveButton, cancelButton);
     menu.append(title, hint, input, status, actions);
     positionMenu();
-    window.setTimeout(() => {
-      if (open && input.isConnected) input.focus();
-    }, 0);
+    window.setTimeout(() => { if (open && input.isConnected) input.focus(); }, 0);
   };
-
   const renderPicker = () => {
     if (!open || editingCustom) return;
     if (menu.contains(document.activeElement)) {
       const focusedControl = document.activeElement;
       pendingChoiceFocus = {
-        kind: focusedControl?.classList?.contains("word-meaning-remove")
-          ? "remove"
-          : focusedControl?.classList?.contains("word-meaning-other")
-            ? "other"
-            : "option",
+        kind: focusedControl?.classList?.contains("word-meaning-remove") ? "remove" : focusedControl?.classList?.contains("word-meaning-other") ? "other" : "option",
         source: focusedControl?.dataset?.source || "",
-        value: focusedControl?.textContent || "",
+        value: focusedControl?.dataset?.meaningValue || focusedControl?.textContent || "",
       };
     }
     const model = candidateModel(state, sourceTarget, token, sources);
     menu.replaceChildren();
     const title = document.createElement("h5");
-    title.textContent = "Personal meaning";
+    title.textContent = contained ? COPY.choicesTitle : COPY.title;
     const intro = document.createElement("p");
     intro.className = "word-meaning-hint";
-    intro.textContent = "Choose a suggested meaning or add your own.";
+    intro.textContent = COPY.intro;
+    const boundary = document.createElement("p");
+    boundary.className = "word-meaning-hint";
+    boundary.textContent = COPY.boundary;
     const choices = document.createElement("div");
     choices.className = "word-meaning-choices";
     if (!model.quickChoices.length) {
       const empty = document.createElement("p");
       empty.className = "word-meaning-empty";
-      empty.textContent = "No suggested meanings are available for this token.";
+      empty.textContent = COPY.empty;
       choices.append(empty);
     }
     model.quickChoices.forEach((choice) => {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "word-meaning-option";
-      button.textContent = choice.value;
       button.dataset.source = choice.source;
-      button.addEventListener("click", () => {
-        save(choice.value);
-        close({ restoreFocus: true });
-      });
+      button.dataset.meaningValue = choice.value;
+      const value = document.createElement("span");
+      value.className = "word-meaning-choice-value";
+      value.textContent = choice.value;
+      const source = document.createElement("small");
+      source.className = "word-meaning-choice-source";
+      source.textContent = meaningChoiceSourceLabel(choice.source);
+      button.append(value, source);
+      button.addEventListener("click", () => { save(choice.value); close({ restoreFocus: true }); });
       choices.append(button);
     });
     const other = document.createElement("button");
@@ -311,19 +257,17 @@ export function createWordMeaningControl({
     other.textContent = model.other.label;
     other.addEventListener("click", showCustomEditor);
     choices.append(other);
-    menu.append(title, intro, choices);
+    menu.append(title, intro, choices, boundary);
     if (model.saved) {
       const saved = document.createElement("div");
       saved.className = "word-meaning-saved-actions";
       const labelNode = document.createElement("span");
-      labelNode.textContent = `Saved: ${model.saved}`;
+      labelNode.textContent = `Saved wording: ${model.saved}`;
       const removeButton = document.createElement("button");
       removeButton.type = "button";
       removeButton.className = "link-button compact-link word-meaning-remove";
       removeButton.textContent = "Remove";
-      removeButton.addEventListener("click", () => {
-        if (remove()) close({ restoreFocus: true });
-      });
+      removeButton.addEventListener("click", () => { if (remove()) close({ restoreFocus: true }); });
       saved.append(labelNode, removeButton);
       menu.append(saved);
     }
@@ -331,36 +275,24 @@ export function createWordMeaningControl({
     if (pendingChoiceFocus) {
       const focusIdentity = pendingChoiceFocus;
       const options = [...menu.querySelectorAll(".word-meaning-option")];
-      const replacement = focusIdentity.kind === "remove"
-        ? menu.querySelector(".word-meaning-remove")
-        : focusIdentity.kind === "other"
-          ? options.find((option) => option.classList.contains("word-meaning-other"))
-          : options.find((option) => (
-            option.dataset.source === focusIdentity.source && option.textContent === focusIdentity.value
-          )) || options.find((option) => option.textContent === focusIdentity.value);
-      if (replacement) {
-        window.setTimeout(() => {
-          if (!open || !replacement.isConnected) return;
-          replacement.focus({ preventScroll: true });
-          if (document.activeElement === replacement && pendingChoiceFocus === focusIdentity) {
-            pendingChoiceFocus = null;
-          }
-        }, 0);
-      }
+      const replacement = focusIdentity.kind === "remove" ? menu.querySelector(".word-meaning-remove")
+        : focusIdentity.kind === "other" ? options.find((option) => option.classList.contains("word-meaning-other"))
+          : options.find((option) => option.dataset.source === focusIdentity.source && option.dataset.meaningValue === focusIdentity.value)
+            || options.find((option) => option.dataset.meaningValue === focusIdentity.value);
+      if (replacement) window.setTimeout(() => {
+        if (!open || !replacement.isConnected) return;
+        replacement.focus({ preventScroll: true });
+        if (document.activeElement === replacement && pendingChoiceFocus === focusIdentity) pendingChoiceFocus = null;
+      }, 0);
     }
   };
-
   function onOutsidePointerDown(event) {
     if (!isActiveOverlay(overlayOwner)) return;
     if (!root.contains(event.target)) close();
   }
-
   function positionMenu() {
     if (contained) return;
-    if (!root.isConnected) {
-      close();
-      return;
-    }
+    if (!root.isConnected) { close(); return; }
     if (!open || menu.hidden) return;
     const gutter = 12;
     const width = Math.min(340, Math.max(0, window.innerWidth - gutter * 2));
@@ -370,45 +302,28 @@ export function createWordMeaningControl({
     const maxLeft = Math.max(gutter, window.innerWidth - width - gutter);
     const left = Math.min(Math.max(gutter, triggerBounds.right - width), maxLeft);
     let top = triggerBounds.bottom + 6;
-    if (top + height > window.innerHeight - gutter) {
-      top = Math.max(gutter, triggerBounds.top - height - 6);
-    }
+    if (top + height > window.innerHeight - gutter) top = Math.max(gutter, triggerBounds.top - height - 6);
     menu.style.left = `${left}px`;
     menu.style.top = `${top}px`;
   }
-
   const loadCandidates = () => {
     if (typeof loadExactMappedEnglish === "function" && !loadingExact && !sources.exactMappedEnglish) {
       loadingExact = true;
-      Promise.resolve(loadExactMappedEnglish())
-        .then((value) => {
-          sources.exactMappedEnglish = normalizeMeaningValue(value);
-          if (open) renderPicker();
-        })
-        .catch(() => {})
-        .finally(() => {
-          loadingExact = false;
-        });
+      Promise.resolve(loadExactMappedEnglish()).then((value) => {
+        sources.exactMappedEnglish = normalizeMeaningValue(value);
+        if (open) renderPicker();
+      }).catch(() => {}).finally(() => { loadingExact = false; });
     }
     if (typeof loadLexicon === "function" && !loadingLexicon && !sources.lexicon) {
       loadingLexicon = true;
-      Promise.resolve(loadLexicon())
-        .then((entry) => {
-          sources.lexicon = entry && typeof entry === "object" ? entry : null;
-          if (open) renderPicker();
-        })
-        .catch(() => {})
-        .finally(() => {
-          loadingLexicon = false;
-        });
+      Promise.resolve(loadLexicon()).then((entry) => {
+        sources.lexicon = entry && typeof entry === "object" ? entry : null;
+        if (open) renderPicker();
+      }).catch(() => {}).finally(() => { loadingLexicon = false; });
     }
   };
-
   const openPicker = (opener = trigger) => {
-    if (open) {
-      close({ restoreFocus: contained, reason: "meaning-toggle" });
-      return;
-    }
+    if (open) { close({ restoreFocus: contained, reason: "meaning-toggle" }); return; }
     open = true;
     editingCustom = false;
     trigger.setAttribute("aria-expanded", "true");
@@ -418,23 +333,19 @@ export function createWordMeaningControl({
       const focusRegion = root.closest("#detailContext") ? "context" : "content";
       const opened = openContainedDetailTool({
         kind: "meaning",
-        title: "Meaning",
+        title: COPY.title,
         targetId: sourceTarget.target_id,
         content: menu,
         trigger: opener,
         initialFocus: ".word-meaning-option, .word-meaning-remove, .word-meaning-custom-input",
         resolveTrigger: () => {
-          const matches = [...document.querySelectorAll("button[data-word-meaning-target-id]")]
-            .filter((node) => node.dataset.wordMeaningTargetId === sourceTarget.target_id && node.isConnected);
+          const matches = [...document.querySelectorAll("button[data-word-meaning-target-id]")].filter((node) => node.dataset.wordMeaningTargetId === sourceTarget.target_id && node.isConnected);
           return matches.find((node) => Boolean(node.closest("#detailContext")) === (focusRegion === "context")) || matches[0] || null;
         },
         focusFallback: () => document.querySelector("#clearDetail"),
         onClose: () => close({ fromSurface: true }),
       });
-      if (!opened) {
-        close({ fromSurface: true });
-        return;
-      }
+      if (!opened) { close({ fromSurface: true }); return; }
     } else {
       activateOverlay(overlayOwner);
       document.addEventListener("pointerdown", onOutsidePointerDown, true);
@@ -443,12 +354,8 @@ export function createWordMeaningControl({
     }
     loadCandidates();
   };
-
   trigger.addEventListener("click", () => openPicker(trigger));
-  root.addEventListener("detail:restore", () => {
-    close();
-    refreshBadge();
-  });
+  root.addEventListener("detail:restore", () => { close(); refreshBadge(); });
   refreshBadge();
   return root;
 }

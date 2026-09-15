@@ -145,13 +145,14 @@ assert.match(browserSource, /mode === "mobile"/);
 assert.match(browserSource, /mode === "narrow"/);
 assert.match(browserSource, /panelHeaderGap/);
 assert.match(contextCss, /\.panel-context-controls\s*{[\s\S]*?flex-wrap:\s*wrap;/);
-assert.match(contextCss, /\.verse-context-tab::after\s*{[\s\S]*?content:\s*attr\(data-visible-label\);/);
+assert.match(tabsSource, /button\.textContent = action\.shortLabel/);
+assert.doesNotMatch(contextCss, /content:\s*attr\(data-visible-label\)|font-size:\s*0(?:px|rem|em)?\s*;/);
 assert.doesNotMatch(contextCss, /\.detail-pane\s*\{/,
   "Contextual navigation must not own shared Detail-pane geometry.");
 assert.match(await readFile(new URL("../app/styles-shell.css", import.meta.url), "utf8"),
   /top:\s*calc\(var\(--app-header-block-size\) \+ 12px\)/,
   "The shell must size the Detail pane from the measured app header.");
-assert.match(contextCss, /@media\s*\(max-width:\s*640px\)[\s\S]*?grid-template-columns:\s*1fr;/);
+assert.match(contextCss, /@media\s*\(max-width:\s*640px\),\s*\(hover:\s*none\),\s*\(pointer:\s*coarse\)[\s\S]*?min-height:\s*44px;/);
 
 console.log(
   JSON.stringify(

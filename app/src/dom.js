@@ -1,5 +1,6 @@
 import {
   DETAIL_SCROLL_POLICIES,
+  DETAIL_VIEW_IDS,
   PANEL_EVENTS,
   PANEL_MODES,
   normalizeDetailScrollPolicy,
@@ -281,7 +282,7 @@ export function setDetail(title, node, options = {}) {
     detailHistory.push(storedCurrent);
     detailForwardHistory.length = 0;
   }
-  if (options.lock === true || (!options.transient && historyMode === "push")) {
+  if (options.lock === true || (!options.transient && (historyMode === "push" || nextViewId === DETAIL_VIEW_IDS.languageStudy))) {
     detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.activate);
   } else if (options.lock === false) {
     detailPanelMode = transitionPanelMode(detailPanelMode, PANEL_EVENTS.disengage);
@@ -311,6 +312,11 @@ export function isDetailHoverLocked() {
 }
 
 export function setDetailHoverLocked(locked) {
+  // Language Study is a committed reading session, not a disposable hover card.
+  // Incidental clicks (including its text and scrollbar) cannot release it.
+  // Clear/Escape and Reader navigation still reset through resetDetailContent;
+  // deliberately opening another tool still replaces it through setDetail.
+  if (!locked && currentDetailViewId === DETAIL_VIEW_IDS.languageStudy && !currentDetailTransient) return;
   detailPanelMode = transitionPanelMode(
     detailPanelMode,
     locked ? PANEL_EVENTS.activate : PANEL_EVENTS.disengage,

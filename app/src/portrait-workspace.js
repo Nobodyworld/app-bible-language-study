@@ -31,11 +31,27 @@ let hiddenStateDetailScrollTop = null;
 let hiddenStateScrollX = null;
 let hiddenStateScrollY = null;
 let drawerInvoker = null;
+let workspaceWasMobile = mobileMedia.matches;
+let viewportLayoutFrame = 0;
 const fallbackTabIndexes = new Map();
 
 function updateHeaderBlockSize() {
   const height = Math.ceil(header?.getBoundingClientRect?.().height || 0);
-  if (height > 0) root.style.setProperty("--app-header-block-size", `${height}px`);
+  const headerValue = `${height}px`;
+  if (height > 0 && root.style.getPropertyValue("--app-header-block-size") !== headerValue) {
+    root.style.setProperty("--app-header-block-size", headerValue);
+  }
+  // Browser page zoom changes CSS viewport dimensions. Pinch zoom must not
+  // rescale layout a second time; the keyboard may reduce a scale-1 viewport.
+  const viewport = window.visualViewport;
+  const visibleHeight = viewport && Math.abs(viewport.scale - 1) < 0.001
+    ? viewport.height
+    : window.innerHeight;
+  const viewportHeight = Math.floor(Number(visibleHeight));
+  const viewportValue = `${viewportHeight}px`;
+  if (viewportHeight > 0 && root.style.getPropertyValue("--study-viewport-block-size") !== viewportValue) {
+    root.style.setProperty("--study-viewport-block-size", viewportValue);
+  }
 }
 
 function currentDetailScrollTop() {
@@ -283,10 +299,17 @@ export function focusStudyWorkspaceAfterClear() {
 }
 
 function syncResponsiveWorkspace() {
+  const enteringMobile = mobileMedia.matches && !workspaceWasMobile;
+  const preserveOpenStudy = enteringMobile && root.dataset.studyWorkspaceHidden !== "true"
+    && Boolean(detailPane?.dataset.displayedView);
+  workspaceWasMobile = mobileMedia.matches;
   updateAdaptiveHideButton();
   if (mobileMedia.matches) {
     if (root.dataset.studyWorkspaceHidden === "true") setWorkspaceHidden(false, { restoreFocus: false });
-    if (!detailPane?.classList.contains("visible")) closeStudyWorkspace({ restoreFocus: false });
+    // Keep an already open study session when browser zoom crosses the drawer
+    // breakpoint. Initial mobile load still starts closed, without stealing focus.
+    if (preserveOpenStudy) openStudyWorkspace({ focus: false });
+    else if (!detailPane?.classList.contains("visible")) closeStudyWorkspace({ restoreFocus: false });
     return;
   }
 
@@ -300,6 +323,19 @@ function syncResponsiveWorkspace() {
     setPaneInert(false);
   }
   syncPaneDisclosure(root.dataset.studyWorkspaceHidden !== "true");
+}
+
+function queueViewportLayout() {
+  updateHeaderBlockSize();
+  if (viewportLayoutFrame) return;
+  viewportLayoutFrame = window.requestAnimationFrame(() => {
+    viewportLayoutFrame = 0;
+    syncResponsiveWorkspace();
+    updateHeaderBlockSize();
+    // Media/container queries and scrollbar metrics can settle a frame later.
+    // Do not restore old pixel scroll offsets or recreate any Study content here.
+    window.requestAnimationFrame(updateHeaderBlockSize);
+  });
 }
 
 function rememberExternalInteraction(event) {
@@ -343,15 +379,14 @@ hideButton?.addEventListener("click", () => {
 });
 showButton?.addEventListener("click", () => setWorkspaceHidden(false));
 
-mobileMedia.addEventListener?.("change", syncResponsiveWorkspace);
-
-window.addEventListener("resize", updateHeaderBlockSize, { passive: true });
+mobileMedia.addEventListener?.("change", queueViewportLayout);
+window.addEventListener("resize", queueViewportLayout, { passive: true });
+window.visualViewport?.addEventListener("resize", queueViewportLayout, { passive: true });
 if (typeof ResizeObserver === "function" && header) {
-  new ResizeObserver(updateHeaderBlockSize).observe(header);
+  new ResizeObserver(queueViewportLayout).observe(header);
 }
 if (document.fonts?.ready) {
-  document.fonts.ready.then(updateHeaderBlockSize).catch(() => {});
+  document.fonts.ready.then(queueViewportLayout).catch(() => {});
 }
 syncResponsiveWorkspace();
-updateHeaderBlockSize();
-window.requestAnimationFrame(updateHeaderBlockSize);
+queueViewportLayout();

@@ -20,8 +20,9 @@ has been removed: its desktop/container rules now live with their components.
 The independent `portrait-workspace.js` runtime still measures the app header.
 Desktop staging requires every stylesheet listed above and copies the same HTML.
 
-The Study pane's 320px border box has a 318px container query content box. That
-query enables the single header row; smaller containers retain a stacked fallback.
+The complete Study header uses one row at a 560px container width. Smaller
+containers keep the title and width control above the history/Clear/Hide row;
+history does not reserve a separate strip in the work area.
 The intermediate desktop clamp can produce a 300px Compact pane. Mobile uses the
 existing drawer and hides the stored desktop width control.
 
@@ -65,3 +66,8 @@ wrapping in light/dark/forced colors. The wrapping negative control restores
 inline padding in an isolated fixture and must detect padding-only fragments.
 Viewport resizing/reflow evidence does not claim actual browser zoom or owner
 approval. Native and final integrated results are recorded separately.
+
+`npm run test:study-followup` checks open-pane viewport transitions, header
+history, bounded context controls, Language lock persistence, prominent English
+phrases and sticky verse-heading handoff. The shell owns the Language scrollport
+padding; the Study stylesheet owns the adjacent cards and their sticky headings.

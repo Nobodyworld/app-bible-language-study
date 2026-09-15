@@ -44,6 +44,8 @@ async function geometry(page) {
       pane: rect(pane),
       detailHeader: rect(detailHeader),
       floatingNav: rect(floatingNav),
+      historyInHeader: detailHeader.contains(floatingNav),
+      bodyGap: contextRect.top - rect(detailHeader).bottom,
       context: contextRect,
       card: cardRect,
       cardFillsContext: Math.abs(cardRect.left - contextRect.left - parseFloat(contextStyle.paddingLeft)) <= 1 &&
@@ -76,9 +78,6 @@ export async function checkZoomReflow(browser, url) {
       for (const viewport of VIEWPORTS) {
         await page.setViewportSize(viewport);
         const desktop = viewport.width >= 769;
-        if (!desktop && !(await page.locator("#detailPane").evaluate((node) => node.classList.contains("visible")))) {
-          await page.locator("#openStudyPanel").click();
-        }
         for (const mode of desktop ? ["compact", "standard", "expanded"] : ["drawer"]) {
           if (desktop) {
             for (let attempt = 0; attempt < 3; attempt += 1) {
@@ -103,6 +102,9 @@ export async function checkZoomReflow(browser, url) {
           assert(state.cardFillsContext && state.cardInsidePane && state.contextInsidePane && state.contextNoHorizontalOverflow,
             `Context card must fill and remain inside the Study pane: ${diagnostic}`);
           assert(state.contentHeight >= 44, `Context must leave usable Study content space: ${diagnostic}`);
+          assert(state.historyInHeader && Math.abs(state.bodyGap) <= 1, `History must share the header without a body spacer: ${diagnostic}`);
+          if (!desktop) assert(await page.locator('#detailPane').evaluate(node => node.classList.contains('visible') && !node.inert),
+            `An already-open Study pane must remain open across the drawer breakpoint: ${diagnostic}`);
           if (desktop) {
             assert(state.header.height <= 88 && state.headerSingleRow && state.headerNoOverlap && state.headerContained,
               `Desktop header must remain a compact, nonoverlapping row: ${diagnostic}`);
@@ -119,13 +121,15 @@ export async function checkZoomReflow(browser, url) {
           // Keyboard focus must be able to reveal the final context action even
           // when a short viewport requires this bounded region to scroll.
           const last = page.locator("#detailContext button:not([disabled])").last();
+          await page.locator('#clearDetail').focus();
           await last.focus();
           const reachable = await last.evaluate((node) => {
             const item = node.getBoundingClientRect();
             const host = document.querySelector("#detailContext").getBoundingClientRect();
-            return document.activeElement === node && item.top >= host.top - 1 && item.bottom <= host.bottom + 1;
+            return { reachable: document.activeElement === node && item.top >= host.top - 1 && item.bottom <= host.bottom + 1,
+              item: item.toJSON(), host: host.toJSON(), scrollTop: document.querySelector("#detailContext").scrollTop };
           });
-          assert(reachable, `Final context action must be keyboard-reachable: ${label}`);
+          assert(reachable.reachable, `Final context action must be keyboard-reachable: ${label}: ${JSON.stringify(reachable)}`);
           if (process.env.BIBLEAPP_UI_EVIDENCE_DIR) {
             mkdirSync(process.env.BIBLEAPP_UI_EVIDENCE_DIR, { recursive: true });
             await page.screenshot({ path: path.join(process.env.BIBLEAPP_UI_EVIDENCE_DIR, `reflow-${theme}-${viewport.width}-${mode}.png`) });

@@ -107,7 +107,7 @@
                 <svg aria-hidden="true" class="toolbar-icon study-marks-icon"><use href="#study-marks-icon"></use></svg>
                 <span>Study Marks</span>
               </button>
-              <button id="showMyData" class="toolbar-button" type="button" title="Settings, backup, and personal study data">
+              <button id="showMyData" class="toolbar-button" type="button" title="Backup and saved study data">
                 <span aria-hidden="true" class="toolbar-icon">▣</span>
                 <span>My Data</span>
               </button>
@@ -177,6 +177,10 @@
               </button>
             </div>
             <div class="detail-header-actions">
+              <div class="detail-floating-nav" role="group" aria-label="Detail panel history">
+                <button id="detailBack" class="detail-nav-arrow" type="button" title="Panel history back" aria-label="Panel history back" disabled>↶</button>
+                <button id="detailForward" class="detail-nav-arrow" type="button" title="Panel history forward" aria-label="Panel history forward" disabled>↷</button>
+              </div>
               <button
                 id="clearDetail"
                 class="detail-header-icon-button"
@@ -211,14 +215,6 @@
         </div>
         <div id="detailWorkspace" class="detail-workspace">
           <div id="detailWorkArea" class="detail-work-area">
-            <div class="detail-floating-nav" aria-label="Detail panel history">
-              <button id="detailBack" class="detail-nav-arrow" type="button" title="Panel history back" aria-label="Panel history back" disabled>
-                ↶
-              </button>
-              <button id="detailForward" class="detail-nav-arrow" type="button" title="Panel history forward" aria-label="Panel history forward" disabled>
-                ↷
-              </button>
-            </div>
             <div id="detailContext" class="detail-context" hidden></div>
             <div id="detailContent" class="detail-content">
               Select a verse, tag, or reader tool.
