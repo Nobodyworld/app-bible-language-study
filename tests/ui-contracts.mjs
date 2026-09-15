@@ -3,15 +3,20 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { CAPABILITY_REGISTRY, CAPABILITY_STATES, capabilityMessage } from "../app/src/capabilities.js";
+import { FEATURE_REGISTRY, featureById } from "../app/src/feature-registry.js";
+import { panelToolsForScope } from "../app/src/panel-context-model.js";
 import {
   chapterSwipeDirection,
   CONTROL_STATES,
   PANEL_EVENTS,
   PANEL_MODES,
   STUDY_CONTROL_SCHEMA,
+  UI_ACTION_CONTRACTS,
   interlinearTokenIdentity,
   resolveControlState,
   transitionPanelMode,
+  uiActionContract,
+  uiActionLabel,
 } from "../app/src/ui-contracts.js";
 
 assert.deepEqual(resolveControlState(), {
@@ -79,6 +84,7 @@ for (const [controlId, control] of Object.entries(STUDY_CONTROL_SCHEMA)) {
   actions.add(control.action);
   assert.ok(["package", "book", "chapter", "verse"].includes(control.dataScope));
   assert.equal(control.lockOnActivate, true);
+  assert.ok(uiActionContract(control.uiActionId), `${controlId} must reference a canonical UI action`);
   if (control.capabilityId) {
     assert.ok(capabilityIds.has(control.capabilityId), `${controlId} has an unknown capability`);
   }
@@ -89,13 +95,64 @@ assert.equal(STUDY_CONTROL_SCHEMA.sidePanelOutline.dataScope, "book");
 assert.equal(STUDY_CONTROL_SCHEMA.sidePanelInterlinear.dataScope, "chapter");
 assert.equal(STUDY_CONTROL_SCHEMA.verseCommentary.dataScope, "verse");
 assert.equal(STUDY_CONTROL_SCHEMA.verseInterlinear.dataScope, "verse");
+assert.equal(
+  STUDY_CONTROL_SCHEMA.sidePanelInterlinear.uiActionId,
+  STUDY_CONTROL_SCHEMA.verseInterlinear.uiActionId,
+  "Chapter and verse Language Study entry points must share one semantic UI action",
+);
+
+for (const [actionId, contract] of Object.entries(UI_ACTION_CONTRACTS)) {
+  assert.equal(contract.id, actionId, `${actionId} contract key/id drifted`);
+  assert.ok(contract.label?.trim(), `${actionId} requires a primary label`);
+  assert.ok(contract.compactLabel?.trim(), `${actionId} requires an explicit compact label`);
+  assert.ok(contract.tip?.trim(), `${actionId} requires a concise quick tip`);
+  assert.ok(contract.viewId?.trim(), `${actionId} requires a destination view`);
+  assert.ok(featureById(contract.featureId, FEATURE_REGISTRY), `${actionId} references unknown feature ${contract.featureId}`);
+  assert.equal(uiActionLabel(actionId), contract.label);
+  assert.equal(uiActionLabel(actionId, { compact: true }), contract.compactLabel);
+}
+assert.equal(uiActionContract(" LANGUAGE-STUDY "), UI_ACTION_CONTRACTS["language-study"]);
+assert.equal(uiActionContract("unknown-action"), null);
+
+const verseTools = Object.fromEntries(panelToolsForScope("verse").map((tool) => [tool.id, tool]));
+for (const [toolId, actionId] of Object.entries({
+  par: "translations",
+  refs: "references",
+  commentary: "commentary",
+  interlinear: "language-study",
+})) {
+  const tool = verseTools[toolId];
+  const contract = uiActionContract(actionId);
+  assert.equal(tool.actionId, actionId, `${toolId} must be wired to ${actionId}`);
+  assert.equal(tool.label, contract.label, `${toolId} full label drifted from ${actionId}`);
+  assert.equal(tool.shortLabel, contract.compactLabel, `${toolId} compact label drifted from ${actionId}`);
+  assert.equal(tool.tip, contract.tip, `${toolId} quick tip drifted from ${actionId}`);
+}
+const definition = panelToolsForScope("word", { language: null })[0];
+assert.equal(definition.actionId, "definition");
+assert.equal(definition.label, uiActionLabel("definition"));
+
+const index = readFileSync(new URL("../app/index.html", import.meta.url), "utf8");
+for (const [controlId, actionId] of Object.entries({
+  showSearch: "search",
+  showInterlinear: "language-study",
+  showOutline: "outline",
+  showTags: "study-marks",
+  showMyData: "my-data",
+})) {
+  const markup = index.match(new RegExp(`<button id="${controlId}"[\\s\\S]*?<\\/button>`))?.[0] || "";
+  assert.ok(markup, `${controlId} must remain in the Reader toolbar`);
+  const label = uiActionLabel(actionId);
+  assert.match(markup, new RegExp(`>${label.replace(/[.*+?^${}()|[\\]\\]/g, "\\$&")}<`), `${controlId} visible label must match ${actionId}`);
+}
 
 console.log(
   JSON.stringify(
     {
       status: "ok",
       controls_checked: Object.keys(STUDY_CONTROL_SCHEMA).length,
-      assertions: 30,
+      ui_actions_checked: Object.keys(UI_ACTION_CONTRACTS).length,
+      repeated_panel_actions_checked: 5,
     },
     null,
     2,
