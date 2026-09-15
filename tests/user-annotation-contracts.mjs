@@ -10,6 +10,7 @@ import {
   normalizeSpeechAttributionRanges,
   speechAttributionContract,
   speechAttributionForSegment,
+  speechAttributionPreview,
   upsertSpeechAttributionRange,
 } from "../app/src/user-annotation-contracts.js";
 
@@ -33,6 +34,19 @@ assert.deepEqual(
   "legacy red-letter ranges must normalize losslessly as red user annotations",
 );
 assert.equal(normalizeSpeechAttributionRange({ start: 4, end: 4 }), null);
+
+const attributionPreview = speechAttributionPreview({
+  start: 2,
+  end: 7,
+  text: "Jesus",
+  classification: "pink",
+});
+assert.equal(attributionPreview.label, "Speech attribution");
+assert.equal(attributionPreview.classification, "pink");
+assert.equal(attributionPreview.classificationLabel, "Possibly attributed");
+assert.match(attributionPreview.accessibleText, /Selected text: Jesus/);
+assert.match(attributionPreview.accessibleText, /private annotation/);
+assert.equal(speechAttributionPreview({ start: 1, end: 1 }), null);
 
 const initial = normalizeSpeechAttributionRanges([
   { start: 10, end: 20, text: "outer", classification: "gray", updated_at: "2026-01-01T00:00:00Z" },
@@ -77,5 +91,6 @@ console.log(JSON.stringify({
   speech_attribution_levels: SPEECH_ATTRIBUTION_IDS.length,
   legacy_red_letter_migration_contract: "PASS",
   overlap_resolution_contract: "PASS",
+  speech_attribution_preview_contract: "PASS",
   interpretation_preview_contract: "PASS",
 }, null, 2));
