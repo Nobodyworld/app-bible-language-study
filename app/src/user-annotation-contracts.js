@@ -104,6 +104,24 @@ export function speechAttributionForSegment(ranges, start, end) {
   return candidates[0] || null;
 }
 
+export function speechAttributionPreview(range = {}) {
+  const normalized = normalizeSpeechAttributionRange(range);
+  if (!normalized) return null;
+  const contract = speechAttributionContract(normalized.classification);
+  return {
+    label: "Speech attribution",
+    classification: normalized.classification,
+    classificationLabel: contract.label,
+    selectedText: normalized.text,
+    accessibleText: [
+      `Speech attribution: ${contract.label}.`,
+      normalized.text ? `Selected text: ${normalized.text}.` : "",
+      contract.tip,
+      "This is your private annotation, not an attribution asserted by the app.",
+    ].filter(Boolean).join(" "),
+  };
+}
+
 export function interpretationPreview(record = {}) {
   const saved = String(record.rendering || "").trim();
   if (!saved) return null;
