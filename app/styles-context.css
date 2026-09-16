@@ -154,9 +154,9 @@
   min-width: 0;
   min-height: 0;
   max-width: 100%;
-  /* A viewport bound is stable while the enclosing flex boxes reflow at zoom.
-     Very short windows may scroll this region; actions are never discarded. */
-  max-height: min(200px, 34dvh);
+  /* Reserve reading space within the bounded work area even at high zoom.
+     The context can scroll independently without hiding any actions. */
+  max-height: min(200px, 34dvh, 45%);
   box-sizing: border-box;
   overflow-x: hidden;
   overflow-y: auto;
