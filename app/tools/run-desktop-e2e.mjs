@@ -1,4 +1,5 @@
 #!/usr/bin/env node
+import { interpretationRecordsAt } from "../src/annotation-records.js";
 
 import assert from "node:assert/strict";
 import { historicalPollStore } from "../../tests/fixtures/legacy-polls.mjs";
@@ -168,7 +169,8 @@ async function readNativeStores(client) {
 
 function persistedState(stores, targetId) {
   const tags = stores?.tags?.value?.tag_assertions || {};
-  const renderings = Object.values(stores?.workspace?.value?.token_renderings || {}).flatMap((verse) => Object.values(verse || {}));
+  const collection = stores?.workspace?.value?.token_renderings || {};
+  const renderings = Object.keys(collection).flatMap(reference => interpretationRecordsAt(collection, reference));
   return {
     favorite: Object.values(tags).some((record) => record?.active && record?.target_id === targetId && String(record?.tag_id || record?.legacy_tag_id).replace(/^tag:/, "") === "favorite"),
     meaning: renderings.some((record) => record?.target_id === targetId && record?.rendering === MEANING),

@@ -5,15 +5,15 @@ import { createSourceTokenTarget } from "../app/src/semantic-targets.js?v=pr13-l
 import { compactUserDataBackup } from "../app/src/portable-backup.js";
 
 configureUserStorageAdapter(createMemoryUserStorageAdapter());
-const source = {};
+const source = { translationId: "bsb" };
 const target = createSourceTokenTarget({ translation_id: "bsb", book_id: "john", chapter: 1, verse: 1 }, { token_index: 2, original: "λόγος", strong_code: "G3056", language: "greek" }, "bsb");
 assert.ok(target, "fixture needs an exact source-token identity");
 assert.ok(setTokenRendering(source, target, "word"));
 source.workspaceStore.extension = { retained: true };
 source.workspaceStore.red_letter_ranges["john:1:1"] = [
-  { start: 0, end: 2, text: "In", legacy: { retained: true } },
+  { translation_id: "bsb", start: 0, end: 2, text: "In", legacy: { retained: true } },
   ...["red", "pink", "gray", "black"].map((classification, index) => ({
-    start: index * 5 + 3, end: index * 5 + 6, text: classification, classification,
+    translation_id: "bsb", start: index * 5 + 3, end: index * 5 + 6, text: classification, classification,
     updated_at: "2026-01-02T00:00:00Z", extension: { classification },
   })),
   { future_record: { retained: true } },
@@ -25,7 +25,7 @@ const compact = compactUserDataBackup(full);
 assert.equal(Object.hasOwn(compact.stores, "polls"), false);
 for (const mode of ["merge", "replace"]) {
   configureUserStorageAdapter(createMemoryUserStorageAdapter());
-  const restored = {};
+  const restored = { translationId: "bsb" };
   importUserData(restored, compact, mode);
   assert.deepEqual(createUserDataExport(restored).stores, full.stores, `${mode} restores omitted defaults and saved token renderings`);
   assert.equal(getSpeechAttributionRanges(restored, "john:1:1")[0].classification, "red");
@@ -37,15 +37,15 @@ for (const mode of ["merge", "replace"]) {
   assert.deepEqual(createUserDataExport(restored).stores, before, "malformed history is atomic");
 }
 configureUserStorageAdapter(createMemoryUserStorageAdapter());
-const merged = {};
+const merged = { translationId: "bsb" };
 importUserData(merged, compact, "replace");
 const incoming = structuredClone(compact);
 incoming.stores.workspace.extra_backup_field = "retained";
 incoming.stores.workspace.red_letter_ranges["john:1:1"] = [
-  { start: 3, end: 6, classification: "black", updated_at: "2026-01-03T00:00:00Z", new_field: true },
-  { start: 8, end: 11, classification: "gray", updated_at: "2026-01-01T00:00:00Z" },
-  { start: 13, end: 16, classification: "pink", updated_at: "2026-01-02T00:00:00Z" },
-  { start: 25, end: 29, classification: "gray", text: "new" },
+  { translation_id: "bsb", text: "red", start: 3, end: 6, classification: "black", updated_at: "2026-01-03T00:00:00Z", new_field: true },
+  { translation_id: "bsb", text: "pink", start: 8, end: 11, classification: "gray", updated_at: "2026-01-01T00:00:00Z" },
+  { translation_id: "bsb", text: "gray", start: 13, end: 16, classification: "pink", updated_at: "2026-01-02T00:00:00Z" },
+  { translation_id: "bsb", text: "new", start: 25, end: 29, classification: "gray" },
 ];
 importUserData(merged, incoming, "merge");
 const ranges = getSpeechAttributionRanges(merged, "john:1:1");
@@ -57,8 +57,8 @@ assert.deepEqual(ranges.find(r => r.start === 3).extension, { classification: "r
 assert.equal(ranges.find(r => r.start === 3).new_field, true);
 assert.deepEqual(merged.workspaceStore.extension, { retained: true });
 assert.equal(merged.workspaceStore.extra_backup_field, "retained");
-applySpeechAttributionRange(merged, "john:1:1", { start: 0, end: 2 }, "pink");
-clearSpeechAttribution(merged, "john:1:1", { start: 25, end: 29 });
+applySpeechAttributionRange(merged, "john:1:1", { start: 0, end: 2, text: "In" }, "pink");
+clearSpeechAttribution(merged, "john:1:1", { translation_id: "bsb", text: "new", start: 25, end: 29 });
 assert.deepEqual(merged.workspaceStore.red_letter_ranges["john:1:1"].at(-1), { future_record: { retained: true } }, "opaque historical records survive updates/clear");
 const beforeReplace = createUserDataExport(merged);
 importUserData(merged, compact, "replace");

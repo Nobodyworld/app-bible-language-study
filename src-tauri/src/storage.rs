@@ -447,15 +447,24 @@ mod tests {
             "version": 3,
             "red_letter_ranges": {"john:1:1": [
                 {"start": 0, "end": 2, "text": "In", "legacy": {"keep": true}},
-                {"start": 3, "end": 6, "classification": "red"},
-                {"start": 7, "end": 16, "classification": "pink"},
-                {"start": 17, "end": 20, "classification": "gray"},
-                {"start": 21, "end": 24, "classification": "black"}
+                {"translation_id": "bsb", "reference_key": "john:1:1", "start": 0, "end": 2, "text": "In", "classification": "red"},
+                {"translation_id": "kjv", "reference_key": "john:1:1", "start": 0, "end": 2, "text": "In", "classification": "pink"},
+                {"translation_id": "bsb", "reference_key": "john:1:1", "start": 17, "end": 20, "text": "was", "classification": "gray"},
+                {"translation_id": "kjv", "reference_key": "john:1:1", "start": 17, "end": 20, "text": "was", "classification": "black"}
             ]},
-            "token_renderings": {"john:1:1": {"2": {
-                "rendering": "my beginning", "original": "ἀρχῇ", "strong_code": "G746",
-                "target_id": "target:source_token:bsb:new:john:1:1:2"
-            }}},
+            "token_renderings": {"john:1:1": {
+                "target:source_token:bsb:new:john:1:1:2": {
+                    "rendering": "my BSB beginning", "original": "ἀρχῇ", "strong_code": "G746",
+                    "translation_id": "bsb", "reference_key": "john:1:1", "token_index": 2,
+                    "target_id": "target:source_token:bsb:new:john:1:1:2"
+                },
+                "target:source_token:kjv:new:john:1:1:2": {
+                    "rendering": "my KJV beginning", "original": "ἀρχῇ", "strong_code": "G746",
+                    "translation_id": "kjv", "reference_key": "john:1:1", "token_index": 2,
+                    "target_id": "target:source_token:kjv:new:john:1:1:2"
+                },
+                "@preserved:2": {"rendering": "unknown origin", "future": {"keep": true}}
+            }},
             "unknown": {"keep": [1, 2, 3]}
         });
         write_store(

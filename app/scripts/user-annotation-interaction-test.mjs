@@ -7,6 +7,7 @@ import { chromium } from "playwright-core";
 import { startStaticAppServer } from "../tools/serve-app.mjs";
 import { mapStrongChapterRanges } from "../src/strongs.js";
 import { UI_ACTION_CONTRACTS } from "../src/ui-contracts.js";
+import { createSourceTokenTarget } from "../src/semantic-targets.js";
 
 const executablePath = ["C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe", "C:/Program Files/Microsoft/Edge/Application/msedge.exe"].find(existsSync);
 assert(executablePath, "An installed Edge is required");
@@ -19,9 +20,9 @@ const exactToken = mapped.find(range => range.token.token_index === 2);
 assert(exactToken.end - exactToken.start > 5);
 const key = "john:1:1";
 const fixture = { version: 3, token_renderings: {}, red_letter_ranges: { [key]: [
-  { start: 0, end: 20, text: verses["1"].slice(0, 20), legacy: "retained" },
-  { start: exactToken.start + 2, end: exactToken.end - 2, classification: "pink", updated_at: "2026-01-02T00:00:00Z" },
-  { start: 45, end: 50, classification: "black" },
+  { translation_id: "bsb", start: 0, end: 20, text: verses["1"].slice(0, 20), legacy: "retained" },
+  { translation_id: "bsb", text: verses["1"].slice(exactToken.start + 2, exactToken.end - 2), start: exactToken.start + 2, end: exactToken.end - 2, classification: "pink", updated_at: "2026-01-02T00:00:00Z" },
+  { translation_id: "bsb", text: verses["1"].slice(45, 50), start: 45, end: 50, classification: "black" },
 ] } };
 const { server, url } = await startStaticAppServer({ port: 0 });
 const browser = await chromium.launch({ executablePath, headless: true });
@@ -32,7 +33,7 @@ async function ready(page) {
 async function readerVisible(page) {
   if (page.viewportSize().width > 768) return;
   const hide = page.locator("#hideStudyWorkspace");
-  if (await hide.isVisible()) await hide.click();
+  if (await hide.getAttribute('aria-expanded') === 'true') await hide.click();
 }
 async function workspace(page) {
   return page.evaluate(() => new Promise((resolve, reject) => {
@@ -146,6 +147,167 @@ async function preview(page, marker, expected, interaction) {
   const viewport = page.viewportSize();
   assert(rect.x >= 0 && rect.y >= 0 && rect.x + rect.width <= viewport.width + 1 && rect.y + rect.height <= viewport.height + 1, 'preview must stay in viewport');
 }
+
+async function switchTranslation(page, id) {
+  await readerVisible(page);
+  await page.locator('#translationSelect').selectOption(id);
+  await page.waitForFunction(id => location.hash.includes(`/read/${id}/`) && document.querySelector('#translationSelect').value === id, id);
+  await ready(page);
+}
+
+async function editRendering(page, value, pending = false) {
+  await readerVisible(page);
+  await page.locator('.verse-row[data-verse="1"] .strong-token[data-token-index="2"]').first().click();
+  await page.locator('#detailContext .word-meaning-trigger').click();
+  await page.getByRole('button', { name: 'Add alternative wording', exact: true }).click();
+  await page.locator('.word-meaning-custom-input').fill(value);
+  if (!pending) await page.locator('.word-meaning-save').click();
+}
+
+async function crossTranslationJourney(page, profile) {
+  const bsbId = 'target:source_token:bsb:new:john:1:1:2';
+  const kjvId = 'target:source_token:kjv:new:john:1:1:2';
+  const row = page.locator('.verse-row[data-verse="1"]');
+  await editRendering(page, 'BSB private wording');
+  await readerVisible(page);
+  await selectRange(page, 0, 2);
+  await page.getByRole('combobox', { name: 'Speech attribution — private annotation' }).selectOption('red');
+  await switchTranslation(page, 'kjv');
+  assert.equal(await row.locator('.speech-attribution, .interpretation-marker').count(), 0, 'BSB annotations never decorate KJV');
+  const discovery = row.locator('.annotation-discovery');
+  assert.equal(await discovery.textContent(), 'Saved in BSB · 4');
+  const before = await snapshot(page);
+  if (profile.touch) await discovery.tap();
+  else {
+    await discovery.hover();
+    const tip = page.locator('.user-annotation-tooltip-layer');
+    await tip.waitFor({ state: 'visible' });
+    assert.match(await tip.innerText(), /BSB.*John 1:1/);
+    assert.match(await tip.innerText(), /BSB private wording/);
+    await discovery.focus();
+    assert.deepEqual(await snapshot(page), before);
+    await discovery.press('Enter');
+  }
+  const dialog = page.getByRole('dialog', { name: 'Saved annotations from other translations' });
+  await dialog.waitFor();
+  assert.deepEqual(await snapshot(page), before, 'discovery never switches translation automatically');
+  await dialog.getByRole('button', { name: 'Open saved source. Open in BSB', exact: true }).first().click();
+  await page.waitForFunction(() => location.hash.includes('/read/bsb/'));
+  await ready(page);
+  assert.equal(await row.locator('.interpretation-marker').count(), 1);
+  await switchTranslation(page, 'kjv');
+  await editRendering(page, 'KJV private wording');
+  await readerVisible(page);
+  await selectRange(page, 0, 2);
+  await page.getByRole('combobox', { name: 'Speech attribution — private annotation' }).selectOption('pink');
+  const both = await persisted(page, value => value.token_renderings?.[key]?.[kjvId]?.rendering === 'KJV private wording');
+  assert.equal(both.token_renderings[key][bsbId].rendering, 'BSB private wording');
+  assert.equal(both.red_letter_ranges[key].find(r => r.translation_id === 'bsb' && r.start === 0 && r.end === 2).classification, 'red');
+  assert.equal(both.red_letter_ranges[key].find(r => r.translation_id === 'kjv' && r.start === 0 && r.end === 2).classification, 'pink');
+  assert.equal(await row.locator('.interpretation-marker').count(), 1);
+  await switchTranslation(page, 'bsb');
+  assert.equal(await discovery.textContent(), 'Saved in KJV · 2');
+  if (evidence) {
+    await discovery.click();
+    await page.getByRole('dialog').waitFor();
+    await page.screenshot({ path: resolve(evidence, `${profile.name}-discovery.png`) });
+    await page.getByRole('dialog').getByRole('button', { name: 'Close', exact: true }).click();
+  }
+  // Hold actual UI callbacks across navigation. These delayed DOM events are
+  // race fixtures; the preceding interactions use real pointer/keyboard/touch.
+  await editRendering(page, 'Pending BSB wording', true);
+  await page.evaluate(() => {
+    window.pendingAnnotationSave = document.querySelector('.word-meaning-save');
+    location.hash = '#/read/kjv/john/1';
+  });
+  await page.waitForFunction(() => document.querySelector('#translationSelect').value === 'kjv');
+  await ready(page);
+  await page.evaluate(() => window.pendingAnnotationSave.click());
+  await persisted(page, value => value.token_renderings?.[key]?.[bsbId]?.rendering === 'Pending BSB wording');
+  assert.equal((await workspace(page)).token_renderings[key][kjvId].rendering, 'KJV private wording');
+  await switchTranslation(page, 'bsb');
+  await selectRange(page, 0, 2);
+  await page.evaluate(() => {
+    window.pendingSpeech = document.querySelector('.selection-speech-attribution select');
+    location.hash = '#/read/kjv/john/1';
+  });
+  await page.waitForFunction(() => document.querySelector('#translationSelect').value === 'kjv');
+  await ready(page);
+  await page.evaluate(() => { window.pendingSpeech.value = 'black'; window.pendingSpeech.dispatchEvent(new Event('change')); });
+  await persisted(page, value => value.red_letter_ranges[key].some(r => r.translation_id === 'bsb' && r.start === 0 && r.end === 2 && r.classification === 'black'));
+  assert.equal((await workspace(page)).red_letter_ranges[key].find(r => r.translation_id === 'kjv').classification, 'pink');
+  await page.reload(); await ready(page);
+  assert.equal(await row.locator('.interpretation-marker').count(), 1);
+  assert.equal(await row.locator('[data-speech-attribution="black"]').count(), 0);
+  // Actual backup UI drives merge/replace and immediate derived counts. Keep
+  // foreign and unknown-origin records while deleting only the KJV records.
+  await readerVisible(page);
+  await page.locator('#showMyData').click();
+  await page.locator('.advanced-backup-options > summary').click();
+  await page.locator('.manual-json-panel:not(.paste-json-panel) > summary').click();
+  await page.waitForFunction(() => document.querySelector('.export-textarea')?.value);
+  const backup = JSON.parse(await page.locator('.export-textarea').inputValue());
+  const withoutKjv = structuredClone(backup);
+  delete withoutKjv.stores.workspace.token_renderings[key][kjvId];
+  withoutKjv.stores.workspace.red_letter_ranges[key] = withoutKjv.stores.workspace.red_letter_ranges[key].filter(r => r.translation_id !== 'kjv');
+  await page.locator('.paste-json-panel > summary').click();
+  await page.locator('.import-textarea').fill(JSON.stringify(withoutKjv));
+  await page.getByRole('button', { name: 'Replace all local data', exact: true }).click();
+  await page.getByRole('alertdialog').getByRole('button', { name: /Replace/ }).click();
+  await persisted(page, value => !value.token_renderings?.[key]?.[kjvId]);
+  await switchTranslation(page, 'bsb');
+  assert.equal(await discovery.isVisible(), false, 'discovery disappears when the last foreign record is removed');
+  await page.locator('#showMyData').click();
+  await page.locator('.advanced-backup-options > summary').click();
+  await page.locator('.paste-json-panel > summary').click();
+  await page.locator('.import-textarea').fill(JSON.stringify(backup));
+  await page.getByRole('button', { name: 'Merge backup', exact: true }).click();
+  await persisted(page, value => Boolean(value.token_renderings?.[key]?.[kjvId]));
+  await readerVisible(page);
+  assert.equal(await discovery.textContent(), 'Saved in KJV · 2', 'import refreshes discovery immediately');
+  await audit(page);
+
+  const unresolved = structuredClone(backup);
+  const missing = createSourceTokenTarget(key, { token_index: 999, original: 'stored source', strong_code: 'G746' }, 'missing');
+  const stale = createSourceTokenTarget(key, { token_index: 999, original: 'old source', strong_code: 'G746' }, 'kjv');
+  unresolved.stores.workspace.token_renderings[key]['@preserved:historic'] = { rendering: 'Unscoped historical wording' };
+  for (const target of [missing, stale]) unresolved.stores.workspace.token_renderings[key][target.target_id] = {
+    target, target_id: target.target_id, translation_id: target.translation_id, rendering: 'Preserved alternative',
+  };
+  unresolved.stores.workspace.red_letter_ranges[key].push({ translation_id: 'kjv', reference_key: key,
+    start: 60, end: 65, text: 'outdated', classification: 'gray' });
+  await page.locator('#showMyData').click();
+  await page.locator('.advanced-backup-options > summary').click();
+  await page.locator('.paste-json-panel > summary').click();
+  await page.locator('.import-textarea').fill(JSON.stringify(unresolved));
+  await page.getByRole('button', { name: 'Merge backup', exact: true }).click();
+  await persisted(page, value => Boolean(value.token_renderings?.[key]?.[stale.target_id]));
+  await page.locator('.advanced-diagnostics > summary').click();
+  const recovery = page.locator('.annotation-recovery');
+  await recovery.waitFor();
+  assert.match(await recovery.innerText(), /Translation not recorded.*Unscoped historical wording/s);
+  assert.match(await recovery.innerText(), /MISSING.*Saved translation is unavailable/s);
+  await readerVisible(page);
+  assert.equal(await discovery.textContent(), 'Saved in KJV · 4', 'unknown and unavailable translations do not inflate BSB/KJV counts');
+  await discovery.click();
+  await dialog.getByText(/saved source token could not be verified/).waitFor();
+  await dialog.getByText(/Saved wording no longer matches/).waitFor();
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await switchTranslation(page, 'kjv');
+  assert.equal(await row.locator('.interpretation-marker').count(), 1, 'stale token does not gain a marker');
+  assert.equal(await row.locator('[data-speech-attribution="gray"]').count(), 0, 'stale speech snapshot never colors current text');
+  await switchTranslation(page, 'bsb');
+  // An unavailable original passage keeps its stored preview and offers no
+  // guessed destination. Reload clears the app cache before this data fixture.
+  await page.route('**/data/verses/kjv/john.json', route => route.fulfill({ json: { translation: { id: 'kjv' }, book: { id: 'john' }, chapters: {} } }));
+  await page.reload(); await ready(page);
+  await discovery.click();
+  await page.waitForFunction(() => [...document.querySelectorAll('.annotation-discovery-dialog [role="status"]')].every(node => node.textContent.includes('unavailable')));
+  assert.equal(await dialog.getByRole('button', { name: 'Open saved source. Open in KJV', exact: true }).count(), 4);
+  for (const button of await dialog.getByRole('button', { name: 'Open saved source. Open in KJV', exact: true }).all()) assert(await button.isDisabled());
+  await dialog.getByRole('button', { name: 'Close', exact: true }).click();
+  await page.unroute('**/data/verses/kjv/john.json');
+}
 try {
   for (const profile of [
     { name: 'compact-light', width: 1365, height: 900, mode: 'compact', theme: 'light' },
@@ -192,7 +354,7 @@ try {
     await marker.waitFor({ state: 'attached' });
     assert.equal(await marker.count(), 1, 'one exact source-token marker despite fragment splits');
     assert.equal(await page.locator('#detailContext .word-meaning-badge').count(), 1);
-    await persisted(page, value => value.token_renderings?.[key]?.[2]?.rendering === 'My beginning');
+    await persisted(page, value => value.token_renderings?.[key]?.["target:source_token:bsb:new:john:1:1:2"]?.rendering === 'My beginning');
     await readerVisible(page);
     const before = await snapshot(page);
     if (!profile.touch) assert.equal(before.mode, 'locked');
@@ -265,7 +427,7 @@ try {
     assert.equal(await marker.count(), 0, 'delete removes Reader marker immediately');
     assert.equal(await card.locator('.interpretation-marker').count(), 0, 'delete removes Language marker immediately');
     await audit(page);
-    await persisted(page, value => !value.token_renderings?.[key]?.[2]);
+    await persisted(page, value => !value.token_renderings?.[key]?.["target:source_token:bsb:new:john:1:1:2"]);
     await readerVisible(page);
     await page.locator('#homeButton').click();
     await page.locator('.home-action-grid').waitFor();
@@ -277,8 +439,9 @@ try {
     assert.deepEqual((await workspace(page)).red_letter_ranges, {});
     await page.goto(`${url}/#/read/bsb/john/1`); await ready(page);
     assert(await row.locator('.speech-attribution').count() > 0);
+    await crossTranslationJourney(page, profile);
     assert.deepEqual(errors, [], `${profile.name}: browser health`);
-    results.push(`${profile.name}: persistence, overlap, exact-token markers, previews, actions and geometry PASS`);
+    results.push(`${profile.name}: independent translations, pending actions, discovery, backups, markers, previews and geometry PASS`);
     await context.close();
   }
   console.log(JSON.stringify({ status: 'ok', results, zoom: 'Responsive viewports only; actual browser zoom is a separate rendered check.' }, null, 2));

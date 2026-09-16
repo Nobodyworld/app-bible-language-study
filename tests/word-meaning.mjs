@@ -106,6 +106,7 @@ assert.deepEqual(canonicalTarget, {
 assert.equal(validateSourceTokenMeaningTarget(createVerseTarget("john:3:16")), null);
 
 const normalizedRendering = normalizeTokenRendering({
+  translation_id: "bsb",
   reference_key: "john:3:16",
   token_index: "4",
   rendering: "  God ",
@@ -140,7 +141,7 @@ assert.equal(getTokenRendering(state, firstToken)?.rendering, "God");
 assert.equal(getTokenRendering(state, secondToken)?.rendering, "Deity");
 assert.deepEqual(
   Object.keys(state.workspaceStore.token_renderings["john:3:16"]).sort(),
-  ["4", "7"],
+  [firstToken.target_id, secondToken.target_id].sort(),
   "tokens with the same Strong's code and display text must remain distinct by exact index",
 );
 
@@ -157,7 +158,7 @@ assert.equal(
 assert.equal(deleteTokenRendering(state, firstToken), true, "existing token meaning must be removable");
 assert.equal(getTokenRendering(state, firstToken), null, "removed token meaning must not resolve as a ghost record");
 assert.equal(getTokenRendering(state, secondToken)?.rendering, "Deity", "removing one token must not remove its same-Strong peer");
-assert.deepEqual(Object.keys(state.workspaceStore.token_renderings["john:3:16"]), ["7"]);
+assert.deepEqual(Object.keys(state.workspaceStore.token_renderings["john:3:16"]), [secondToken.target_id]);
 const jobsAfterRemoval = state.workspaceStore.job_events.length;
 assert.equal(jobsAfterRemoval, 0, "removing a meaning must not create jobs");
 assert.equal(deleteTokenRendering(state, firstToken), false, "removing an absent meaning must be a no-op");

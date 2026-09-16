@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 
 import "./user-annotation-validation.mjs";
+import "./user-annotation-identity.mjs";
 import assert from "node:assert/strict";
 import {
   addRedLetterRange, applySpeechAttributionRange, changeSpeechAttributionRange,
@@ -96,11 +97,11 @@ assert.match(preview.accessibleText, /not replacement Scripture text/);
 assert.equal(interpretationPreview({}), null);
 
 configureUserStorageAdapter(createMemoryUserStorageAdapter());
-const state = {};
+const state = { translationId: "bsb" };
 const key = "john:1:1";
 assert.equal(addRedLetterRange(state, key, { start: 0, end: 12, text: "In the beginning", historical: { keep: true } }), true);
 for (const id of SPEECH_ATTRIBUTION_IDS) {
-  assert.equal(changeSpeechAttributionRange(state, key, { start: 0, end: 12 }, id), true);
+  assert.equal(changeSpeechAttributionRange(state, key, { start: 0, end: 12, text: "In the beginning" }, id), true);
   const ranges = getSpeechAttributionRanges(state, key);
   assert.equal(ranges.length, 1);
   assert.equal(ranges[0].classification, id);
@@ -110,7 +111,7 @@ for (const id of SPEECH_ATTRIBUTION_IDS) {
 assert.equal(changeSpeechAttributionRange(state, key, { start: 12, end: 15 }, "pink"), false);
 assert.equal(applySpeechAttributionRange(state, key, { start: 3, end: 6, text: "the" }, "pink"), true);
 assert.equal(speechAttributionForSegment(getSpeechAttributionRanges(state, key), 3, 6).classification, "pink");
-assert.equal(clearSpeechAttribution(state, key, { start: 3, end: 6 }), true);
+assert.equal(clearSpeechAttribution(state, key, { start: 3, end: 6, text: "the" }), true);
 assert.equal(getSpeechAttributionRanges(state, key).length, 1, "clear must preserve neighboring ranges");
 assert.equal(clearSpeechAttribution(state, key, { start: 3, end: 6 }), false);
 assert.equal(applySpeechAttributionRange(state, key, { start: 5, end: 4 }, "gray"), false);
@@ -146,7 +147,7 @@ function adapterFor(backend, profileId) {
 for (const backend of ["browser", "native"]) {
   for (const profile of ["stable", "lab"]) {
     const adapter = adapterFor(backend, profile);
-    const fresh = {};
+    const fresh = { translationId: "bsb" };
     await initStores(fresh, adapter);
     assert.equal(getSpeechAttributionRanges(fresh, key).length, 0, `${backend}/${profile} starts isolated`);
     for (const [index, classification] of SPEECH_ATTRIBUTION_IDS.entries()) {
@@ -154,7 +155,7 @@ for (const backend of ["browser", "native"]) {
     }
     setTokenRendering(fresh, target, profile);
     if (backend === "native") await adapter.flush();
-    const restarted = {};
+    const restarted = { translationId: "bsb" };
     await initStores(restarted, adapterFor(backend, profile));
     assert.deepEqual(getSpeechAttributionRanges(restarted, key), getSpeechAttributionRanges(fresh, key));
     assert.equal(getTokenRendering(restarted, target).rendering, profile);

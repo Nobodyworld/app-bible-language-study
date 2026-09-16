@@ -281,7 +281,7 @@ async function exerciseDelayedSavedMeaningFocus(page, profile) {
       workspaceStore: {
         token_renderings: {
           "proverbs:1:1": {
-            999: {
+            [target.target_id]: {
               schema_version: 2,
               rendering: "W".repeat(180),
               original: "qa",

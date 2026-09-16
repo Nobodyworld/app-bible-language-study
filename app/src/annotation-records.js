@@ -47,19 +47,29 @@ function retainOpaque(bucket, key, record) {
   // Opaque entries never masquerade as canonical target IDs. Retain exact bytes
   // of the JSON value, including unknown fields, without duplicate imports.
   const serialized = signature(record);
-  if (Object.entries(bucket).some(([name, value]) => name.startsWith("@preserved:") && signature(value) === serialized)) return;
+  const base = `@preserved:${key}`;
+  if (Object.entries(bucket).some(([name, value]) => (name === base || name.startsWith(`${base}:`)) && signature(value) === serialized)) return;
   let suffix = 0;
-  let name = `@preserved:${key}`;
+  let name = base;
   while (own(bucket, name)) name = `@preserved:${key}:${++suffix}`;
   put(bucket, name, copy(record));
+}
+
+function mergeRecordFields(previous, incoming) {
+  const result = { ...previous };
+  for (const [key, value] of Object.entries(incoming)) {
+    put(result, key, own(previous, key) && recordObject(previous[key]) && recordObject(value)
+      ? mergeRecordFields(previous[key], value) : copy(value));
+  }
+  return result;
 }
 
 function newerRecord(previous, incoming) {
   const a = Date.parse(previous?.updated_at || "");
   const b = Date.parse(incoming?.updated_at || "");
-  if (Number.isFinite(a) && (!Number.isFinite(b) || a > b)) return { ...incoming, ...previous };
-  if (a === b && Number(previous?.revision || 0) > Number(incoming?.revision || 0)) return { ...incoming, ...previous };
-  return { ...previous, ...incoming };
+  if (Number.isFinite(a) && (!Number.isFinite(b) || a > b)) return mergeRecordFields(incoming, previous);
+  if (a === b && Number(previous?.revision || 0) > Number(incoming?.revision || 0)) return mergeRecordFields(incoming, previous);
+  return mergeRecordFields(previous, incoming);
 }
 
 export function mergeInterpretationCollections(current, incoming, normalizeRecord) {
@@ -81,11 +91,14 @@ export function mergeInterpretationCollections(current, incoming, normalizeRecor
       }
       const bucket = own(result, reference) ? result[reference] : {};
       for (const [key, value] of Object.entries(entries)) {
-        const record = !key.startsWith("@preserved:") ? normalizeRecord(value, {
+        // Inspect the raw value first: a callback must never promote an
+        // unidentified legacy record by defaulting its translation to BSB.
+        const record = !key.startsWith("@preserved:") && explicitAnnotationTranslation(value) ? normalizeRecord(value, {
           reference_key: reference,
           ...( /^[1-9]\d*$/.test(key) ? { token_index: Number(key) } : {} ),
         }) : null;
-        if (!record || !explicitAnnotationTranslation(record) || !record.target_id) {
+        if (!record || !explicitAnnotationTranslation(record) || !record.target_id
+          || (!/^[1-9]\d*$/.test(key) && key !== record.target_id)) {
           retainOpaque(bucket, key.replace(/^@preserved:/, ""), value);
           continue;
         }
@@ -100,10 +113,11 @@ export function mergeInterpretationCollections(current, incoming, normalizeRecor
   return result;
 }
 
-export function interpretationRecordsAt(collection, reference, translationId = "") {
+export function interpretationRecordsAt(collection, reference, translationId) {
   const entries = collection?.[reference];
   if (!recordObject(entries)) return [];
   const translation = annotationTranslationId(translationId);
+  if (translationId !== undefined && !translation) return [];
   return Object.entries(entries).filter(([key, value]) => !key.startsWith("@preserved:")
     && recordObject(value) && key === value.target_id
     && value.reference_key === reference && explicitAnnotationTranslation(value)
@@ -113,7 +127,7 @@ export function interpretationRecordsAt(collection, reference, translationId = "
 
 export function speechRangeIdentity(range, reference = range?.reference_key) {
   const translation = explicitAnnotationTranslation(range);
-  if (!translation || !reference || (range.reference_key && range.reference_key !== reference)
+  if (!translation || !/^[a-z0-9_-]+:[1-9]\d*:[1-9]\d*$/.test(reference || "") || (range.reference_key && range.reference_key !== reference)
     || !Number.isSafeInteger(range.start) || !Number.isSafeInteger(range.end)
     || range.start < 0 || range.end <= range.start || typeof range.text !== "string" || !range.text.length) return "";
   return JSON.stringify([translation, reference, range.start, range.end, range.text]);
@@ -145,7 +159,7 @@ export function mergeSpeechCollections(current, incoming, normalizeRange) {
       const exact = new Map();
       const opaque = new Map();
       for (const value of [...(result[reference] || []), ...values]) {
-        const normalized = normalizeRange(value);
+        const normalized = speechRangeIdentity(value, reference) ? normalizeRange(value) : null;
         const id = normalized && speechRangeIdentity(normalized, reference);
         if (!id) opaque.set(signature(value), copy(value));
         else {
@@ -174,6 +188,7 @@ export function otherTranslationAnnotations(workspace, reference, currentTransla
   }
   const ranges = workspace?.red_letter_ranges?.[reference];
   for (const value of Array.isArray(ranges) ? ranges : []) {
+    if (!speechRangeIdentity(value, reference)) continue;
     const range = normalizeRange(value);
     const id = range && speechRangeIdentity(range, reference);
     const translation = range && explicitAnnotationTranslation(range);
@@ -184,4 +199,41 @@ export function otherTranslationAnnotations(workspace, reference, currentTransla
     });
   }
   return [...found.values()].sort((a, b) => a.translation_id.localeCompare(b.translation_id) || a.id.localeCompare(b.id));
+}
+
+// The bundled Translations view compares catalog passages in the app's
+// normalized reference coordinates. Do not extend that correspondence to an
+// uncatalogued witness or to metadata declaring a different versification.
+export function annotationPassageCorresponds(manifest, currentId, storedId) {
+  const catalog = manifest?.translations || [];
+  const current = catalog.find(item => item.id === annotationTranslationId(currentId));
+  const stored = catalog.find(item => item.id === annotationTranslationId(storedId));
+  if (!current || !stored) return false;
+  return (current.versification || "bundled-reference") === (stored.versification || "bundled-reference");
+}
+
+// Unidentified/unmapped records belong in recovery, not on an arbitrarily
+// chosen verse. The list is derived from the same stores and never migrates data.
+export function annotationRecordsNeedingReview(workspace, manifest, currentTranslation, normalizeRange) {
+  const result = [];
+  const add = (reference, kind, record, canonical) => {
+    const translation = explicitAnnotationTranslation(record);
+    const catalogued = manifest?.translations?.some(item => item.id === translation);
+    const reason = !translation ? "Translation not recorded or conflicting"
+      : !canonical ? "Saved target cannot be verified"
+        : !catalogued ? "Saved translation is unavailable"
+          : !annotationPassageCorresponds(manifest, currentTranslation, translation) ? "Passage correspondence is unavailable" : "";
+    if (reason) result.push({ reference_key: reference, kind, translation_id: translation, record: copy(record), reason });
+  };
+  for (const [reference, bucket] of Object.entries(workspace?.token_renderings || {})) {
+    if (!recordObject(bucket)) { add(reference, "Interpretation", bucket, false); continue; }
+    const canonical = new Set(interpretationRecordsAt(workspace.token_renderings, reference));
+    for (const record of Object.values(bucket)) add(reference, "Interpretation", record, canonical.has(record));
+  }
+  for (const [reference, values] of Object.entries(workspace?.red_letter_ranges || {})) {
+    if (!Array.isArray(values)) { add(reference, "Speech attribution", values, false); continue; }
+    for (const record of values) add(reference, "Speech attribution", record,
+      Boolean(speechRangeIdentity(record, reference) && normalizeRange(record)));
+  }
+  return result;
 }

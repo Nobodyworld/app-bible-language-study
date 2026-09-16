@@ -109,7 +109,21 @@ export const UI_ACTION_CONTRACTS = Object.freeze({
     label: "Interpretation",
     tip: "Review source wording or save an alternative interpretation for this word.",
   }),
+  "saved-annotations": defineUiAction({
+    id: "saved-annotations", featureId: "study-marks", label: "Saved annotations", destination: "dialog",
+    tip: "Preview your saved annotations in other translations; choose a source to open it.",
+  }),
+  "open-annotation-source": defineUiAction({
+    id: "open-annotation-source", featureId: "study-marks", label: "Open saved source", destination: "reader",
+    tip: "Open the original translation and saved passage.",
+  }),
 });
+
+export function annotationDiscoveryLabel(translations, count) {
+  return translations.length === 1 ? `Saved in ${translations[0]} · ${count}` : `Saved in ${translations.length} other translations`;
+}
+
+export function annotationSourceLabel(translation) { return `Open in ${translation}`; }
 
 export function uiActionContract(actionId) {
   const normalized = String(actionId || "").trim().toLowerCase();

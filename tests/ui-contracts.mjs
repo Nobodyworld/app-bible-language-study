@@ -106,7 +106,7 @@ for (const [actionId, contract] of Object.entries(UI_ACTION_CONTRACTS)) {
   assert.ok(contract.label?.trim(), `${actionId} requires a primary label`);
   assert.ok(contract.compactLabel?.trim(), `${actionId} requires an explicit compact label`);
   assert.ok(contract.tip?.trim(), `${actionId} requires a concise quick tip`);
-  assert.ok(contract.viewId?.trim(), `${actionId} requires a destination view`);
+  assert.ok(contract.viewId?.trim() || ["dialog", "reader"].includes(contract.destination), `${actionId} requires a declared destination`);
   assert.ok(featureById(contract.featureId, FEATURE_REGISTRY), `${actionId} references unknown feature ${contract.featureId}`);
   assert.equal(uiActionLabel(actionId), contract.label);
   assert.equal(uiActionLabel(actionId, { compact: true }), contract.compactLabel);

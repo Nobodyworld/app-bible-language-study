@@ -1,6 +1,51 @@
 /* Study context, bookmarks and word-interpretation surfaces.
    One base rule per selector; conditional states stay with this owner. */
 
+.annotation-recovery li {
+  margin-block: 8px;
+  overflow-wrap: anywhere;
+}
+
+.annotation-discovery {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  max-width: 100%;
+  margin-inline: 4px;
+  padding: 3px 7px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel-alt);
+  color: var(--accent-dark);
+  font: 500 11px/1.25 Inter, ui-sans-serif, system-ui, sans-serif;
+  vertical-align: middle;
+}
+
+.annotation-discovery[hidden] { display: none; }
+.annotation-discovery:focus-visible,
+.annotation-discovery-dialog button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+.annotation-discovery-dialog {
+  width: min(520px, calc(100vw - 24px));
+  max-height: calc(100dvh - 24px);
+  box-sizing: border-box;
+  overflow: auto;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  color: var(--text);
+  font: 400 14px/1.45 Inter, ui-sans-serif, system-ui, sans-serif;
+  overflow-wrap: anywhere;
+}
+
+.annotation-discovery-dialog::backdrop { background: rgb(0 0 0 / 35%); }
+.annotation-discovery-dialog ul { padding-inline-start: 20px; }
+.annotation-discovery-dialog li { margin-block: 14px; }
+.annotation-discovery-dialog h3,
+.annotation-discovery-dialog p { margin-block: 0 8px; }
+.annotation-discovery-dialog button { min-height: 36px; }
+
 .interpretation-marker {
   display: inline-flex;
   align-items: center;
@@ -56,7 +101,9 @@
 
 @media (pointer: coarse) {
   .interpretation-marker,
-  .word-meaning-trigger.interpretation-marker { min-height: 44px; }
+  .word-meaning-trigger.interpretation-marker,
+  .annotation-discovery,
+  .annotation-discovery-dialog button { min-height: 44px; }
 }
 
 .detail-floating-nav {

@@ -490,7 +490,7 @@ function workspacePersistenceExpression(referenceKey, expectedDraft, expectedRen
     const matches = (store) => {
       const renderings = store?.token_renderings?.[${JSON.stringify(referenceKey)}] || {};
       return store?.verse_drafts?.[${JSON.stringify(referenceKey)}]?.draft_text === ${JSON.stringify(expectedDraft)} &&
-        Object.values(renderings).some((item) => item?.rendering === ${JSON.stringify(expectedRendering)});
+        Object.entries(renderings).some(([id, item]) => id === item?.target_id && item?.translation_id === 'bsb' && item?.rendering === ${JSON.stringify(expectedRendering)});
     };
     if (!window.indexedDB) {
       resolve(matches(readLocalWorkspace()));

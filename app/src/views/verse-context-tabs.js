@@ -13,6 +13,7 @@ import { createSourceTokenTarget, createVerseTarget } from "../semantic-targets.
 import { strongSectionControlState } from "../strong-section-lifecycle.js?v=pr13-live-qa-20260711e";
 import { fetchLexiconEntry, fetchVerseBook, fetchWordMapBook } from "../data-service.js?v=pr13-live-qa-20260711e";
 import { panelActionFeature } from "../feature-ui.js";
+import { createAnnotationDiscovery } from "../user-annotation-presenter.js";
 
 function toolEnabled(ctx, toolId) {
   const featureId = panelActionFeature(toolId);
@@ -24,13 +25,14 @@ function getVerseText(ctx, verse) {
 }
 
 async function exactMappedBsbMeaning(ctx, token, verse) {
+  const { bookId, chapter } = ctx.state;
   const [wordMapBook, bsbBook] = await Promise.all([
-    fetchWordMapBook("bsb", ctx.state.bookId),
-    fetchVerseBook("bsb", ctx.state.bookId),
+    fetchWordMapBook("bsb", bookId),
+    fetchVerseBook("bsb", bookId),
   ]);
-  const text = bsbBook?.chapters?.[ctx.state.chapter]?.[verse] || "";
+  const text = bsbBook?.chapters?.[chapter]?.[verse] || "";
   const tokenIndex = Number(token?.token_index);
-  const row = (wordMapBook?.chapters?.[ctx.state.chapter]?.[verse] || [])
+  const row = (wordMapBook?.chapters?.[chapter]?.[verse] || [])
     .find((item) => Number(item?.[1]) === tokenIndex);
   if (!row) return "";
   return String(text.slice(Number(row[2] || 0), Number(row[3] || row[2] || 0))).replace(/\s+/g, " ").trim();
@@ -382,7 +384,7 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
               token: wordContext.token,
               presentation: "detail-pane",
               label: `selected source word in ${reference}`,
-              loadExactMappedEnglish: () => exactMappedBsbMeaning(ctx, wordContext.token, verse),
+              loadExactMappedEnglish: () => exactMappedBsbMeaning({ state: { bookId: sourceTarget.reference.book_id, chapter: sourceTarget.reference.chapter } }, wordContext.token, verse),
               loadLexicon: wordContext.token.strong_code
                 ? () => fetchLexiconEntry(wordContext.token.strong_code)
                 : null,
@@ -428,6 +430,7 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
           marks.classList.add("ui-action-control");
           controls.append(marks);
         }
+        controls.append(createAnnotationDiscovery(ctx, `${ctx.state.bookId}:${ctx.state.chapter}:${verse}`));
         relatedTools.forEach(appendTool);
       } else {
         relatedTools.forEach(appendTool);

@@ -90,7 +90,7 @@ a neighboring annotation.
 
 Rendering must segment on all relevant boundaries, but persistence should stay simple:
 
-- identical translation/reference/start/end => one user record, newest classification wins;
+- identical translation/reference/start/end/text snapshot => one user record, newest classification wins;
 - different translations never collide or participate in one another's overlap resolution;
 - contained/overlapping different ranges within one translation may coexist;
 - the renderer chooses the most specific anchored range; equal specificity uses the most recent update;
@@ -160,8 +160,8 @@ Persistent annotation controls participate in `app/src/ui-contracts.js`:
 
 Owner clarification on 2026-09-15, before the preceding Codex handoff was sent:
 use the existing translation ID to isolate these records, while allowing the
-reader to discover saved work from another translation. This section refines
-that handoff; it does not assert that the two runtime repairs are complete.
+reader to discover saved work from another translation. The implementation below
+integrates that identity into the existing workspace stores.
 
 ### Reuse existing identity; do not add a new ID system
 
@@ -237,24 +237,37 @@ all existing action consistency, CSS, keyboard/touch and zoom acceptance.
 
 ## Validation and current checkpoint
 
-At `9d71e25245796fdb357e25c312eec85d375ed1ac`, Codex reported focused static,
-browser, backup and native storage/adapter PASS results. Connector review found
-that translation/anchor isolation and cross-target save/delete/merge were not
-covered. **These remain integration blockers, not completed owner-review gates.**
-The previous text saying unscoped translation behavior could simply be retained
-is superseded by the identity requirements above.
+The connector review of `9d71e25245796fdb357e25c312eec85d375ed1ac` exposed
+translation/anchor and cross-target collision gaps. The integration now uses
+`annotation-records.js` for normalization, exact collection merge, lookup and
+derived discovery. Interpretation buckets use canonical target IDs. Unidentified
+or conflicting entries stay under `@preserved:` keys without translation guesses;
+opaque collection shapes are retained or reject conflicting merges atomically.
+Repeated imports deduplicate preserved JSON values. Unknown nested fields survive
+updates and merges. New v3 exports retain this representation; lossless reading
+by older builds that only understand numeric token keys is not promised.
 
-`tests/user-annotation-validation.mjs`, imported by the existing annotation suite,
-adds negative cases for unknown classifications, inherited property names,
-malformed offsets and null input. Full storage tests must also prove those opaque
-records survive merge/replace and that independent translations remain intact.
+Discovery reuses the bundled Translations view's catalog reference coordinates.
+Uncatalogued translations or explicitly different versification schemes do not
+attach to the open passage. Help and recovery in My Data lists preserved records
+whose identity or correspondence cannot be established. The discovery dialog
+checks the original passage and exact source token, retaining stored previews
+with explicit unavailable/stale status. It never infers word alignment.
 
-Before Ready, complete identity/anchor repair and focused browser/native tests,
-then one applicable aggregate checkpoint. Native unit/adapter restart is not an
-installed WebView restart. Use an isolated actual candidate for native acceptance
-or the existing final hosted desktop lifecycle; do not touch an owner's live
-profile or repeat full installer runs during draft iteration. Record actual
-browser-menu zoom separately from viewport emulation.
+The maintained identity regressions cover independent BSB/KJV targets and offsets,
+foreign operations, raw missing/conflicting metadata, anchor drift, nested unknown
+fields, idempotent opaque imports, rejected-import atomicity, reload and recovery.
+The browser journey covers pending saves across translation switches, derived
+counts after import/deletion, deliberate navigation, stale/unavailable originals,
+marker deduplication and mouse/keyboard/touch previews in four layout profiles.
+Native storage tests reopen isolated on-disk records containing both translations,
+all four speech states and unidentified historical data, with Stable/Lab isolation.
+
+The PR records exact-candidate focused, aggregate and security results. Native
+unit/adapter restart is not an installed WebView restart. Before Ready, complete
+the separate installed WebView and actual browser-menu zoom acceptance using an
+isolated candidate or the existing final hosted desktop lifecycle. Do not touch
+an owner's live profile or repeat installer runs during draft iteration.
 
 Keep repeated-action naming, CSS hygiene, profile isolation, backups, marker
 create/update/delete, light/dark, keyboard/touch, and Reader lock/history coverage.

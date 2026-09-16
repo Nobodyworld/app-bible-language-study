@@ -18,7 +18,7 @@ import { mapStrongChapterRanges, resolveSourceBearingPresentationSegment } from 
 import { createStudyEmptyState, studyUnavailableLabel } from "./study-empty-state.js";
 import { interlinearTokenIdentity, uiActionContract } from "./ui-contracts.js";
 import { SPEECH_ATTRIBUTION_LEVELS, speechAttributionForSegment } from "./user-annotation-contracts.js";
-import { createInterpretationMarker, decorateSpeechAttributionElement } from "./user-annotation-presenter.js";
+import { createAnnotationDiscovery, createInterpretationMarker, decorateSpeechAttributionElement, refreshAnnotationDiscovery } from "./user-annotation-presenter.js";
 import { resolveReferencePreviewPlacement } from "./reference-preview-placement.js";
 
 export function createChapterRenderer(ctx) {
@@ -427,6 +427,7 @@ export function createChapterRenderer(ctx) {
   }
 
   function showSelectionMenuForVerse(reference, verse, verseText, body, key) {
+    const translationId = ctx.state.translationId;
     const range = selectedTextRange(verseText, body);
     if (!range) {
       if (selectionMenu) selectionMenu.hidden = true;
@@ -473,12 +474,14 @@ export function createChapterRenderer(ctx) {
     choices.dataset.uiAction = "speech-attribution";
     choices.setAttribute("aria-label", "Speech attribution — private annotation");
     choices.title = "Your private annotation, not an attribution asserted by the app. Clear removes only this exact selected range.";
-    const ranges = getSpeechAttributionRanges(ctx.state, key);
+    const ranges = getSpeechAttributionRanges(ctx.state, key, translationId, verseText);
     const exactSelection = selectedTextRange(verseText, body, false);
     // Retain the normal whole-word selection behavior while allowing an exact
     // imported range inside a word to be changed or cleared without expanding it.
-    const speechRange = ranges.some((item) => item.start === exactSelection?.start && item.end === exactSelection?.end)
-      ? exactSelection : range;
+    const speechRange = {
+      ...(ranges.some((item) => item.start === exactSelection?.start && item.end === exactSelection?.end) ? exactSelection : range),
+      translation_id: translationId, reference_key: key,
+    };
     const current = ranges.find((item) => item.start === speechRange.start && item.end === speechRange.end);
     choices.setAttribute("aria-description", `Selected wording: ${speechRange.text}`);
     const placeholder = document.createElement("option");
@@ -915,7 +918,7 @@ export function createChapterRenderer(ctx) {
       });
 
     const tokenRanges = ctx.canUseCapability?.("strongs-overlay") ? chapterData.strongRangesByVerse?.[verse] || [] : [];
-    const attributionRanges = getSpeechAttributionRanges(ctx.state, key);
+    const attributionRanges = getSpeechAttributionRanges(ctx.state, key, ctx.state.translationId, verseText);
     const taggedTextTargets = getTaggedTargetsForReference(ctx.state, key, {
       targetTypes: ["text_span"],
       translationId: ctx.state.translationId,
@@ -1003,12 +1006,14 @@ export function createChapterRenderer(ctx) {
     body.addEventListener("mouseup", () => showSelectionMenuForVerse(reference, verse, verseText, body, key));
     body.addEventListener("touchend", () => window.setTimeout(() => showSelectionMenuForVerse(reference, verse, verseText, body, key), 0));
     body.addEventListener("keyup", () => showSelectionMenuForVerse(reference, verse, verseText, body, key));
+    body.append(createAnnotationDiscovery(ctx, key));
 
     row.append(numberWrap, body, verseActions);
     return row;
   }
 
   function renderChapter() {
+    if (selectionMenu) selectionMenu.hidden = true;
     ensureStores(ctx.state);
     const book = ctx.state.verseBook?.book;
     const chapterVerses = ctx.state.verseBook?.chapters?.[ctx.state.chapter] || {};
@@ -1087,6 +1092,7 @@ export function createChapterRenderer(ctx) {
   }
 
   function refreshInterpretationMarkers() {
+    refreshAnnotationDiscovery();
     // Marker siblings never enter the character-offset spans used for selection.
     const seen = new Set();
     els.content.querySelectorAll(".interpretation-marker").forEach((marker) => marker.remove());

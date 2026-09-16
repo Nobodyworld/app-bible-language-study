@@ -11,6 +11,7 @@ import { setCapabilityDisabled } from "../package-state.js";
 import { compactUserDataBackup } from "../portable-backup.js";
 import { renderPhysicalPackManager } from "./physical-pack-view.js";
 import { renderPackRecovery } from "./pack-recovery-view.js";
+import { createAnnotationRecovery } from "../user-annotation-presenter.js";
 
 function renderSummaryGrid(rows) {
   const grid = document.createElement("div");
@@ -371,6 +372,8 @@ export function createUserDataView(ctx, options = {}) {
     const diagnosticsSlot = document.createElement("div");
     const refreshDiagnostics = () => {
       const sections = [renderTechnicalSummary(getUserDataSummary(ctx.state), profile?.isLab)];
+      const annotations = createAnnotationRecovery(ctx);
+      if (annotations) sections.push(annotations);
       if (profile?.isLab) {
         if (ctx.isFeatureEnabled?.("physical-pack-management") !== false) sections.push(renderPhysicalPackManager(ctx));
         if (ctx.isFeatureEnabled?.("capability-controls") !== false) sections.push(renderCapabilityManager(ctx, refreshDiagnostics));
