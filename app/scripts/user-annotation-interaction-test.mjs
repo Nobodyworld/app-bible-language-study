@@ -27,6 +27,7 @@ const fixture = { version: 3, token_renderings: {}, red_letter_ranges: { [key]: 
 const { server, url } = await startStaticAppServer({ port: 0 });
 const browser = await chromium.launch({ executablePath, headless: true });
 const results = [];
+const discoveryDrawerOnly = process.argv.includes('--discovery-drawer-only');
 async function ready(page) {
   await page.waitForFunction(() => document.querySelector('.verse-row[data-verse="1"] .strong-token') && document.querySelector('#statusText')?.textContent.includes('data loaded'));
 }
@@ -308,8 +309,64 @@ async function crossTranslationJourney(page, profile) {
   await dialog.getByRole('button', { name: 'Close', exact: true }).click();
   await page.unroute('**/data/verses/kjv/john.json');
 }
+async function discoveryDrawerKeyboard() {
+  for (const theme of ['light', 'dark']) {
+    const context = await browser.newContext({ viewport: { width:764, height:343 }, colorScheme:theme });
+    const page = await context.newPage();
+    await page.addInitScript(value => localStorage.setItem('bibleapp:translation-workspace:v1', JSON.stringify(value)), fixture);
+    await page.goto(`${url}/#/read/kjv/john/1`);
+    await ready(page);
+    if (await page.locator('html').getAttribute('data-theme') !== theme) await page.locator('#themeToggle').click();
+    await page.locator('.verse-row[data-verse="1"] .strong-token[data-token-index="2"]').first().click();
+    await page.locator('#detailContext [data-ui-action="language-study"]').click();
+    await page.waitForFunction(() => document.querySelector('#detailTitle')?.textContent === 'Language Study');
+    const before = await snapshot(page);
+    assert.equal(before.mode, 'locked');
+    const trigger = page.locator('#detailContext .annotation-discovery');
+    const dialog = page.getByRole('dialog', { name:'Saved annotations from other translations' });
+    await trigger.focus();
+    await page.keyboard.press('Enter');
+    await page.waitForFunction(() => [...document.querySelectorAll('.annotation-discovery-dialog button')].every(button => !button.disabled));
+    const controls = dialog.locator('button');
+    const count = await controls.count();
+    assert(count > 1, 'fixture must offer saved source actions');
+    assert(await controls.last().evaluate(node => document.activeElement === node), 'list starts with Close focused');
+    for (let index = count - 2; index >= 0; index--) {
+      await page.keyboard.press('Shift+Tab');
+      assert(await controls.nth(index).evaluate(node => document.activeElement === node),
+        `${theme}: Study drawer must not intercept reverse Tab in the saved list`);
+    }
+    for (let index = 1; index < count; index++) {
+      await page.keyboard.press('Tab');
+      assert(await controls.nth(index).evaluate(node => {
+        const rect = node.getBoundingClientRect();
+        const host = node.closest('dialog').getBoundingClientRect();
+        return document.activeElement === node && rect.top >= host.top && rect.bottom <= host.bottom;
+      }), `${theme}: each saved-list action must remain keyboard reachable within the dialog`);
+    }
+    await page.keyboard.press('Enter');
+    await dialog.waitFor({ state:'detached' });
+    assert.deepEqual(await snapshot(page), before, 'closing discovery preserves Reader and locked Study state');
+    await trigger.press('Enter');
+    await dialog.waitFor();
+    await page.keyboard.press('Escape');
+    await dialog.waitFor({ state:'detached' });
+    assert.deepEqual(await snapshot(page), before, 'Escape closes discovery without closing or resetting Study');
+    assert.equal(await page.locator('#hideStudyWorkspace').getAttribute('aria-expanded'), 'true');
+    // The drawer still owns its own focus cycle after the modal is gone.
+    await page.locator('#detailBack').focus();
+    await page.keyboard.press('Shift+Tab');
+    assert(await page.locator('#detailPane').evaluate(node => node.contains(document.activeElement)), 'reverse Tab remains inside Study');
+    await page.keyboard.press('Tab');
+    assert(await page.locator('#detailBack').evaluate(node => document.activeElement === node), 'Study focus wraps after closing the modal');
+    results.push(`${theme}: short drawer saved-list forward/reverse Tab, Close, Escape and preserved Study PASS`);
+    await context.close();
+  }
+}
+
 try {
-  for (const profile of [
+  await discoveryDrawerKeyboard();
+  if (!discoveryDrawerOnly) for (const profile of [
     { name: 'compact-light', width: 1365, height: 900, mode: 'compact', theme: 'light' },
     { name: 'standard-dark', width: 1365, height: 900, mode: 'standard', theme: 'dark' },
     { name: 'expanded-light', width: 1365, height: 900, mode: 'expanded', theme: 'light' },
