@@ -355,8 +355,8 @@ export function createUserDataView(ctx, options = {}) {
     const confirmation = createReplaceConfirmation(() => runImport("replace"));
     replace.addEventListener("click", () => confirmation.open(replace));
     importActions.append(merge, replace);
-    advancedBackup.append(advancedBackupTitle, fileLabel, importActions, exportDetails, pasteDetails, confirmation.panel);
-    backupSection.append(backupTitle, backupIntro, download, advancedBackup, status);
+    advancedBackup.append(advancedBackupTitle, fileLabel, importActions, exportDetails, pasteDetails);
+    backupSection.append(backupTitle, backupIntro, download, advancedBackup, confirmation.panel, status);
     wrap.append(backupSection);
 
     const diagnostics = document.createElement("details");
