@@ -172,7 +172,7 @@ export function createReferenceViews(ctx) {
           reference,
           options.verse,
           DETAIL_VIEW_IDS.references,
-          ctx.getActiveWordContext?.(verse),
+          ctx.getActiveWordContext?.(options.verse),
         ),
       );
     }
