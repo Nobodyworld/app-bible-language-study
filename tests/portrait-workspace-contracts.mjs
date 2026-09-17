@@ -81,11 +81,13 @@ assert(
   "Right-side Hide must point outward/right and Show must point inward/left.",
 );
 assert(
-  /\.detail-header\s*{[\s\S]*?--study-header-layout-band:\s*narrow;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto;/.test(css) &&
+  /\.detail-header\s*{[\s\S]*?--study-header-layout-band:\s*narrow;[\s\S]*?grid-template-columns:\s*auto minmax\(0, 1fr\);/.test(css) &&
     /\.detail-header-main\s*{\s*display:\s*contents;/.test(css) &&
-    /\.detail-header-actions\s*{[\s\S]*?grid-row:\s*2;/.test(css) &&
-    /@container\s+study-workspace\s*\(min-width:\s*560px\)[\s\S]*?--study-header-layout-band:\s*wide;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;[\s\S]*?\.detail-header-actions\s*{[\s\S]*?grid-row:\s*1;/.test(css),
-  "Study history and actions must share the header, with a second row below the complete toolbar's 560px threshold.",
+    /\.detail-title-block\s*{[\s\S]*?grid-column:\s*1 \/ -1;[\s\S]*?grid-row:\s*1;/.test(css) &&
+    /\.study-workspace-width-controls\s*{[\s\S]*?grid-column:\s*1;[\s\S]*?grid-row:\s*2;/.test(css) &&
+    /\.detail-header-actions\s*{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*2;/.test(css) &&
+    /@container\s+study-workspace\s*\(min-width:\s*560px\)[\s\S]*?--study-header-layout-band:\s*wide;[\s\S]*?grid-template-columns:\s*minmax\(0, 1fr\) auto auto;[\s\S]*?\.study-workspace-width-controls\s*{[\s\S]*?grid-column:\s*2;[\s\S]*?grid-row:\s*1;[\s\S]*?\.detail-header-actions\s*{[\s\S]*?grid-column:\s*3;[\s\S]*?grid-row:\s*1;/.test(css),
+  "Narrow Study headers must keep the title on row one and place Width beside Back/Forward/Clear/Hide on row two; wide headers must keep all controls on one row.",
 );
 assert(
   /\.detail-header-icon-button\s*{[\s\S]*?min-width:\s*32px;[\s\S]*?height:\s*32px;[\s\S]*?font-size:\s*11px;/.test(css),
