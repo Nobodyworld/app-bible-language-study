@@ -219,7 +219,6 @@ try {
     return (await new BrowserPhysicalPackRegistry().open()).getMeta("physical_data_mode");
   }), "managed_cache_packs", "Opening recovery cannot silently change mode");
   await page.getByRole("button", { name: "Use included data", exact: true }).click();
-  await page.getByRole("button", { name: "Use included data", exact: true }).waitFor();
   await page.getByRole("status").filter({ hasText: "Your notes and separately saved files were kept" }).waitFor();
   await screenshot(page, "stable-managed-recovery");
   const after = await exportBackup(page);
