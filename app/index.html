@@ -29,12 +29,6 @@
         </div>
       </button>
       <nav class="reader-controls" aria-label="Reader controls">
-        <label class="reader-control reader-control-translation">
-          <span class="reader-control-label-line">
-            <span>Translation</span>
-          </span>
-          <select id="translationSelect"></select>
-        </label>
         <div class="reader-control">
           <span id="bookPickerLabel" class="reader-control-label">Book</span>
           <select id="bookSelect" class="reader-native-select" hidden aria-hidden="true" tabindex="-1"></select>
@@ -51,6 +45,12 @@
           </button>
           <div id="chapterPickerPanel" class="reader-picker-panel chapter-picker-panel" hidden></div>
         </div>
+        <label class="reader-control reader-control-translation">
+          <span class="reader-control-label-line">
+            <span>Translation</span>
+          </span>
+          <select id="translationSelect"></select>
+        </label>
       </nav>
       <span id="compactStatusText" class="reader-control-status" aria-hidden="true" hidden></span>
       <p id="statusText" class="header-status" role="status" aria-live="polite">Loading data...</p>
