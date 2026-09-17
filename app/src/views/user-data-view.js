@@ -228,7 +228,7 @@ export function createUserDataView(ctx, options = {}) {
     const backupTitle = document.createElement("h4");
     backupTitle.textContent = "Backup and restore";
     const backupIntro = document.createElement("p");
-    backupIntro.textContent = "Save a backup of your study data, or choose a saved backup to restore. Merge keeps current items; Replace overwrites local data after confirmation.";
+    backupIntro.textContent = "Save a backup of your study data. Restore and manual JSON tools are available under Advanced backup options.";
     const status = document.createElement("p");
     status.className = "import-status";
     status.setAttribute("role", "status");
@@ -299,7 +299,6 @@ export function createUserDataView(ctx, options = {}) {
     advancedBackup.className = "advanced-backup-options";
     const advancedBackupTitle = document.createElement("summary");
     advancedBackupTitle.textContent = "Advanced backup options";
-    advancedBackup.append(advancedBackupTitle, exportDetails, pasteDetails);
 
     const runImport = (mode) => {
       let applied = false;
@@ -356,7 +355,8 @@ export function createUserDataView(ctx, options = {}) {
     const confirmation = createReplaceConfirmation(() => runImport("replace"));
     replace.addEventListener("click", () => confirmation.open(replace));
     importActions.append(merge, replace);
-    backupSection.append(backupTitle, backupIntro, download, fileLabel, importActions, advancedBackup, confirmation.panel, status);
+    advancedBackup.append(advancedBackupTitle, fileLabel, importActions, exportDetails, pasteDetails, confirmation.panel);
+    backupSection.append(backupTitle, backupIntro, download, advancedBackup, status);
     wrap.append(backupSection);
 
     const diagnostics = document.createElement("details");
