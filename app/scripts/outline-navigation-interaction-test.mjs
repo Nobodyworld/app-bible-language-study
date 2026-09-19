@@ -108,8 +108,8 @@ async function runSideBySide() {
   await page.waitForFunction(() => location.hash === "#/read/bsb/proverbs/1/8");
   await assertReaderDestinationVisible(page, 8, "Desktop same-chapter");
   let state = await detailState(page);
-  assert.equal(state.title, "Outline");
-  assert.equal(state.displayedView, "outline");
+  assert.equal(state.title, "Outline", "Desktop same-chapter navigation cleared Outline.");
+  assert.equal(state.displayedView, "outline", "Desktop same-chapter navigation lost Outline view identity.");
   assert.equal(state.panelMode, before.panelMode);
   assert.equal(state.mobileVisible, false);
   assert.equal(state.workspaceHidden, false);
@@ -120,8 +120,8 @@ async function runSideBySide() {
   await page.waitForFunction(() => location.hash === "#/read/bsb/proverbs/2/1");
   await assertReaderDestinationVisible(page, 1, "Desktop different-chapter");
   state = await detailState(page);
-  assert.equal(state.title, "Outline");
-  assert.equal(state.displayedView, "outline");
+  assert.equal(state.title, "Outline", "Desktop different-chapter navigation cleared Outline.");
+  assert.equal(state.displayedView, "outline", "Desktop different-chapter navigation lost Outline view identity.");
   assert.equal(state.panelMode, before.panelMode);
   assert.equal(state.workspaceHidden, false);
   assert(Math.abs(state.scrollTop - seeded.scrollTop) <= 1, "Desktop chapter navigation reset Outline scroll.");
@@ -171,8 +171,8 @@ async function runDrawer() {
   );
   await assertReaderDestinationVisible(page, 8, "Drawer same-chapter");
   let state = await detailState(page);
-  assert.equal(state.title, "Outline");
-  assert.equal(state.displayedView, "outline");
+  assert.equal(state.title, "Outline", "Drawer same-chapter navigation lost preserved Outline.");
+  assert.equal(state.displayedView, "outline", "Drawer same-chapter navigation lost Outline view identity.");
   assert.equal(state.mobileVisible, false);
   const focusAfterClose = await page.evaluate(() => ({
     id: document.activeElement?.id || "",
@@ -200,8 +200,8 @@ async function runDrawer() {
   );
   await assertReaderDestinationVisible(page, 1, "Drawer different-chapter");
   state = await detailState(page);
-  assert.equal(state.title, "Outline");
-  assert.equal(state.displayedView, "outline");
+  assert.equal(state.title, "Outline", "Drawer different-chapter navigation lost preserved Outline.");
+  assert.equal(state.displayedView, "outline", "Drawer different-chapter navigation lost Outline view identity.");
 
   await page.locator("#openStudyPanel").click();
   await page.waitForFunction(() => document.querySelector(".detail-pane")?.classList.contains("visible"));
