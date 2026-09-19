@@ -35,11 +35,18 @@ async function openOutline(page) {
   );
 }
 
-async function seedOutlineScroll(page) {
-  return page.locator("#detailContent").evaluate((node) => {
-    const maxScrollTop = Math.max(0, node.scrollHeight - node.clientHeight);
-    node.scrollTop = Math.min(maxScrollTop, Math.max(80, Math.floor(maxScrollTop * 0.3)));
-    return { maxScrollTop, scrollTop: node.scrollTop };
+async function seedOutlineScroll(page, label) {
+  const reference = page.locator("#detailContent").getByRole("button", { name: label, exact: true });
+  await reference.scrollIntoViewIfNeeded();
+  return reference.evaluate((node) => {
+    const scroller = node.closest("#detailContent");
+    const maxScrollTop = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+    const targetTop = scroller.scrollTop + node.getBoundingClientRect().top -
+      scroller.getBoundingClientRect().top - scroller.clientTop;
+    // Keep the actual reference in view, rather than seeding an unrelated
+    // position that Playwright must undo before it can perform a real click.
+    scroller.scrollTop = Math.min(maxScrollTop, Math.max(0, Math.floor(targetTop - 24)));
+    return { maxScrollTop, scrollTop: scroller.scrollTop };
   });
 }
 
@@ -76,7 +83,36 @@ async function assertReaderDestinationVisible(page, verse, label) {
 }
 
 async function clickOutlineReference(page, label) {
-  await page.getByRole("button", { name: label, exact: true }).click();
+  const reference = page.locator("#detailContent").getByRole("button", { name: label, exact: true });
+  await reference.evaluate((node) => {
+    window.__outlineNavigationActivation = null;
+    // Observe only: capture runs after click preparation/focus, but before
+    // the reference's normal bubbling navigation handler. Do not restore
+    // scroll or synthesize a click to make a preservation assertion pass.
+    node.addEventListener("click", (event) => {
+      window.__outlineNavigationActivation = {
+        scrollTop: node.closest("#detailContent").scrollTop,
+        route: location.hash,
+        trusted: event.isTrusted,
+      };
+    }, { capture: true, once: true });
+  });
+  await reference.click();
+  const activation = await page.evaluate(() => {
+    const result = window.__outlineNavigationActivation;
+    delete window.__outlineNavigationActivation;
+    return result;
+  });
+  console.log(JSON.stringify({ outlineActivation: { label, ...activation } }));
+  assert(activation?.trusted, `${label}: expected a real Outline reference click.`);
+  assert(activation.scrollTop > 0, `${label}: Outline activation fixture must have nonzero scroll.`);
+  return activation;
+}
+
+function assertOutlineScroll(activation, state, message) {
+  const evidence = { before: activation.scrollTop, after: state.scrollTop };
+  console.log(JSON.stringify({ outlineScroll: { message, ...evidence } }));
+  assert(Math.abs(evidence.after - evidence.before) <= 1, `${message} ${JSON.stringify(evidence)}`);
 }
 
 async function navigateBookSelect(page, bookId) {
@@ -99,13 +135,14 @@ async function runSideBySide() {
   await ready(page, "Proverbs 1");
   await openOutline(page);
 
-  const seeded = await seedOutlineScroll(page);
+  const seeded = await seedOutlineScroll(page, "1:8–9:18");
   assert(seeded.maxScrollTop > 0 && seeded.scrollTop > 0, "Desktop Outline fixture must be scrollable.");
   const before = await detailState(page);
   assert.equal(before.panelMode, "locked", "Opening Outline should establish a committed Study view.");
 
-  await clickOutlineReference(page, "1:8–9:18");
+  const sameChapterActivation = await clickOutlineReference(page, "1:8–9:18");
   await page.waitForFunction(() => location.hash === "#/read/bsb/proverbs/1/8");
+  await ready(page, "Proverbs 1");
   await assertReaderDestinationVisible(page, 8, "Desktop same-chapter");
   let state = await detailState(page);
   assert.equal(state.title, "Outline", "Desktop same-chapter navigation cleared Outline.");
@@ -113,9 +150,10 @@ async function runSideBySide() {
   assert.equal(state.panelMode, before.panelMode);
   assert.equal(state.mobileVisible, false);
   assert.equal(state.workspaceHidden, false);
-  assert(Math.abs(state.scrollTop - seeded.scrollTop) <= 1, "Desktop same-chapter navigation reset Outline scroll.");
+  assertOutlineScroll(sameChapterActivation, state, "Desktop same-chapter navigation reset Outline scroll.");
 
-  await clickOutlineReference(page, "2:1–4:27");
+  await seedOutlineScroll(page, "2:1–4:27");
+  const differentChapterActivation = await clickOutlineReference(page, "2:1–4:27");
   await ready(page, "Proverbs 2");
   await page.waitForFunction(() => location.hash === "#/read/bsb/proverbs/2/1");
   await assertReaderDestinationVisible(page, 1, "Desktop different-chapter");
@@ -124,7 +162,7 @@ async function runSideBySide() {
   assert.equal(state.displayedView, "outline", "Desktop different-chapter navigation lost Outline view identity.");
   assert.equal(state.panelMode, before.panelMode);
   assert.equal(state.workspaceHidden, false);
-  assert(Math.abs(state.scrollTop - seeded.scrollTop) <= 1, "Desktop chapter navigation reset Outline scroll.");
+  assertOutlineScroll(differentChapterActivation, state, "Desktop chapter navigation reset Outline scroll.");
 
   await navigateBookSelect(page, "genesis");
   await ready(page, "Genesis 1");
@@ -138,7 +176,8 @@ async function runSideBySide() {
     sameChapter: "#/read/bsb/proverbs/1/8",
     differentChapter: "#/read/bsb/proverbs/2/1",
     crossBookReset: true,
-    outlineScrollTop: seeded.scrollTop,
+    outlineScrollTop: sameChapterActivation.scrollTop,
+    differentChapterScrollTop: differentChapterActivation.scrollTop,
   };
 }
 
@@ -160,15 +199,16 @@ async function runDrawer() {
   await openOutline(page);
   await page.waitForFunction(() => document.querySelector(".detail-pane")?.classList.contains("visible"));
 
-  const seeded = await seedOutlineScroll(page);
+  const seeded = await seedOutlineScroll(page, "1:8–9:18");
   assert(seeded.maxScrollTop > 0 && seeded.scrollTop > 0, "Drawer Outline fixture must be scrollable.");
 
-  await clickOutlineReference(page, "1:8–9:18");
+  const sameChapterActivation = await clickOutlineReference(page, "1:8–9:18");
   await page.waitForFunction(
     () =>
       location.hash === "#/read/bsb/proverbs/1/8" &&
       !document.querySelector(".detail-pane")?.classList.contains("visible"),
   );
+  await ready(page, "Proverbs 1");
   await assertReaderDestinationVisible(page, 8, "Drawer same-chapter");
   let state = await detailState(page);
   assert.equal(state.title, "Outline", "Drawer same-chapter navigation lost preserved Outline.");
@@ -189,9 +229,10 @@ async function runDrawer() {
   state = await detailState(page);
   assert.equal(state.title, "Outline");
   assert.equal(state.displayedView, "outline");
-  assert(Math.abs(state.scrollTop - seeded.scrollTop) <= 1, "Reopening Study did not restore the preserved Outline scroll.");
+  assertOutlineScroll(sameChapterActivation, state, "Reopening Study did not restore the preserved Outline scroll.");
 
-  await clickOutlineReference(page, "2:1–4:27");
+  await seedOutlineScroll(page, "2:1–4:27");
+  const differentChapterActivation = await clickOutlineReference(page, "2:1–4:27");
   await ready(page, "Proverbs 2");
   await page.waitForFunction(
     () =>
@@ -208,6 +249,7 @@ async function runDrawer() {
   state = await detailState(page);
   assert.equal(state.title, "Outline");
   assert.equal(state.displayedView, "outline");
+  assertOutlineScroll(differentChapterActivation, state, "Reopening Study after chapter navigation reset Outline scroll.");
 
   await navigateBookSelect(page, "genesis");
   await ready(page, "Genesis 1");
@@ -223,7 +265,8 @@ async function runDrawer() {
     differentChapterClosed: true,
     reopenedOutline: true,
     crossBookReset: true,
-    outlineScrollTop: seeded.scrollTop,
+    outlineScrollTop: sameChapterActivation.scrollTop,
+    differentChapterScrollTop: differentChapterActivation.scrollTop,
   };
 }
 
