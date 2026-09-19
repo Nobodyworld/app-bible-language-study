@@ -242,15 +242,15 @@ export function createChapterRenderer(ctx) {
   function positionReferenceHoverTooltip(target) {
     const layer = ensureReferenceHoverTooltipLayer();
     if (!target || layer.hidden) return;
+    const previousScrollTop = layer.scrollTop;
     const targetRect = target.getBoundingClientRect();
     const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
     const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
     const margin = 10;
     const offset = 8;
-    layer.style.removeProperty("max-height");
     delete layer.dataset.placement;
-    const naturalLayerRect = layer.getBoundingClientRect();
-    const desiredHeight = Math.max(layer.scrollHeight, naturalLayerRect.height);
+    const currentLayerRect = layer.getBoundingClientRect();
+    const desiredHeight = Math.max(layer.scrollHeight, currentLayerRect.height);
     const placement = resolveReferencePreviewPlacement({
       targetTop: targetRect.top,
       targetBottom: targetRect.bottom,
@@ -270,6 +270,8 @@ export function createChapterRenderer(ctx) {
     const left = clamp(centerX - layerRect.width / 2, margin, viewportWidth - layerRect.width - margin);
     layer.style.left = `${left}px`;
     layer.style.top = `${top}px`;
+    const maxScrollTop = Math.max(0, layer.scrollHeight - layer.clientHeight);
+    layer.scrollTop = Math.min(previousScrollTop, maxScrollTop);
   }
 
   function hideReferenceHoverTooltip(target = null) {
@@ -393,8 +395,9 @@ export function createChapterRenderer(ctx) {
     positionReferenceHoverTooltip(target);
   }
 
-  window.addEventListener("scroll", () => {
+  window.addEventListener("scroll", (event) => {
     if (!activeReferenceHoverTarget) return;
+    if (event.target === referenceHoverTooltipLayer) return;
     if (!activeReferenceHoverTarget.isConnected) {
       hideReferenceHoverTooltip();
       return;

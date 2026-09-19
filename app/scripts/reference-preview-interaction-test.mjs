@@ -186,7 +186,7 @@ function watchPageErrors(page) {
 }
 
 async function runDesktopIteration(browser, baseUrl, iteration) {
-  const context = await browser.newContext({ viewport: { height: 720, width: 1280 } });
+  const context = await browser.newContext({ viewport: { height: 640, width: 1280 } });
   const page = await context.newPage();
   const errors = watchPageErrors(page);
   const result = { iteration };
@@ -213,10 +213,37 @@ async function runDesktopIteration(browser, baseUrl, iteration) {
     await page.mouse.move(tooltipPoint.x, tooltipPoint.y, { steps: 4 });
     await page.waitForTimeout(220);
     assert.equal(await page.locator(TOOLTIP_SELECTOR).count(), 1, "Preview dismissed while moving from trigger to tooltip.");
-    await page.mouse.wheel(0, 240);
-    await page.waitForTimeout(100);
+    const wheelScrollTops = [];
+    let previousWheelTop = 0;
+    for (let step = 0; step < 3; step += 1) {
+      await page.mouse.wheel(0, 120);
+      await page.waitForTimeout(80);
+      const wheelState = await previewState(page, trigger);
+      assert(
+        wheelState.scroll.scrollTop >= previousWheelTop,
+        `desktop iteration ${iteration}: wheel scrolling moved backward: ${JSON.stringify({ previousWheelTop, current: wheelState.scroll.scrollTop, wheelScrollTops })}`,
+      );
+      assert(
+        wheelState.scroll.scrollTop > previousWheelTop,
+        `desktop iteration ${iteration}: wheel scrolling did not progress: ${JSON.stringify({ previousWheelTop, current: wheelState.scroll.scrollTop, wheelScrollTops })}`,
+      );
+      previousWheelTop = wheelState.scroll.scrollTop;
+      wheelScrollTops.push(previousWheelTop);
+    }
     const afterInternalScroll = await previewState(page, trigger);
-    assert(afterInternalScroll.scroll.scrollTop > 0, "Pointer inspection did not scroll the long preview.");
+    const internalScrollEventStability = await page.evaluate((selector) => {
+      const tooltip = document.querySelector(selector);
+      const maxScrollTop = Math.max(0, tooltip.scrollHeight - tooltip.clientHeight);
+      tooltip.scrollTop = Math.min(maxScrollTop, Math.max(48, Math.floor(maxScrollTop * 0.65)));
+      const before = tooltip.scrollTop;
+      for (let index = 0; index < 3; index += 1) tooltip.dispatchEvent(new Event("scroll"));
+      return { after: tooltip.scrollTop, before, maxScrollTop };
+    }, ".reference-hover-tooltip-layer");
+    assert(
+      internalScrollEventStability.before > 0 &&
+        Math.abs(internalScrollEventStability.after - internalScrollEventStability.before) <= 1,
+      `desktop iteration ${iteration}: internal scroll events reset the preview: ${JSON.stringify(internalScrollEventStability)}`,
+    );
 
     await hidePreview(page);
     assert.equal(await page.locator(TOOLTIP_SELECTOR).count(), 0, "Preview did not dismiss after leaving trigger and tooltip.");
@@ -228,10 +255,19 @@ async function runDesktopIteration(browser, baseUrl, iteration) {
     assert.deepEqual(await detailState(page), panelBefore, "Transient preview changed route, panel lock, content, or history state.");
 
     await showPreview(page, trigger);
-    await page.setViewportSize({ height: 640, width: 1000 });
+    await page.setViewportSize({ height: 560, width: 1000 });
     await page.waitForTimeout(150);
     const resized = await previewState(page, trigger);
     assertCollisionSafe(resized, `desktop iteration ${iteration} resized`);
+
+    const seededScroll = await page.evaluate((selector) => {
+      const tooltip = document.querySelector(selector);
+      const maxScrollTop = Math.max(0, tooltip.scrollHeight - tooltip.clientHeight);
+      tooltip.scrollTop = Math.min(maxScrollTop, Math.max(64, Math.floor(maxScrollTop * 0.55)));
+      return { maxScrollTop, scrollTop: tooltip.scrollTop };
+    }, ".reference-hover-tooltip-layer");
+    assert(seededScroll.scrollTop > 0, `desktop iteration ${iteration}: could not seed preview scroll before reposition`);
+    const beforeReposition = await previewState(page, trigger);
 
     const scrollResult = await page.evaluate((button) => {
       let node = button.parentElement;
@@ -251,12 +287,31 @@ async function runDesktopIteration(browser, baseUrl, iteration) {
     await page.waitForTimeout(150);
     const repositioned = await previewState(page, trigger);
     assertCollisionSafe(repositioned, `desktop iteration ${iteration} scrolled`);
+    const repositionMaxScrollTop = Math.max(0, repositioned.scroll.scrollHeight - repositioned.scroll.clientHeight);
+    assert(
+      Math.abs(
+        repositioned.scroll.scrollTop -
+          Math.min(beforeReposition.scroll.scrollTop, repositionMaxScrollTop)
+      ) <= 1,
+      `desktop iteration ${iteration}: Reader reposition reset preview scroll: ${JSON.stringify({ before: beforeReposition.scroll, after: repositioned.scroll, scrollResult })}`,
+    );
     assert(
       scrollResult.after !== scrollResult.before || repositioned.trigger.top === resized.trigger.top,
       `desktop iteration ${iteration}: relevant scroll state was indeterminate: ${JSON.stringify(scrollResult)}`,
     );
 
     await page.setViewportSize({ height: 720, width: 1280 });
+    await page.waitForTimeout(150);
+    const resizedBack = await previewState(page, trigger);
+    assertCollisionSafe(resizedBack, `desktop iteration ${iteration} resized back`);
+    const resizedBackMaxScrollTop = Math.max(0, resizedBack.scroll.scrollHeight - resizedBack.scroll.clientHeight);
+    assert(
+      Math.abs(
+        resizedBack.scroll.scrollTop -
+          Math.min(repositioned.scroll.scrollTop, resizedBackMaxScrollTop)
+      ) <= 1,
+      `desktop iteration ${iteration}: resize did not preserve/clamp preview scroll: ${JSON.stringify({ before: repositioned.scroll, after: resizedBack.scroll })}`,
+    );
     await hidePreview(page);
     await trigger.scrollIntoViewIfNeeded();
     await showPreview(page, trigger);
@@ -280,6 +335,9 @@ async function runDesktopIteration(browser, baseUrl, iteration) {
     result.repositioned = repositioned;
     result.scrollResult = scrollResult;
     result.tooltipScrollTop = afterInternalScroll.scroll.scrollTop;
+    result.wheelScrollTops = wheelScrollTops;
+    result.internalScrollEventStability = internalScrollEventStability;
+    result.resizedBackScrollTop = resizedBack.scroll.scrollTop;
     assert.deepEqual(errors.consoleErrors, [], `desktop iteration ${iteration}: browser console errors`);
     assert.deepEqual(errors.pageErrors, [], `desktop iteration ${iteration}: uncaught page errors`);
     result.consoleErrors = errors.consoleErrors;
