@@ -55,7 +55,9 @@ import {
 } from "./src/ui-contracts.js?v=pr13-live-qa-20260711e";
 import { dismissContainedDetailTool } from "./src/detail-tool-surface.js";
 import {
+  closeStudyWorkspace,
   focusStudyWorkspaceAfterClear,
+  isMobileStudyWorkspaceOpen,
   openStudyWorkspace,
 } from "./src/portrait-workspace.js";
 import {
@@ -193,8 +195,10 @@ function currentRoute(verse = null) {
   };
 }
 
-function createReferenceButton(label, location) {
-  return makeReferenceButton(label, location, goToLocation);
+function createReferenceButton(label, location, navigationOptions = {}) {
+  return makeReferenceButton(label, location, (bookId, chapter, verse) =>
+    goToLocation(bookId, chapter, verse, navigationOptions),
+  );
 }
 
 function canUseCapability(capabilityId) {
@@ -1210,14 +1214,22 @@ async function navigateToRoute(route, options = {}) {
   const readerDatasetIdentityChanged =
     next.translationId !== state.translationId || next.bookId !== state.bookId;
   const readerChapterIdentityChanged = readerDatasetIdentityChanged || next.chapter !== state.chapter;
+  const preserveOutlineDetail = Boolean(
+    options.preserveDetailView === DETAIL_VIEW_IDS.outline &&
+      !browserTraversalChangedRoute &&
+      next.translationId === state.translationId &&
+      next.bookId === state.bookId,
+  );
   if (
     readerChapterIdentityChanged || browserTraversalChangedRoute
   ) {
     clearActiveTextSpanSelection();
     ctx.studyContext = {};
-    setDetailHoverLocked(false);
     detailViews.clearStrongPin();
-    resetDetailForNavigation();
+    if (!preserveOutlineDetail) {
+      setDetailHoverLocked(false);
+      resetDetailForNavigation();
+    }
   }
   if (readerDatasetIdentityChanged) resetReaderDatasets();
 
@@ -1257,6 +1269,13 @@ async function navigateToRoute(route, options = {}) {
   platform.runtime?.persistRoute?.(state, readerRouteHash(next));
   if (canRestore) await restoreReaderNavigationSnapshot(restorationSnapshot);
   persistCurrentReaderSnapshot();
+  if (
+    preserveOutlineDetail &&
+    options.revealReaderOnDrawer === true &&
+    isMobileStudyWorkspaceOpen()
+  ) {
+    closeStudyWorkspace({ restoreFocus: true });
+  }
   return true;
   } finally {
     if (navigationGeneration === state.navigationGeneration) {
