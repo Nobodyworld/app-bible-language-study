@@ -440,6 +440,80 @@ mod tests {
     }
 
     #[test]
+    fn workspace_annotations_round_trip_on_disk_without_crossing_profiles() {
+        let root = test_root("annotations");
+        let paths = AppPaths::for_test(&root);
+        let workspace = serde_json::json!({
+            "version": 3,
+            "red_letter_ranges": {"john:1:1": [
+                {"start": 0, "end": 2, "text": "In", "legacy": {"keep": true}},
+                {"translation_id": "bsb", "reference_key": "john:1:1", "start": 0, "end": 2, "text": "In", "classification": "red"},
+                {"translation_id": "kjv", "reference_key": "john:1:1", "start": 0, "end": 2, "text": "In", "classification": "pink"},
+                {"translation_id": "bsb", "reference_key": "john:1:1", "start": 17, "end": 20, "text": "was", "classification": "gray"},
+                {"translation_id": "kjv", "reference_key": "john:1:1", "start": 17, "end": 20, "text": "was", "classification": "black"}
+            ]},
+            "token_renderings": {"john:1:1": {
+                "target:source_token:bsb:new:john:1:1:2": {
+                    "rendering": "my BSB beginning", "original": "ἀρχῇ", "strong_code": "G746",
+                    "translation_id": "bsb", "reference_key": "john:1:1", "token_index": 2,
+                    "target_id": "target:source_token:bsb:new:john:1:1:2"
+                },
+                "target:source_token:kjv:new:john:1:1:2": {
+                    "rendering": "my KJV beginning", "original": "ἀρχῇ", "strong_code": "G746",
+                    "translation_id": "kjv", "reference_key": "john:1:1", "token_index": 2,
+                    "target_id": "target:source_token:kjv:new:john:1:1:2"
+                },
+                "@preserved:2": {"rendering": "unknown origin", "future": {"keep": true}}
+            }},
+            "unknown": {"keep": [1, 2, 3]}
+        });
+        write_store(
+            &paths,
+            ProfileId::Stable,
+            StoreId::Workspace,
+            workspace.clone(),
+            false,
+        )
+        .unwrap();
+        let reopened_paths = AppPaths::for_test(&root);
+        assert_eq!(
+            read_store(&reopened_paths, ProfileId::Stable, StoreId::Workspace)
+                .unwrap()
+                .value,
+            Some(workspace.clone())
+        );
+        assert_eq!(
+            read_store(&reopened_paths, ProfileId::Lab, StoreId::Workspace)
+                .unwrap()
+                .status,
+            "missing"
+        );
+        let lab =
+            serde_json::json!({"version": 3, "red_letter_ranges": {}, "token_renderings": {}});
+        write_store(
+            &reopened_paths,
+            ProfileId::Lab,
+            StoreId::Workspace,
+            lab.clone(),
+            false,
+        )
+        .unwrap();
+        assert_eq!(
+            read_store(&paths, ProfileId::Stable, StoreId::Workspace)
+                .unwrap()
+                .value,
+            Some(workspace)
+        );
+        assert_eq!(
+            read_store(&paths, ProfileId::Lab, StoreId::Workspace)
+                .unwrap()
+                .value,
+            Some(lab)
+        );
+        fs::remove_dir_all(root).unwrap();
+    }
+
+    #[test]
     fn malformed_data_and_interrupted_temp_files_are_preserved() {
         let root = test_root("corrupt");
         let paths = AppPaths::for_test(&root);

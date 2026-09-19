@@ -17,11 +17,12 @@ import {
   resolveInterlinearVerseTokens,
   resolveSourceBearingPresentationSegment,
 } from "../strongs.js?v=pr13-live-qa-20260711e";
-import { getTokenRenderings, getWorkspaceVerse, setTokenRendering, setVerseDraft } from "../stores.js?v=pr13-live-qa-20260711e";
+import { getTokenRendering, getWorkspaceVerse, setTokenRendering, setVerseDraft } from "../stores.js?v=pr13-live-qa-20260711e";
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
 import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
 import { createStudyEmptyState } from "../study-empty-state.js";
-import { interlinearTokenIdentity } from "../ui-contracts.js";
+import { interlinearTokenIdentity, uiActionContract } from "../ui-contracts.js";
+import { refreshWordMeaningControls } from "../word-meaning.js?v=pr13-live-qa-20260711e";
 import {
   createSourceTokenTarget,
   normalizeTarget,
@@ -227,15 +228,16 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
   let stopInterlinearLazyLoad = () => {};
   const meaningWordMaps = new Map();
 
-  async function exactMappedBsbMeaning(token, verse) {
-    const key = referenceKey(ctx.state.bookId, ctx.state.chapter, verse);
+  async function exactMappedBsbMeaning(token, verse, origin) {
+    const { bookId, chapter } = origin;
+    const key = referenceKey(bookId, chapter, verse);
     if (!meaningWordMaps.has(key)) {
       meaningWordMaps.set(key, Promise.all([
-        fetchWordMapBook("bsb", ctx.state.bookId),
-        fetchVerseBook("bsb", ctx.state.bookId),
+        fetchWordMapBook("bsb", bookId),
+        fetchVerseBook("bsb", bookId),
       ]).then(([wordMapBook, bsbBook]) => {
-        const text = bsbBook?.chapters?.[ctx.state.chapter]?.[verse] || "";
-        return createWordMapLookup(wordMapBook?.chapters?.[ctx.state.chapter]?.[verse] || [], text);
+        const text = bsbBook?.chapters?.[chapter]?.[verse] || "";
+        return createWordMapLookup(wordMapBook?.chapters?.[chapter]?.[verse] || [], text);
       }).catch(() => null));
     }
     const lookup = await meaningWordMaps.get(key);
@@ -349,6 +351,11 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     strong.textContent = token.strong_code || "No Strong's";
     if (token.strong_code) {
       strong.type = "button";
+      strong.classList.add("ui-action-control");
+      strong.dataset.uiAction = "definition";
+      strong.dataset.uiScope = "source_token";
+      strong.title = uiActionContract("definition").tip;
+      strong.setAttribute("aria-label", `Definition for ${token.strong_code}`);
       strong.disabled = !ctx.canUseCapability?.("strongs-overlay");
       strong.addEventListener("click", (event) => {
         if (!ctx.canUseCapability?.("strongs-overlay")) return;
@@ -403,7 +410,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
         language: token.language,
         original: token.original,
       },
-      ctx.state.translationId,
+      options.translationId || ctx.state.translationId,
     );
     if (sourceTarget) {
       const actions = document.createElement("div");
@@ -435,7 +442,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
         token,
         presentation: "detail-pane",
         label: tokenLabel,
-        loadExactMappedEnglish: () => exactMappedBsbMeaning(token, card.dataset.verse),
+        loadExactMappedEnglish: () => exactMappedBsbMeaning(token, card.dataset.verse, { bookId: sourceTarget.reference.book_id, chapter: sourceTarget.reference.chapter }),
         loadLexicon: token.strong_code ? () => fetchLexiconEntry(token.strong_code) : null,
       });
       controls.append(marks);
@@ -463,15 +470,16 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     if (options.workspace && options.referenceKey) {
       if (options.wordMapLookup) appendWorkspaceWordMap(card, token, wordMapForToken(token, options.wordMapLookup));
 
-      const renderings = getTokenRenderings(ctx.state, options.referenceKey);
       const label = document.createElement("label");
       label.className = "token-rendering";
       const labelText = document.createElement("span");
       labelText.textContent = "Your rendering";
       const input = document.createElement("input");
-      input.value = renderings[token.token_index]?.rendering || "";
+      input.value = getTokenRendering(ctx.state, sourceTarget)?.rendering || "";
       input.addEventListener("change", () => {
-        setTokenRendering(ctx.state, options.referenceKey, token, input.value.trim());
+        setTokenRendering(ctx.state, sourceTarget, input.value.trim());
+        ctx.refreshInterpretationMarkers?.();
+        refreshWordMeaningControls();
       });
       label.append(labelText, input);
       card.append(label);
@@ -538,6 +546,8 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
   }
 
   async function createInterlinearVerseSection(verse, textSpanTarget = null) {
+    const translationId = ctx.state.translationId;
+    const key = referenceKey(ctx.state.bookId, ctx.state.chapter, verse);
     const reference = ctx.currentReference(verse);
     const tokens = interlinearTokensForVerse(verse);
     if (!tokens.length) return null;
@@ -548,7 +558,6 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     section.dataset.verse = String(verse);
     const heading = document.createElement("h3");
     heading.textContent = reference;
-    const key = referenceKey(ctx.state.bookId, ctx.state.chapter, verse);
     const verseContext = { reference, verse };
     const wordInfoLookup = createOriginalWordInfoLookup(tokens);
     section.append(heading);
@@ -569,6 +578,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
         createInterlinearTokenCard(token, {
           workspace: false,
           referenceKey: key,
+          translationId,
           verseContext,
         }),
       );
@@ -580,6 +590,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
   }
 
   async function showInterlinearVerse(reference, verse, options = {}) {
+    const origin = [ctx.state.translationId, ctx.state.bookId, ctx.state.chapter].join(":");
     stopInterlinearLazyLoad();
     const viewOptions = { ...options, viewId: DETAIL_VIEW_IDS.languageStudy };
     if (!ctx.canUseCapability?.("interlinear")) {
@@ -595,6 +606,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     }
     const selectedTextSpan = options.textSpanTarget || ctx.getActiveTextSpanTarget?.(verse) || null;
     const initialSection = await createInterlinearVerseSection(verse, selectedTextSpan);
+    if ([ctx.state.translationId, ctx.state.bookId, ctx.state.chapter].join(":") !== origin) return;
     if (!initialSection) {
       const empty = document.createElement("div");
       const heading = document.createElement("h3");
@@ -615,6 +627,7 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
     wrap.dataset.detailRestore = "interlinear-lazy-reader";
     wrap.append(createVerseContextTabs(ctx, reference, verse, DETAIL_VIEW_IDS.languageStudy, ctx.studyContext?.strong));
     const superscriptionSection = await createSuperscriptionSection(verse);
+    if ([ctx.state.translationId, ctx.state.bookId, ctx.state.chapter].join(":") !== origin) return;
     if (selectedTextSpan) {
       wrap.append(initialSection);
       if (superscriptionSection) wrap.append(superscriptionSection);
@@ -741,8 +754,12 @@ export function createInterlinearTranslationViews(ctx, { appendLanguageBreakdown
         li.append(ctx.createReferenceButton(reference, { book_id: ctx.state.bookId, chapter: ctx.state.chapter, verse_start: verse }));
         const inspect = document.createElement("button");
         inspect.type = "button";
-        inspect.className = "mini-button";
-        inspect.textContent = "Inspect";
+        inspect.className = "mini-button ui-action-control";
+        inspect.dataset.uiAction = "language-study";
+        inspect.dataset.uiScope = "verse";
+        inspect.textContent = uiActionContract("language-study").compactLabel;
+        inspect.title = uiActionContract("language-study").tip;
+        inspect.setAttribute("aria-label", `Language Study for ${reference}`);
         inspect.addEventListener("click", () => void showInterlinearVerse(reference, verse));
         li.append(inspect);
       }),

@@ -19,6 +19,15 @@ import {
 } from "./semantic-targets.js?v=pr13-live-qa-20260711e";
 import { aggregatePollResponses, normalizePollResponse } from "./semantic-polls.js";
 import { createDefaultPackageStore, normalizePackageStore } from "./package-state.js";
+import {
+  normalizeSpeechAttributionRange,
+  speechAttributionContract,
+} from "./user-annotation-contracts.js";
+import {
+  annotationTranslationId, explicitAnnotationTranslation, interpretationRecordsAt,
+  mergeInterpretationCollections, mergeSpeechCollections, recordObject,
+  sameInterpretationSource, speechRangeIdentity, speechRangeIsCurrent,
+} from "./annotation-records.js";
 
 const USER_DATA_EXPORT_KIND = "bibleapp:user-data";
 const USER_DATA_EXPORT_VERSION = 3;
@@ -42,6 +51,13 @@ function nowIso() {
 
 function nextRevision(current) {
   return Number(current?.revision || 0) + 1;
+}
+
+function annotationUpdateTime(current) {
+  const now = nowIso();
+  // An imported clock ahead of this device must not make explicit edits older
+  // than the record they replace. Revision orders edits sharing this timestamp.
+  return Date.parse(current?.updated_at || "") > Date.parse(now) ? current.updated_at : now;
 }
 
 function appendConflict(store, conflict) {
@@ -226,8 +242,7 @@ function normalizeWorkspaceStore(value = {}) {
   const store = { ...fallback, ...(value || {}) };
   store.verse_drafts = store.verse_drafts && typeof store.verse_drafts === "object" ? store.verse_drafts : {};
   store.token_renderings = normalizeTokenRenderingCollection(store.token_renderings);
-  store.red_letter_ranges =
-    store.red_letter_ranges && typeof store.red_letter_ranges === "object" ? store.red_letter_ranges : {};
+  store.red_letter_ranges = mergeSpeechCollections({}, store.red_letter_ranges, normalizeSpeechAttributionRange);
   store.conflicts = Array.isArray(store.conflicts) ? store.conflicts.slice(-100) : [];
   store.job_events = normalizeJobEvents(store.job_events);
   store.version = fallback.version;
@@ -245,17 +260,25 @@ function normalizeRenderingText(value) {
 }
 
 function sourceTokenTargetForRendering(record = {}, options = {}) {
+  const translation = explicitAnnotationTranslation(record);
+  if (!translation || (options.translation_id !== undefined && annotationTranslationId(options.translation_id) !== translation)) return null;
   const referenceKey = String(options.reference_key || record.reference_key || "").trim();
   const tokenIndex = positiveTokenIndex(options.token_index ?? record.token_index);
-  const fallbackTranslation = options.translation_id || record.translation_id || record.target?.translation_id || "bsb";
-  const supplied = normalizeTarget(options.target || record.target);
+  if (record.reference_key && record.reference_key !== referenceKey) return null;
+  if (record.token_index !== undefined && tokenIndex !== positiveTokenIndex(record.token_index)) return null;
+  const rawTarget = options.target || record.target;
+  if (rawTarget && !explicitAnnotationTranslation({ ...record, target: rawTarget })) return null;
+  const supplied = rawTarget ? normalizeTarget({ ...rawTarget, translation_id: translation, edition_id: translation }) : null;
   if (
     supplied?.target_type === "source_token" &&
     (!referenceKey || referenceKeyFromTarget(supplied) === referenceKey) &&
     (!tokenIndex || Number(supplied.token?.token_index) === tokenIndex)
   ) {
-    return supplied;
+    if ([record.target_id, record.target?.target_id, rawTarget?.target_id].some(id => id && id !== supplied.target_id)) return null;
+    if (!sameInterpretationSource({ ...record, target_id: supplied.target_id }, supplied)) return null;
+    return { ...rawTarget, ...supplied, token: { ...rawTarget?.token, ...supplied.token } };
   }
+  if (rawTarget) return null;
   if (!referenceKey || !tokenIndex) return null;
   return createSourceTokenTarget(
     referenceKey,
@@ -265,18 +288,20 @@ function sourceTokenTargetForRendering(record = {}, options = {}) {
       strong_code: record.strong_code || supplied?.token?.strong_code || "",
       language: record.language || supplied?.token?.language || "",
     },
-    fallbackTranslation,
+    translation,
   );
 }
 
 export function normalizeTokenRendering(record, options = {}) {
-  if (!record || typeof record !== "object") return null;
+  if (!recordObject(record) || !explicitAnnotationTranslation(record)) return null;
+  if (typeof record.rendering !== "string") return null;
   const rendering = normalizeRenderingText(record.rendering);
   if (!rendering) return null;
   const target = sourceTokenTargetForRendering(record, options);
   const referenceKey = String(options.reference_key || record.reference_key || referenceKeyFromTarget(target) || "").trim();
   const tokenIndex = positiveTokenIndex(options.token_index ?? record.token_index ?? target?.token?.token_index);
   if (!target || !referenceKey || !tokenIndex) return null;
+  if (record.target_id && record.target_id !== target.target_id) return null;
   const original = normalizeRenderingText(record.original || target.token?.original || "");
   const strongCode = normalizeRenderingText(record.strong_code || target.token?.strong_code || "").toUpperCase();
   return {
@@ -289,26 +314,12 @@ export function normalizeTokenRendering(record, options = {}) {
     rendering,
     original,
     strong_code: strongCode || null,
-    updated_at: record.updated_at || nowIso(),
+    updated_at: record.updated_at || "",
   };
 }
 
 function normalizeTokenRenderingCollection(value) {
-  if (!value || typeof value !== "object") return {};
-  const normalized = {};
-  Object.entries(value).forEach(([referenceKey, entries]) => {
-    if (!entries || typeof entries !== "object") return;
-    const verseRenderings = {};
-    Object.entries(entries).forEach(([tokenIndex, record]) => {
-      const rendering = normalizeTokenRendering(record, {
-        reference_key: referenceKey,
-        token_index: tokenIndex,
-      });
-      if (rendering) verseRenderings[rendering.token_index] = rendering;
-    });
-    if (Object.keys(verseRenderings).length) normalized[referenceKey] = verseRenderings;
-  });
-  return normalized;
+  return mergeInterpretationCollections({}, value, normalizeTokenRendering);
 }
 
 export function normalizeAssertionStore(value = {}, seedAssertions = {}) {
@@ -658,14 +669,6 @@ function mergeHistoryEvents(current, incoming, limit = 200) {
     .slice(limit === null ? 0 : -limit);
 }
 
-function mergeTokenRenderings(current, incoming) {
-  const merged = { ...(current || {}) };
-  Object.entries(incoming || {}).forEach(([key, renderings]) => {
-    merged[key] = { ...(merged[key] || {}), ...(renderings || {}) };
-  });
-  return merged;
-}
-
 function mergePackageStores(current, incoming) {
   return normalizeLocalPackageStore({
     ...current,
@@ -757,11 +760,10 @@ export function getUserDataSummary(state) {
   const packageOperations = (state.packageStore.operations || []).length;
   const importBackups = loadImportBackupStore().backups.length;
   const verseDrafts = Object.keys(state.workspaceStore.verse_drafts || {}).length;
-  const tokenRenderingVerses = Object.keys(state.workspaceStore.token_renderings || {}).length;
-  const tokenRenderings = Object.values(state.workspaceStore.token_renderings || {}).reduce(
-    (total, renderings) => total + Object.keys(renderings || {}).length,
-    0,
-  );
+  const renderedRecords = Object.keys(state.workspaceStore.token_renderings || {})
+    .map(key => interpretationRecordsAt(state.workspaceStore.token_renderings, key));
+  const tokenRenderingVerses = renderedRecords.filter(records => records.length).length;
+  const tokenRenderings = renderedRecords.reduce((total, records) => total + records.length, 0);
   return {
     custom_tags: customTags,
     tagged_verses: taggedVerses,
@@ -784,55 +786,66 @@ export function getUserDataSummary(state) {
 }
 
 export function importUserData(state, payload, mode = "merge") {
-  const incoming = extractUserDataStores(payload);
   if (mode !== "merge" && mode !== "replace") {
     throw new Error("Import mode must be merge or replace.");
   }
-  ensureStores(state);
-
-  if (mode === "replace") {
-    createUserDataBackup(state, "before-replace-import");
-    state.tagStore = incoming.tagStore;
-    state.workspaceStore = incoming.workspaceStore;
-    state.assertionStore = incoming.assertionStore;
-    state.pollStore = incoming.pollStore;
-    state.packageStore = incoming.packageStore;
-  } else {
-    state.tagStore = normalizeTagStore({
-      ...state.tagStore,
-      tags: { ...(state.tagStore.tags || {}), ...(incoming.tagStore.tags || {}) },
-      verse_tags: mergeVerseTags(state.tagStore.verse_tags, incoming.tagStore.verse_tags),
-      tag_assertions: mergeTagAssertions(state.tagStore.tag_assertions, incoming.tagStore.tag_assertions),
-      job_events: mergeHistoryEvents(state.tagStore.job_events, incoming.tagStore.job_events, null),
-    });
-    state.workspaceStore = normalizeWorkspaceStore({
-      ...state.workspaceStore,
-      verse_drafts: { ...(state.workspaceStore.verse_drafts || {}), ...(incoming.workspaceStore.verse_drafts || {}) },
-      token_renderings: mergeTokenRenderings(
-        state.workspaceStore.token_renderings,
-        incoming.workspaceStore.token_renderings,
-      ),
-      red_letter_ranges: {
-        ...(state.workspaceStore.red_letter_ranges || {}),
-        ...(incoming.workspaceStore.red_letter_ranges || {}),
-      },
-      job_events: mergeHistoryEvents(state.workspaceStore.job_events, incoming.workspaceStore.job_events, null),
-    });
-    state.assertionStore = normalizeAssertionStore({
-      ...state.assertionStore,
-      assertions: mergeTagAssertions(state.assertionStore.assertions, incoming.assertionStore.assertions),
-      events: mergeHistoryEvents(state.assertionStore.events, incoming.assertionStore.events),
-    });
-    state.pollStore = normalizePollStore({
-      ...state.pollStore,
-      ...incoming.pollStore,
-      responses: mergeTagAssertions(state.pollStore.responses, incoming.pollStore.responses),
-      // Retired histories have no active writer; retain every distinct event.
-      events: mergeHistoryEvents(state.pollStore.events, incoming.pollStore.events, null),
-    });
-    state.packageStore = mergePackageStores(state.packageStore, incoming.packageStore);
+  const current = { ...state };
+  for (const name of ["tagStore", "workspaceStore", "assertionStore", "pollStore", "packageStore"]) {
+    if (current[name]) current[name] = clone(current[name]);
   }
+  ensureStores(current);
+  const candidate = {};
+  try {
+    const incoming = extractUserDataStores(payload);
 
+    if (mode === "replace") {
+      candidate.tagStore = incoming.tagStore;
+      candidate.workspaceStore = incoming.workspaceStore;
+      candidate.assertionStore = incoming.assertionStore;
+      candidate.pollStore = incoming.pollStore;
+      candidate.packageStore = incoming.packageStore;
+    } else {
+      candidate.tagStore = normalizeTagStore({
+        ...current.tagStore,
+        tags: { ...(current.tagStore.tags || {}), ...(incoming.tagStore.tags || {}) },
+        verse_tags: mergeVerseTags(current.tagStore.verse_tags, incoming.tagStore.verse_tags),
+        tag_assertions: mergeTagAssertions(current.tagStore.tag_assertions, incoming.tagStore.tag_assertions),
+        job_events: mergeHistoryEvents(current.tagStore.job_events, incoming.tagStore.job_events, null),
+      });
+      candidate.workspaceStore = normalizeWorkspaceStore({
+        ...current.workspaceStore,
+        ...incoming.workspaceStore,
+        verse_drafts: { ...(current.workspaceStore.verse_drafts || {}), ...(incoming.workspaceStore.verse_drafts || {}) },
+        token_renderings: mergeInterpretationCollections(
+          current.workspaceStore.token_renderings,
+          incoming.workspaceStore.token_renderings, normalizeTokenRendering,
+        ),
+        red_letter_ranges: mergeSpeechCollections(
+          current.workspaceStore.red_letter_ranges,
+          incoming.workspaceStore.red_letter_ranges, normalizeSpeechAttributionRange,
+        ),
+        conflicts: [...current.workspaceStore.conflicts, ...incoming.workspaceStore.conflicts],
+        job_events: mergeHistoryEvents(current.workspaceStore.job_events, incoming.workspaceStore.job_events, null),
+      });
+      candidate.assertionStore = normalizeAssertionStore({
+        ...current.assertionStore,
+        assertions: mergeTagAssertions(current.assertionStore.assertions, incoming.assertionStore.assertions),
+        events: mergeHistoryEvents(current.assertionStore.events, incoming.assertionStore.events),
+      });
+      candidate.pollStore = normalizePollStore({
+        ...current.pollStore,
+        ...incoming.pollStore,
+        responses: mergeTagAssertions(current.pollStore.responses, incoming.pollStore.responses),
+        // Retired histories have no active writer; retain every distinct event.
+        events: mergeHistoryEvents(current.pollStore.events, incoming.pollStore.events, null),
+      });
+      candidate.packageStore = mergePackageStores(current.packageStore, incoming.packageStore);
+    }
+  } catch (error) {
+    throw invalidBackupStructure(error.message);
+  }
+  if (mode === "replace") createUserDataBackup(state, "before-replace-import");
+  Object.assign(state, candidate);
   saveStorage(STORAGE_KEYS.tags, state.tagStore);
   saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
   saveStorage(STORAGE_KEYS.assertions, state.assertionStore);
@@ -953,21 +966,28 @@ export function getWorkspaceVerse(state, key) {
   return state.workspaceStore.verse_drafts[key] || null;
 }
 
-export function getTokenRenderings(state, key) {
+export function getTokenRenderings(state, key, translationId = state.translationId || state.translation_id) {
   ensureStores(state);
-  return state.workspaceStore.token_renderings[key] || {};
+  if (!annotationTranslationId(translationId)) return {};
+  return Object.fromEntries(interpretationRecordsAt(state.workspaceStore.token_renderings, key, translationId)
+    .map(record => [record.target_id, record]));
 }
 
 function resolveTokenRenderingTarget(state, targetOrKey, token = null) {
   if (typeof targetOrKey === "string") {
+    const translation = annotationTranslationId(state?.translationId || state?.translation_id);
+    if (!translation) return null;
     return createSourceTokenTarget(
       targetOrKey,
       token || {},
-      state?.translationId || state?.translation_id || "bsb",
+      translation,
     );
   }
+  if (!explicitAnnotationTranslation(targetOrKey)) return null;
   const target = normalizeTarget(targetOrKey);
-  return target?.target_type === "source_token" ? target : null;
+  if (targetOrKey.target_id && targetOrKey.target_id !== target?.target_id) return null;
+  return target?.target_type === "source_token"
+    ? { ...targetOrKey, ...target, token: { ...targetOrKey.token, ...target.token } } : null;
 }
 
 function tokenRenderingLocation(state, targetOrKey, token = null) {
@@ -982,39 +1002,80 @@ export function getTokenRendering(state, targetOrKey, token = null) {
   ensureStores(state);
   const location = tokenRenderingLocation(state, targetOrKey, token);
   if (!location) return null;
-  const current = state.workspaceStore.token_renderings[location.referenceKey]?.[location.tokenIndex] || null;
-  return current
-    ? normalizeTokenRendering(current, {
-        target: location.target,
-        reference_key: location.referenceKey,
-        token_index: location.tokenIndex,
-      })
-    : null;
+  const current = getTokenRenderings(state, location.referenceKey, location.target.translation_id)[location.target.target_id];
+  return current && sameInterpretationSource(current, location.target) ? current : null;
 }
 
 export function getRedLetterRanges(state, key) {
+  return getSpeechAttributionRanges(state, key);
+}
+
+export function getSpeechAttributionRanges(state, key, translationId = state.translationId || state.translation_id, verseText) {
   ensureStores(state);
-  return state.workspaceStore.red_letter_ranges[key] || [];
+  const translation = annotationTranslationId(translationId);
+  if (!translation) return [];
+  const ranges = state.workspaceStore.red_letter_ranges[key];
+  return (Array.isArray(ranges) ? ranges : []).filter(range => speechRangeIdentity(range, key))
+    .map(range => normalizeSpeechAttributionRange(range)).filter(range => range
+      && explicitAnnotationTranslation(range) === translation
+      && (verseText === undefined || speechRangeIsCurrent(range, key, translation, verseText)));
+}
+
+function speechActionRange(state, key, range) {
+  if (!recordObject(range)) return null;
+  const hasIdentity = ["translation_id", "edition_id", "target"].some(field => Object.hasOwn(range, field));
+  const translation = hasIdentity ? explicitAnnotationTranslation(range) : annotationTranslationId(state.translationId || state.translation_id);
+  const candidate = { ...range, translation_id: translation, reference_key: range.reference_key || key };
+  return speechRangeIdentity(candidate, key) ? normalizeSpeechAttributionRange(candidate) : null;
+}
+
+export function applySpeechAttributionRange(state, key, range, classification = range?.classification || "red") {
+  ensureStores(state);
+  const next = speechActionRange(state, key, range);
+  const contract = speechAttributionContract(classification);
+  if (!next || !contract) return false;
+  const stored = state.workspaceStore.red_letter_ranges[key];
+  if (stored !== undefined && !Array.isArray(stored)) return false;
+  const id = speechRangeIdentity(next, key);
+  const previous = (stored || []).find(item => speechRangeIdentity(item, key) === id);
+  const updated = {
+    ...previous,
+    ...next,
+    start: next.start,
+    end: next.end,
+    classification: contract.id,
+    source: previous?.source || next.source,
+    revision: nextRevision(previous),
+    updated_at: annotationUpdateTime(previous),
+  };
+  state.workspaceStore.red_letter_ranges = mergeSpeechCollections(state.workspaceStore.red_letter_ranges,
+    { [key]: [updated] }, normalizeSpeechAttributionRange);
+  saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
+  return true;
+}
+
+export function changeSpeechAttributionRange(state, key, range, classification) {
+  const target = speechActionRange(state, key, range);
+  if (!target || !getSpeechAttributionRanges(state, key, target.translation_id)
+    .some(item => speechRangeIdentity(item, key) === speechRangeIdentity(target, key))) return false;
+  return applySpeechAttributionRange(state, key, target, classification);
+}
+
+export function clearSpeechAttribution(state, key, range) {
+  ensureStores(state);
+  const target = speechActionRange(state, key, range);
+  if (!target || !getSpeechAttributionRanges(state, key, target.translation_id)
+    .some(item => speechRangeIdentity(item, key) === speechRangeIdentity(target, key))) return false;
+  const stored = state.workspaceStore.red_letter_ranges[key];
+  const remaining = stored.filter(value => speechRangeIdentity(value, key) !== speechRangeIdentity(target, key));
+  if (remaining.length) state.workspaceStore.red_letter_ranges[key] = remaining;
+  else delete state.workspaceStore.red_letter_ranges[key];
+  saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
+  return true;
 }
 
 export function addRedLetterRange(state, key, range) {
-  ensureStores(state);
-  const start = Number(range?.start);
-  const end = Number(range?.end);
-  if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) return false;
-  const ranges = state.workspaceStore.red_letter_ranges[key] || [];
-  ranges.push({
-    start,
-    end,
-    text: String(range?.text || ""),
-    source: "user",
-    updated_at: nowIso(),
-  });
-  state.workspaceStore.red_letter_ranges[key] = ranges
-    .sort((a, b) => a.start - b.start || a.end - b.end)
-    .filter((item, index, all) => index === 0 || item.start !== all[index - 1].start || item.end !== all[index - 1].end);
-  saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
-  return true;
+  return applySpeechAttributionRange(state, key, range, "red");
 }
 
 export function setVerseDraft(state, key, draftText, options = {}) {
@@ -1058,15 +1119,24 @@ export function setTokenRendering(state, targetOrKey, tokenOrRendering, legacyRe
     deleteTokenRendering(state, location.target);
     return null;
   }
-  const existing = state.workspaceStore.token_renderings[location.referenceKey]?.[location.tokenIndex] || null;
+  const bucket = state.workspaceStore.token_renderings[location.referenceKey];
+  if (bucket !== undefined && !recordObject(bucket)) return null;
+  const existing = bucket?.[location.target.target_id] || null;
+  if (existing && !sameInterpretationSource(existing, location.target)) return null;
   const next = normalizeTokenRendering(
     {
       ...existing,
       rendering: text,
       original: location.target.token?.original || existing?.original || "",
       strong_code: location.target.token?.strong_code || existing?.strong_code || "",
-      target: location.target,
-      updated_at: nowIso(),
+      target: {
+        ...existing?.target, ...location.target,
+        token: { ...existing?.target?.token, ...location.target.token },
+      },
+      translation_id: location.target.translation_id,
+      target_id: location.target.target_id,
+      revision: nextRevision(existing),
+      updated_at: annotationUpdateTime(existing),
     },
     {
       reference_key: location.referenceKey,
@@ -1077,7 +1147,7 @@ export function setTokenRendering(state, targetOrKey, tokenOrRendering, legacyRe
   if (!next) return null;
   state.workspaceStore.token_renderings[location.referenceKey] = {
     ...(state.workspaceStore.token_renderings[location.referenceKey] || {}),
-    [location.tokenIndex]: next,
+    [location.target.target_id]: next,
   };
   saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
   return next;
@@ -1088,9 +1158,9 @@ export function deleteTokenRendering(state, targetOrKey, token = null) {
   const location = tokenRenderingLocation(state, targetOrKey, token);
   if (!location) return false;
   const renderings = state.workspaceStore.token_renderings[location.referenceKey];
-  const existing = renderings?.[location.tokenIndex];
-  if (!existing) return false;
-  delete renderings[location.tokenIndex];
+  const existing = renderings?.[location.target.target_id];
+  if (!existing || !sameInterpretationSource(existing, location.target)) return false;
+  delete renderings[location.target.target_id];
   if (!Object.keys(renderings).length) delete state.workspaceStore.token_renderings[location.referenceKey];
   saveStorage(STORAGE_KEYS.workspace, state.workspaceStore);
   return true;

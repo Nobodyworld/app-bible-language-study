@@ -19,6 +19,8 @@ const DOCUMENT_CLASSIFICATIONS = new Set([
 ]);
 
 const DOCUMENT_MODEL = Object.freeze([
+  { path: "docs/UX_ACTION_INVENTORY.md", classification: "maintained", roles: ["ui-contract", "test-inventory"] },
+  { path: "docs/UX_ANNOTATION_CONTRACT.md", classification: "maintained", roles: ["ui-contract", "data-model", "test-inventory"] },
   { path: "docs/CURRENT_FEATURE_CLEANUP.md", classification: "maintained", roles: ["current-status", "ui-contract", "test-inventory"] },
   { path: "docs/STYLESHEET_OWNERSHIP.md", classification: "maintained", roles: ["technical", "ui-contract", "test-inventory"] },
   { path: ".github/PULL_REQUEST_TEMPLATE.md", classification: "maintained", roles: ["policy"] },

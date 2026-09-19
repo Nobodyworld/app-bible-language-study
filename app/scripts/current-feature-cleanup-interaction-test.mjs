@@ -37,6 +37,62 @@ async function exportBackup(page) {
   await page.waitForFunction(() => Boolean(document.querySelector(".export-textarea")?.value));
   return JSON.parse(await page.locator(".export-textarea").inputValue());
 }
+async function checkBackupDisclosureAndFocus(page) {
+  const advanced = page.locator(".advanced-backup-options");
+  const summary = advanced.locator(":scope > summary");
+  const section = page.locator(".backup-restore-section");
+  const replace = advanced.locator(".import-actions .danger-button");
+  const dialog = section.locator(".replace-confirmation");
+  const cancel = dialog.getByRole("button", { name: "Cancel", exact: true });
+  assert.equal(await advanced.evaluate((node) => node.open), false, "Advanced backup options starts closed");
+  assert.deepEqual(await section.locator("button:visible").allTextContents(), ["Download backup"], "Only Download backup is an initially visible backup button");
+  assert.equal(await advanced.locator(".user-data-file-label").isVisible(), false, "File selection belongs inside Advanced");
+  assert.equal(await advanced.locator(".import-actions").isVisible(), false, "Merge and Replace belong inside Advanced");
+  assert.equal(await dialog.isVisible(), false, "Replace confirmation starts hidden");
+
+  // Follow the real disclosure path; DOM .click() would also activate hidden controls.
+  await summary.focus();
+  await summary.press("Enter");
+  await page.waitForFunction(() => document.querySelector(".advanced-backup-options")?.open);
+  assert.equal(await replace.isVisible(), true, "Replace must be visible before activation");
+  assert.equal(await advanced.locator(".user-data-file-label").isVisible(), true, "Opening Advanced reveals file selection");
+  const beforeStores = (await exportBackup(page)).stores;
+  const beforeView = await page.evaluate(() => ({
+    route: location.hash,
+    title: document.querySelector("#detailTitle")?.textContent,
+    mode: document.querySelector(".detail-pane")?.dataset.panelMode,
+    history: history.length,
+    back: document.querySelector("#detailBack")?.disabled,
+    forward: document.querySelector("#detailForward")?.disabled,
+  }));
+  for (const dismissal of ["Escape", "Cancel"]) {
+    await replace.click();
+    await dialog.waitFor({ state: "visible" });
+    assert.equal(await cancel.evaluate((node) => document.activeElement === node), true, "Confirmation initially focuses Cancel");
+    await cancel.press("Shift+Tab");
+    assert.equal(await dialog.locator(".danger-button").evaluate((node) => document.activeElement === node), true, "Shift+Tab stays within confirmation");
+    await dialog.locator(".danger-button").press("Tab");
+    assert.equal(await cancel.evaluate((node) => document.activeElement === node), true, "Tab returns to Cancel");
+    if (dismissal === "Escape") await cancel.press("Escape");
+    else await cancel.click();
+    await dialog.waitFor({ state: "hidden" });
+    await page.waitForFunction(() => document.activeElement === document.querySelector(".advanced-backup-options .import-actions .danger-button"));
+    assert.equal(await advanced.evaluate((node) => node.open), true, `${dismissal} retains the visible return-focus target`);
+    assert.deepEqual(await page.evaluate(() => ({
+      route: location.hash,
+      title: document.querySelector("#detailTitle")?.textContent,
+      mode: document.querySelector(".detail-pane")?.dataset.panelMode,
+      history: history.length,
+      back: document.querySelector("#detailBack")?.disabled,
+      forward: document.querySelector("#detailForward")?.disabled,
+    })), beforeView, `${dismissal} must not navigate or clear My Data`);
+    assert.deepEqual((await exportBackup(page)).stores, beforeStores, `${dismissal} must not mutate saved stores`);
+  }
+  await page.locator(".manual-json-panel:not(.paste-json-panel) > summary").click();
+  await summary.click();
+  assert.equal(await advanced.evaluate((node) => node.open), false, "Disclosure can close after confirmation releases focus");
+  assert.deepEqual(await section.locator("button:visible").allTextContents(), ["Download backup"], "Closing Advanced restores the simple backup surface");
+}
 async function checkControls(page, touch) {
   const measured = await page.evaluate(async (touch) => {
     const auditUrl = new URL("./src/ui-label-audit.js", document.baseURI).href;
@@ -79,6 +135,7 @@ try {
     await myData(page);
     assert.equal(await page.locator(".physical-pack-manager, .user-data-summary-item, .pack-recovery").count(), 0);
     assert.match(await page.locator(".study-data-section").innerText(), /No saved study items yet/);
+    await checkBackupDisclosureAndFocus(page);
     await screenshot(page, `${profile.name}-my-data`);
     const fresh = await exportBackup(page);
     assert.equal(fresh.stores.polls, undefined);
@@ -114,7 +171,7 @@ try {
     await page.getByRole("button", { name: "Add alternative wording", exact: true }).click();
     await input.fill("Fixture interpretation");
     await input.press("Enter");
-    await page.locator("#detailContext .word-meaning-badge").filter({ hasText: "Fixture interpretation" }).waitFor();
+    await page.locator('#detailContext .word-meaning-badge[aria-label*="Fixture interpretation"]').waitFor();
     await trigger.click();
     await page.getByRole("button", { name: "Remove", exact: true }).click();
     assert.equal(await page.locator("#detailContext .word-meaning-badge").count(), 0);
@@ -125,7 +182,7 @@ try {
     await page.locator("#detailContext .word-meaning-trigger").waitFor();
     await checkControls(page, Boolean(profile.touch));
     assert.deepEqual(errors, [], `${profile.name}: browser health`);
-    results.push(`${profile.name}: Hebrew/Greek labels, choices, keyboard save/cancel/remove and geometry passed`);
+    results.push(`${profile.name}: backup disclosure/focus, Hebrew/Greek labels, choices, keyboard save/cancel/remove and geometry passed`);
     await context.close();
   }
 

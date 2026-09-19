@@ -410,6 +410,8 @@
 .detail-pane[data-displayed-view="language-study"] .detail-content {
   /* Sticky verse headings meet the controls at the scrollport's top edge. */
   padding-block-start: 0;
+  /* Keyboard focus must reveal controls below the sticky verse heading. */
+  scroll-padding-block-start: 56px;
 }
 
 .detail-content h3 {

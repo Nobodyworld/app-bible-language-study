@@ -877,7 +877,7 @@ async function seedPersonalData(page, browserHealth, baseUrl) {
   const exactCard = page.locator(".interlinear-token")
     .filter({ has: page.locator(`.word-meaning-control[data-target-id="${targetId}"]`) })
     .first();
-  await exactCard.locator(".word-meaning-badge").filter({ hasText: /^the beginning$/ }).waitFor({
+  await exactCard.locator(".word-meaning-badge").filter({ hasText: /^Interpretation$/ }).and(page.locator('[aria-label*="Saved interpretation: the beginning."]')).waitFor({
     state: "visible",
     timeout: 10000,
   });
@@ -895,7 +895,7 @@ async function seedPersonalData(page, browserHealth, baseUrl) {
   await meaningContent.locator(".word-meaning-custom-input").fill("origin");
   await meaningContent.locator(".word-meaning-save").click();
   await meaningSurface.waitFor({ state: "hidden", timeout: 10000 });
-  await exactCard.locator(".word-meaning-badge").filter({ hasText: /^origin$/ }).waitFor({
+  await exactCard.locator(".word-meaning-badge").filter({ hasText: /^Interpretation$/ }).and(page.locator('[aria-label*="Saved interpretation: origin."]')).waitFor({
     state: "visible",
     timeout: 10000,
   });
@@ -911,12 +911,12 @@ async function seedPersonalData(page, browserHealth, baseUrl) {
   });
 
   const verified = await exactCard.evaluate((node) => ({
-    meaning: node.querySelector(".word-meaning-badge")?.textContent.trim() || "",
+    meaning: node.querySelector('.word-meaning-badge[data-ui-action="interpretation"]')?.getAttribute("aria-label") || "",
     marks: [...node.querySelectorAll(".token-target-badges .target-tag-badge-label")].map((badge) => badge.textContent.trim()),
     marksExpanded: node.querySelector(".token-study-marks-button")?.getAttribute("aria-expanded") || "",
   }));
   if (
-    verified.meaning !== "origin" ||
+    !verified.meaning.includes("Saved interpretation: origin.") ||
     !verified.marks.some((label) => label.includes("Favorite")) ||
     verified.marksExpanded !== "true"
   ) {

@@ -1,7 +1,7 @@
 import { fetchVerseBook, resolvePassageText } from "../data-service.js?v=pr13-live-qa-20260711e";
 import { createDetailList, setDetail, setDetailMessage } from "../dom.js?v=pr13-live-qa-20260711e";
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
-import { DETAIL_SCROLL_POLICIES, DETAIL_VIEW_IDS } from "../ui-contracts.js";
+import { DETAIL_SCROLL_POLICIES, DETAIL_VIEW_IDS, uiActionContract } from "../ui-contracts.js";
 import { attachFootnoteScripture } from "../footnote-scripture.js";
 
 export function createReferenceViews(ctx) {
@@ -66,7 +66,8 @@ export function createReferenceViews(ctx) {
   }
 
   async function showParallelVerse(reference, verse, verseText, options = {}) {
-    const detailIntent = setDetailMessage("Parallel", "Loading parallel translations...", {
+    const translationsAction = uiActionContract("translations");
+    const detailIntent = setDetailMessage(translationsAction.label, "Loading translations...", {
       forceHistory: true,
       ...options,
       scrollPolicy: options.scrollPolicy || DETAIL_SCROLL_POLICIES.reset,
@@ -85,12 +86,10 @@ export function createReferenceViews(ctx) {
       DETAIL_VIEW_IDS.parallel,
       ctx.getActiveWordContext?.(verse),
     );
-    const intro = document.createElement("p");
-    intro.textContent = verseText;
     const list = document.createElement("div");
     list.className = "parallel-list";
-    wrap.append(heading, tabs, intro, list);
-    setDetail("Parallel", wrap, {
+    wrap.append(heading, tabs, list);
+    setDetail(translationsAction.label, wrap, {
       ...detailOptions,
       forceHistory: false,
       history: "replace",
@@ -113,28 +112,38 @@ export function createReferenceViews(ctx) {
 
     if (!list.isConnected) return;
     list.replaceChildren();
+    const currentTranslationId = ctx.state.translationId;
     rows
       .filter(Boolean)
+      .sort((left, right) => {
+        const leftCurrent = left.translation.id === currentTranslationId;
+        const rightCurrent = right.translation.id === currentTranslationId;
+        if (leftCurrent === rightCurrent) return 0;
+        return leftCurrent ? -1 : 1;
+      })
       .forEach(({ translation, text }) => {
+        const isCurrent = translation.id === currentTranslationId;
         const row = document.createElement("div");
-        row.className = translation.id === ctx.state.translationId ? "parallel-verse active" : "parallel-verse";
+        row.className = isCurrent ? "parallel-verse active" : "parallel-verse";
         const top = document.createElement("div");
         top.className = "parallel-verse-top";
-        const label = document.createElement("button");
-        label.type = "button";
-        label.className = "link-button";
+        const label = document.createElement(isCurrent ? "span" : "button");
+        label.className = isCurrent ? "reference-label" : "link-button";
         label.textContent = `${translation.code || translation.id.toUpperCase()} - ${translation.name || translation.id}`;
-        label.addEventListener("click", () =>
-          void ctx.goToRoute({
-            translationId: translation.id,
-            bookId: ctx.state.bookId,
-            chapter: ctx.state.chapter,
-            verse,
-          }),
-        );
+        if (!isCurrent) {
+          label.type = "button";
+          label.addEventListener("click", () =>
+            void ctx.goToRoute({
+              translationId: translation.id,
+              bookId: ctx.state.bookId,
+              chapter: ctx.state.chapter,
+              verse,
+            }),
+          );
+        }
         const marker = document.createElement("span");
         marker.className = "reference-meta";
-        marker.textContent = translation.id === ctx.state.translationId ? "selected" : "click to read";
+        marker.textContent = isCurrent ? "Current" : "Open";
         top.append(label, marker);
         const body = document.createElement("div");
         body.className = "parallel-verse-text";
@@ -145,7 +154,7 @@ export function createReferenceViews(ctx) {
 
     if (!list.children.length) {
       const empty = document.createElement("p");
-      empty.textContent = "No parallel translation text found for this verse.";
+      empty.textContent = "No translation text found for this verse.";
       list.append(empty);
     }
   }

@@ -213,7 +213,7 @@ async function exerciseRetirement(browser, url, profile) {
       }
       assert(backup.stores.tags.tag_target_index["tag:inquiry"].includes(token.target_id), "Direct index must survive reload");
       assert(Object.values(backup.stores.tags.tag_assertions).some((record) => record.note === "Preserved inquiry"), "Inquiry note must survive reload");
-      assert(backup.stores.workspace.token_renderings["psalms:23:1"][1].rendering === "Preserved meaning", "Meaning must survive reload");
+      assert(backup.stores.workspace.token_renderings["psalms:23:1"][token.target_id].rendering === "Preserved meaning", "Meaning must survive reload");
       await page.evaluate(() => { document.querySelector(".advanced-diagnostics").open = true; });
       await page.waitForSelector(".diagnostic-section");
       assert(await page.evaluate(() => !document.querySelector(".job-action, .job-payload, .maintenance-section") && !/Local job console|Tag jobs|Workspace jobs|Plan Review|Simulate|Requeue|Refresh Study Marks index/.test(document.querySelector("#detailContent").textContent)), `${profile}: retired job UI remains`);

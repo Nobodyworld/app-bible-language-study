@@ -51,10 +51,13 @@ import {
   CONTROL_STATES,
   DETAIL_VIEW_IDS,
   resolveControlState,
+  uiActionContract,
 } from "./src/ui-contracts.js?v=pr13-live-qa-20260711e";
 import { dismissContainedDetailTool } from "./src/detail-tool-surface.js";
 import {
+  closeStudyWorkspace,
   focusStudyWorkspaceAfterClear,
+  isMobileStudyWorkspaceOpen,
   openStudyWorkspace,
 } from "./src/portrait-workspace.js";
 import {
@@ -192,8 +195,10 @@ function currentRoute(verse = null) {
   };
 }
 
-function createReferenceButton(label, location) {
-  return makeReferenceButton(label, location, goToLocation);
+function createReferenceButton(label, location, navigationOptions = {}) {
+  return makeReferenceButton(label, location, (bookId, chapter, verse) =>
+    goToLocation(bookId, chapter, verse, navigationOptions),
+  );
 }
 
 function canUseCapability(capabilityId) {
@@ -504,6 +509,7 @@ const ctx = {
     renderer.renderChapter();
     if (readerContext?.verse) restoreReaderHighlightFromContext(readerContext);
   },
+  refreshInterpretationMarkers: () => renderer.refreshInterpretationMarkers(),
   syncChapterButtons,
   syncFavoriteButtons,
   syncToolButtons,
@@ -1016,6 +1022,8 @@ function syncToolButtons() {
     });
     button.disabled = control.disabled && key !== "search";
     button.setAttribute("aria-busy", dataset?.status === "loading" ? "true" : "false");
+    const action = uiActionContract(button.dataset.uiAction);
+    button.dataset.uiTip = action.tip;
     if (control.state === CONTROL_STATES.capabilityUnavailable) {
       button.title = studyUnavailableLabel(key);
     } else if (control.state === CONTROL_STATES.dataUnavailable) {
@@ -1028,9 +1036,10 @@ function syncToolButtons() {
     } else if (dataset?.status === "loading") {
       button.title = `Loading ${fallbackTitle} data...`;
     } else {
-      button.title = fallbackTitle;
+      button.title = action.tip;
     }
-    button.setAttribute("aria-label", button.title);
+    button.setAttribute("aria-label", action.label);
+    button.setAttribute("aria-description", button.title);
     button.dataset.unavailable = control.disabled ? "true" : "false";
     button.dataset.controlState = control.state;
   });
@@ -1070,17 +1079,22 @@ function showHomePage(options = {}) {
     action();
   };
   const actions = [
-    ["Continue reading", () => void navigateToRoute(currentRoute(), { replace: true })],
-    ["Search", runWithReaderData(detailViews.showSearch)],
-    ["Study Marks", runWithReaderData(detailViews.showTagIndex)],
-    ["My Data", runWithReaderData(detailViews.showMyData)],
+    [null, () => void navigateToRoute(currentRoute(), { replace: true })],
+    ["search", runWithReaderData(detailViews.showSearch)],
+    ["study-marks", runWithReaderData(detailViews.showTagIndex)],
+    ["my-data", runWithReaderData(detailViews.showMyData)],
   ];
-  const actionFeatures = { Search: "search", "Study Marks": "study-marks", "My Data": "my-data" };
-  actions.filter(([label]) => !actionFeatures[label] || featureEnabled(state.featureProfile, actionFeatures[label])).forEach(([label, action]) => {
+  actions.filter(([id]) => !id || featureEnabled(state.featureProfile, uiActionContract(id).featureId)).forEach(([id, action]) => {
     const button = document.createElement("button");
     button.type = "button";
     button.className = "home-action";
-    button.textContent = label;
+    const contract = uiActionContract(id);
+    button.textContent = contract?.label || "Continue reading";
+    if (contract) {
+      button.classList.add("ui-action-control");
+      button.dataset.uiAction = id;
+      button.title = contract.tip;
+    }
     button.addEventListener("click", action);
     grid.append(button);
   });
@@ -1200,14 +1214,22 @@ async function navigateToRoute(route, options = {}) {
   const readerDatasetIdentityChanged =
     next.translationId !== state.translationId || next.bookId !== state.bookId;
   const readerChapterIdentityChanged = readerDatasetIdentityChanged || next.chapter !== state.chapter;
+  const preserveOutlineDetail = Boolean(
+    options.preserveDetailView === DETAIL_VIEW_IDS.outline &&
+      !browserTraversalChangedRoute &&
+      next.translationId === state.translationId &&
+      next.bookId === state.bookId,
+  );
   if (
     readerChapterIdentityChanged || browserTraversalChangedRoute
   ) {
     clearActiveTextSpanSelection();
     ctx.studyContext = {};
-    setDetailHoverLocked(false);
     detailViews.clearStrongPin();
-    resetDetailForNavigation();
+    if (!preserveOutlineDetail) {
+      setDetailHoverLocked(false);
+      resetDetailForNavigation();
+    }
   }
   if (readerDatasetIdentityChanged) resetReaderDatasets();
 
@@ -1247,6 +1269,13 @@ async function navigateToRoute(route, options = {}) {
   platform.runtime?.persistRoute?.(state, readerRouteHash(next));
   if (canRestore) await restoreReaderNavigationSnapshot(restorationSnapshot);
   persistCurrentReaderSnapshot();
+  if (
+    preserveOutlineDetail &&
+    options.revealReaderOnDrawer === true &&
+    isMobileStudyWorkspaceOpen()
+  ) {
+    closeStudyWorkspace({ restoreFocus: true });
+  }
   return true;
   } finally {
     if (navigationGeneration === state.navigationGeneration) {
@@ -1296,9 +1325,10 @@ function bindEvents() {
 
   function maybeDisengageLockedDetail(event) {
     if (event.target.closest?.("#detailToolSurface")) return;
+    if (event.target.closest?.(".verse-body") && !window.getSelection()?.isCollapsed) return;
     if (
       !event.target.closest?.(
-        "button, a, input, select, textarea, summary, label, [role='button'], .verse-context-tabs, .detail-floating-nav, .strong-token, .language-word-hover, .language-letter-hover, .letter-unit, .morphology-help",
+        "button, a, input, select, textarea, summary, label, [role='button'], .verse-context-tabs, .detail-floating-nav, .strong-token, .speech-attribution, .user-annotation-tooltip-layer, .language-word-hover, .language-letter-hover, .letter-unit, .morphology-help",
       )
     ) {
       disengageDetailFollow();

@@ -115,11 +115,18 @@ export function createCommentaryOutlineViews(ctx) {
         if (ref) {
           const line = document.createElement("div");
           line.append(
-            ctx.createReferenceButton(ref.label || `${ref.start_chapter}:${ref.start_verse}`, {
-              book_id: ref.book_id || ctx.state.bookId,
-              chapter: ref.start_chapter,
-              verse_start: ref.start_verse,
-            }),
+            ctx.createReferenceButton(
+              ref.label || `${ref.start_chapter}:${ref.start_verse}`,
+              {
+                book_id: ref.book_id || ctx.state.bookId,
+                chapter: ref.start_chapter,
+                verse_start: ref.start_verse,
+              },
+              {
+                preserveDetailView: DETAIL_VIEW_IDS.outline,
+                revealReaderOnDrawer: true,
+              },
+            ),
           );
           li.append(label, line);
         } else {

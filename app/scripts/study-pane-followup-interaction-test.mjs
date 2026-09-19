@@ -13,6 +13,7 @@ assert(executablePath, "Microsoft Edge is required for the browser regressions")
 const { server, url } = await startStaticAppServer({ port: 0 });
 const browser = await chromium.launch({ executablePath, headless: true });
 const results = [];
+const shortControlsOnly = process.argv.includes('--short-controls-only');
 const section = (verse) => `.interlinear-verse-section:not(.interlinear-superscription-section)[data-verse="${verse}"]`;
 
 async function settle(page) {
@@ -112,8 +113,58 @@ async function stickyHeadings(page, label) {
   return positions;
 }
 
-try {
+async function shortWindowControls() {
   for (const theme of ['light', 'dark']) {
+    const context = await browser.newContext({ viewport: { width:873, height:392 } });
+    const page = await context.newPage();
+    await page.goto(`${url}/#/read/bsb/john/1`, { waitUntil:'networkidle' });
+    await page.evaluate(value => { document.documentElement.dataset.theme = value; }, theme);
+    await page.locator('.verse-row[data-verse="1"] .strong-token[data-token-index="2"]').first().click();
+    await page.locator('#detailContext [data-ui-action="language-study"]').click();
+    const lowerControl = page.locator(`${section(1)} .word-meaning-trigger`).last();
+    await lowerControl.waitFor();
+    const route = page.url();
+    const frames = [];
+    for (const frame of [
+      { width:873, height:392, mode:'compact' },
+      { width:873, height:392, mode:'standard' },
+      { width:873, height:392, mode:'expanded' },
+      { width:764, height:343 },
+    ]) {
+      if (frame.mode) {
+        while (await page.locator('html').getAttribute('data-study-workspace-width') !== frame.mode) {
+          await page.locator('#studyWorkspaceWidthCycle').click();
+        }
+      }
+      await page.setViewportSize({ width:frame.width, height:frame.height });
+      await page.locator('#clearDetail').focus();
+      await lowerControl.focus();
+      await page.keyboard.press('Shift+Tab');
+      await page.keyboard.press('Tab');
+      await settle(page);
+      const state = await lowerControl.evaluate(node => {
+        const rect = node.getBoundingClientRect();
+        const host = document.querySelector('#detailContent').getBoundingClientRect();
+        const points = [[rect.left + 2, rect.top + 2], [rect.right - 2, rect.top + 2],
+          [rect.left + 2, rect.bottom - 2], [rect.right - 2, rect.bottom - 2]];
+        return { focused:document.activeElement === node, rect:rect.toJSON(), host:host.toJSON(),
+          unobscured:points.every(([x, y]) => node.contains(document.elementFromPoint(x, y))) };
+      });
+      const label = `${theme}/${frame.mode || 'drawer'}/${frame.width}x${frame.height}`;
+      assert(state.focused && state.unobscured && state.rect.top >= state.host.top && state.rect.bottom <= state.host.bottom,
+        `${label}: sticky heading or scrollport obscures the lower Study control: ${JSON.stringify(state)}`);
+      await locked(page, label);
+      assert.equal(page.url(), route, `${label}: keyboard navigation changed the Reader route`);
+      frames.push({ label, ...state });
+    }
+    results.push({ theme, shortWindowControls:frames });
+    await context.close();
+  }
+}
+
+try {
+  await shortWindowControls();
+  if (!shortControlsOnly) for (const theme of ['light', 'dark']) {
     const context = await browser.newContext({ viewport: { width: 1280, height: 720 } });
     const page = await context.newPage();
     const errors = [];
@@ -126,9 +177,9 @@ try {
     await page.locator('.interlinear-picker').waitFor();
     await locked(page, `${theme}/chapter entry`);
     await passiveInteractions(page, `${theme}/chapter entry`, '.interlinear-picker h3');
-    await page.getByRole('button', { name: 'Inspect', exact: true }).first().click();
+    await page.locator('.interlinear-picker [data-ui-action="language-study"]').first().click();
     await page.locator(`${section(1)} .original-language-word-card`).first().waitFor();
-    await passiveInteractions(page, `${theme}/chapter Inspect`, '.original-language-study-intro');
+    await passiveInteractions(page, `${theme}/chapter Language`, '.original-language-study-intro');
 
     await page.locator('#clearDetail').click();
     assert.equal(await page.locator('#detailPane').getAttribute('data-panel-mode'), 'follow', 'Clear must release the Language lock');

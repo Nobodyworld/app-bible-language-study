@@ -349,6 +349,8 @@ document.addEventListener("pointerdown", rememberExternalInteraction, true);
 document.addEventListener("keydown", (event) => {
   if (event.key === "Enter" || event.key === " ") rememberExternalInteraction(event);
   if (!isMobileStudyWorkspaceOpen()) return;
+  // A native modal above Study owns its keyboard navigation until it closes.
+  if (document.querySelector("dialog:modal")) return;
 
   if (event.key === "Escape") {
     if (event.defaultPrevented) return;

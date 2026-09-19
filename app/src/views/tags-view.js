@@ -12,7 +12,7 @@ import {
 } from "../stores.js?v=pr13-live-qa-20260711e";
 import { tagDefinitionId, targetId } from "../semantic-targets.js?v=pr13-live-qa-20260711e";
 import { createVerseContextTabs } from "./verse-context-tabs.js?v=pr13-live-qa-20260711e";
-import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
+import { DETAIL_VIEW_IDS, uiActionContract } from "../ui-contracts.js";
 import {
   activateOverlay,
   deactivateOverlay,
@@ -670,8 +670,11 @@ export function createTagsView(ctx) {
 
     const manage = document.createElement("button");
     manage.type = "button";
-    manage.className = "tag-picker-manage";
-    manage.textContent = options.manageLabel || "Manage tags";
+    manage.className = "tag-picker-manage ui-action-control";
+    manage.dataset.uiAction = "tags";
+    manage.dataset.uiScope = target.target_type;
+    manage.textContent = uiActionContract("tags").label;
+    manage.title = uiActionContract("tags").tip;
     manage.addEventListener("click", (event) => {
       event.stopPropagation();
       if (options.presentation === "detail-pane") {
@@ -763,7 +766,10 @@ export function createTagsView(ctx) {
     const trigger = document.createElement("button");
     trigger.type = "button";
     if (options.id) trigger.id = options.id;
-    trigger.className = ["study-marks-trigger", options.className || ""].filter(Boolean).join(" ");
+    trigger.className = ["study-marks-trigger", "ui-action-control", options.className || ""].filter(Boolean).join(" ");
+    trigger.dataset.uiAction = "study-marks";
+    trigger.dataset.uiScope = target.target_type;
+    trigger.dataset.uiTip = uiActionContract("study-marks").tip;
     const label = options.label || targetTypeLabel(target);
     if (options.visibleLabel) {
       const visibleLabel = document.createElement("span");
@@ -793,7 +799,7 @@ export function createTagsView(ctx) {
       );
     };
     syncTriggerState();
-    trigger.title = `Study Marks for ${label}`;
+    trigger.title = uiActionContract("study-marks").tip;
 
     if (options.boundary === "detail-pane") {
       const canonicalTargetId = targetId(target);
@@ -855,7 +861,11 @@ export function createTagsView(ctx) {
       .filter(Boolean)
       .join(", ");
     if (options.interactive) {
-      wrap.setAttribute("aria-label", `${options.label || "Tagged target"}: edit tags`);
+      wrap.dataset.uiAction = "study-marks";
+      wrap.dataset.uiScope = target.target_type;
+      wrap.dataset.uiTip = uiActionContract("study-marks").tip;
+      wrap.classList.add("ui-action-control");
+      wrap.setAttribute("aria-label", `Study Marks for ${options.label || "Tagged target"}: ${wrap.title}`);
     }
 
     tagIds.forEach((tagId) => {

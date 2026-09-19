@@ -490,7 +490,7 @@ function workspacePersistenceExpression(referenceKey, expectedDraft, expectedRen
     const matches = (store) => {
       const renderings = store?.token_renderings?.[${JSON.stringify(referenceKey)}] || {};
       return store?.verse_drafts?.[${JSON.stringify(referenceKey)}]?.draft_text === ${JSON.stringify(expectedDraft)} &&
-        Object.values(renderings).some((item) => item?.rendering === ${JSON.stringify(expectedRendering)});
+        Object.entries(renderings).some(([id, item]) => id === item?.target_id && item?.translation_id === 'bsb' && item?.rendering === ${JSON.stringify(expectedRendering)});
     };
     if (!window.indexedDB) {
       resolve(matches(readLocalWorkspace()));
@@ -1235,12 +1235,12 @@ async function runQa(page) {
   pass("inline reader target geometry, hit testing, dense chapter coverage, and floating-arrow gutters");
 
   const visibleChapterTools = [
-    { selector: '#showSearch', accessibleName: 'Search this book', detailTitle: 'Search' },
+    { selector: '#showSearch', accessibleName: 'Search', detailTitle: 'Search' },
     ...(qaDevice === 'mobile'
       ? [{ selector: '#openStudyPanel', accessibleName: 'Study panel', detailState: 'visible locked study panel' }]
       : []),
     { selector: '#showInterlinear', accessibleName: 'Language Study', detailTitle: 'Language Study' },
-    { selector: '#showOutline', accessibleName: 'Book outline', detailTitle: 'Outline' },
+    { selector: '#showOutline', accessibleName: 'Outline', detailTitle: 'Outline' },
     { selector: '#showTags', accessibleName: 'Study Marks', detailTitle: 'Study Marks' },
     { selector: '#showMyData', accessibleName: 'My Data', detailTitle: 'My Data' },
   ];
@@ -2542,7 +2542,7 @@ async function runQa(page) {
   );
   pass("verse number tag popup timing");
   await click(page, ".verse-number");
-  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Parallel'");
+  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Translations'");
   await waitFor(page, "document.querySelector('.parallel-verse')?.textContent.includes('BSB - Berean Study Bible')", 15000);
   state = await getQaState(page);
   assert(
@@ -2632,7 +2632,7 @@ async function runQa(page) {
       containedStudyMarksState.ariaHidden === "false" &&
       containedStudyMarksState.title === "Study Marks" &&
       containedStudyMarksState.target &&
-      containedStudyMarksState.detailTitle === "Parallel" &&
+      containedStudyMarksState.detailTitle === "Translations" &&
       containedStudyMarksState.inert &&
       containedStudyMarksState.workAreaHidden === "true" &&
       containedStudyMarksState.focusedInside &&
@@ -2889,7 +2889,7 @@ async function runQa(page) {
   await selectValue(page, "#bookSelect", "proverbs");
   await waitFor(page, "document.querySelector('#chapterTitle')?.textContent.includes('Proverbs 1')");
   await click(page, ".verse-number");
-  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Parallel'");
+  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Translations'");
   await clickButtonByText(page, "Commentary", { index: 0 });
   await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Commentary'");
   await waitFor(
@@ -3543,7 +3543,9 @@ async function runQa(page) {
   assert(await evaluate(page, "!document.querySelector('.job-action, .job-payload, .maintenance-section')"), "Job controls must not render");
   pass("Local Jobs UI retirement");
 
-  await click(page, ".manual-json-panel > summary");
+  await page.clickPointer(".advanced-backup-options > summary");
+  await waitFor(page, "document.querySelector('.advanced-backup-options')?.open === true");
+  await page.clickPointer(".manual-json-panel:not(.paste-json-panel) > summary");
   await waitFor(page, "Boolean(document.querySelector('.export-textarea')?.value)");
   const userDataExport = await evaluate(
     page,
@@ -3632,7 +3634,9 @@ async function runQa(page) {
 
   await click(page, "#showMyData");
   await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'My Data'");
-  await click(page, ".manual-json-panel > summary");
+  await page.clickPointer(".advanced-backup-options > summary");
+  await waitFor(page, "document.querySelector('.advanced-backup-options')?.open === true");
+  await page.clickPointer(".manual-json-panel:not(.paste-json-panel) > summary");
   await click(page, ".paste-json-panel > summary");
   await evaluate(
     page,

@@ -1,5 +1,5 @@
 import { studyUnavailableLabel } from "../study-empty-state.js";
-import { CONTROL_STATES, normalizeDetailViewId, resolveControlState } from "../ui-contracts.js";
+import { CONTROL_STATES, normalizeDetailViewId, resolveControlState, uiActionContract } from "../ui-contracts.js";
 import {
   PANEL_SCOPE_LABELS,
   isPanelActionCurrent,
@@ -13,6 +13,7 @@ import { createSourceTokenTarget, createVerseTarget } from "../semantic-targets.
 import { strongSectionControlState } from "../strong-section-lifecycle.js?v=pr13-live-qa-20260711e";
 import { fetchLexiconEntry, fetchVerseBook, fetchWordMapBook } from "../data-service.js?v=pr13-live-qa-20260711e";
 import { panelActionFeature } from "../feature-ui.js";
+import { createAnnotationDiscovery } from "../user-annotation-presenter.js";
 
 function toolEnabled(ctx, toolId) {
   const featureId = panelActionFeature(toolId);
@@ -24,13 +25,14 @@ function getVerseText(ctx, verse) {
 }
 
 async function exactMappedBsbMeaning(ctx, token, verse) {
+  const { bookId, chapter } = ctx.state;
   const [wordMapBook, bsbBook] = await Promise.all([
-    fetchWordMapBook("bsb", ctx.state.bookId),
-    fetchVerseBook("bsb", ctx.state.bookId),
+    fetchWordMapBook("bsb", bookId),
+    fetchVerseBook("bsb", bookId),
   ]);
-  const text = bsbBook?.chapters?.[ctx.state.chapter]?.[verse] || "";
+  const text = bsbBook?.chapters?.[chapter]?.[verse] || "";
   const tokenIndex = Number(token?.token_index);
-  const row = (wordMapBook?.chapters?.[ctx.state.chapter]?.[verse] || [])
+  const row = (wordMapBook?.chapters?.[chapter]?.[verse] || [])
     .find((item) => Number(item?.[1]) === tokenIndex);
   if (!row) return "";
   return String(text.slice(Number(row[2] || 0), Number(row[3] || row[2] || 0))).replace(/\s+/g, " ").trim();
@@ -238,11 +240,15 @@ function appendActionButton(ctx, controls, action, reference, verse, wordContext
   const scopeLabel = PANEL_SCOPE_LABELS[action.scope];
   const button = document.createElement("button");
   button.type = "button";
-  button.className = action.current ? "verse-context-tab active" : "verse-context-tab";
+  button.className = ["verse-context-tab", "ui-action-control", action.current ? "active" : ""].filter(Boolean).join(" ");
   button.textContent = action.shortLabel;
   button.dataset.visibleLabel = action.label;
   button.dataset.panelScope = action.scope;
   button.dataset.panelAction = action.id;
+  if (action.actionId) {
+    button.dataset.uiAction = action.actionId;
+    button.dataset.uiTip = action.tip;
+  }
   button.dataset.controlState = control.state;
   button.dataset.unavailable = control.disabled ? "true" : "false";
   const reactivatableCurrent = action.current && action.reactivatableCurrent === true;
@@ -261,10 +267,12 @@ function appendActionButton(ctx, controls, action, reference, verse, wordContext
     button.setAttribute("aria-label", `${scopeLabel} scope, ${action.label}: ${unavailableMessage}`);
     button.setAttribute("aria-disabled", "true");
   } else if (action.current) {
-    button.title = `Current ${scopeLabel.toLowerCase()} view: ${action.label}`;
+    button.title = action.tip
+      ? `Current ${scopeLabel.toLowerCase()} view: ${action.label}. ${action.tip}`
+      : `Current ${scopeLabel.toLowerCase()} view: ${action.label}`;
     button.setAttribute("aria-label", `${scopeLabel} scope, current view: ${action.label} for ${reference}`);
   } else {
-    button.title = `${scopeLabel} scope: ${action.label}`;
+    button.title = action.tip || `${scopeLabel} scope: ${action.label}`;
     button.setAttribute("aria-label", `${scopeLabel} scope, ${action.label} for ${reference}`);
   }
 
@@ -364,6 +372,8 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
               },
             });
             marks.dataset.panelAction = "study-marks";
+            marks.dataset.uiAction = "study-marks";
+            marks.classList.add("ui-action-control");
             controls.append(marks);
           }
           relatedTools.forEach(appendTool);
@@ -374,13 +384,21 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
               token: wordContext.token,
               presentation: "detail-pane",
               label: `selected source word in ${reference}`,
-              loadExactMappedEnglish: () => exactMappedBsbMeaning(ctx, wordContext.token, verse),
+              loadExactMappedEnglish: () => exactMappedBsbMeaning({ state: { bookId: sourceTarget.reference.book_id, chapter: sourceTarget.reference.chapter } }, wordContext.token, verse),
               loadLexicon: wordContext.token.strong_code
                 ? () => fetchLexiconEntry(wordContext.token.strong_code)
                 : null,
             });
             if (meaning) {
               meaning.dataset.panelAction = "meaning";
+              meaning.dataset.uiAction = "interpretation";
+              const trigger = meaning.querySelector(".word-meaning-trigger");
+              if (trigger) {
+                const contract = uiActionContract("interpretation");
+                trigger.dataset.uiAction = "interpretation";
+                trigger.classList.add("ui-action-control");
+                if (contract?.tip && !trigger.dataset.userAnnotation) trigger.title = contract.tip;
+              }
               controls.append(meaning);
             }
           }
@@ -408,8 +426,11 @@ export function createVerseContextTabs(ctx, reference, verse, displayedViewId, s
             },
           });
           marks.dataset.panelAction = "study-marks";
+          marks.dataset.uiAction = "study-marks";
+          marks.classList.add("ui-action-control");
           controls.append(marks);
         }
+        controls.append(createAnnotationDiscovery(ctx, `${ctx.state.bookId}:${ctx.state.chapter}:${verse}`));
         relatedTools.forEach(appendTool);
       } else {
         relatedTools.forEach(appendTool);

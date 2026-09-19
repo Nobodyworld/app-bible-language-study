@@ -895,7 +895,7 @@ async function contextState(page) {
       "#detailContext [data-panel-scope='word'] .verse-context-tab[data-visible-label='Definition']",
     );
     const parallelButton = document.querySelector(
-      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel translations']",
+      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Translations']",
     );
     const verseScopeLabels = [...document.querySelectorAll(
       "#detailContext [data-panel-scope='verse'] .panel-context-scope-label",
@@ -955,7 +955,7 @@ async function contextState(page) {
       wordActiveColor: wordStyle?.color || "",
       parallelDisabled: parallelButton?.disabled ?? null,
       parallelActionCount: document.querySelectorAll(
-        "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel translations']",
+        "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Translations']",
       ).length,
       verseScopeLabels: verseScopeLabels.map((label) => label.textContent.trim()),
       strongSectionControls: [...document.querySelectorAll("#detailContext [data-strong-section-control]")].map((button) => ({
@@ -1413,13 +1413,13 @@ async function runScenario(browser, baseUrl, mode, theme) {
     );
 
     await page.locator(
-      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Parallel translations']",
+      "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Translations']",
     ).click();
-    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Parallel");
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Translations");
     const inheritedState = await contextState(page);
     assert.equal(inheritedState.scopeOrder, "word verse", `${mode}: Verse view must retain containing Word context`);
     assert.deepEqual(inheritedState.groupScopes, ["word", "verse"], `${mode}: inherited Word and Verse groups are out of order`);
-    assert.deepEqual(inheritedState.active, ["verse:Parallel translations"], `${mode}: Parallel must be the sole current displayed view`);
+    assert.deepEqual(inheritedState.active, ["verse:Translations"], `${mode}: Parallel must be the sole current displayed view`);
     assertTruthfulCurrentState(inheritedState, "par", "parallel", `${mode}/${theme}: Parallel`);
     assert.equal(inheritedState.panelOccupant, "parallel", `${mode}: visible Parallel panel occupant must remain identifiable`);
     assert.equal(inheritedState.wordDisabled, false, `${mode}: Word must remain available from Parallel`);

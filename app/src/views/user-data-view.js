@@ -6,11 +6,12 @@ import {
 } from "../stores.js?v=pr13-live-qa-20260711e";
 import { setDetail } from "../dom.js?v=pr13-live-qa-20260711e";
 import { resolveCapabilities } from "../capabilities.js";
-import { DETAIL_VIEW_IDS } from "../ui-contracts.js";
+import { DETAIL_VIEW_IDS, uiActionContract } from "../ui-contracts.js";
 import { setCapabilityDisabled } from "../package-state.js";
 import { compactUserDataBackup } from "../portable-backup.js";
 import { renderPhysicalPackManager } from "./physical-pack-view.js";
 import { renderPackRecovery } from "./pack-recovery-view.js";
+import { createAnnotationRecovery } from "../user-annotation-presenter.js";
 
 function renderSummaryGrid(rows) {
   const grid = document.createElement("div");
@@ -20,6 +21,9 @@ function renderSummaryGrid(rows) {
     item.className = `user-data-summary-item${action ? " summary-link" : ""}`;
     if (action) {
       item.type = "button";
+      item.classList.add("ui-action-control");
+      item.dataset.uiAction = "study-marks";
+      item.title = uiActionContract("study-marks").tip;
       item.setAttribute("aria-label", `${label}: ${value}. Open Study Marks.`);
       item.addEventListener("click", action);
     }
@@ -224,7 +228,7 @@ export function createUserDataView(ctx, options = {}) {
     const backupTitle = document.createElement("h4");
     backupTitle.textContent = "Backup and restore";
     const backupIntro = document.createElement("p");
-    backupIntro.textContent = "Save a backup of your study data, or choose a saved backup to restore. Merge keeps current items; Replace overwrites local data after confirmation.";
+    backupIntro.textContent = "Save a backup of your study data. Restore and manual JSON tools are available under Advanced backup options.";
     const status = document.createElement("p");
     status.className = "import-status";
     status.setAttribute("role", "status");
@@ -295,7 +299,6 @@ export function createUserDataView(ctx, options = {}) {
     advancedBackup.className = "advanced-backup-options";
     const advancedBackupTitle = document.createElement("summary");
     advancedBackupTitle.textContent = "Advanced backup options";
-    advancedBackup.append(advancedBackupTitle, exportDetails, pasteDetails);
 
     const runImport = (mode) => {
       let applied = false;
@@ -352,7 +355,8 @@ export function createUserDataView(ctx, options = {}) {
     const confirmation = createReplaceConfirmation(() => runImport("replace"));
     replace.addEventListener("click", () => confirmation.open(replace));
     importActions.append(merge, replace);
-    backupSection.append(backupTitle, backupIntro, download, fileLabel, importActions, advancedBackup, confirmation.panel, status);
+    advancedBackup.append(advancedBackupTitle, fileLabel, importActions, exportDetails, pasteDetails);
+    backupSection.append(backupTitle, backupIntro, download, advancedBackup, confirmation.panel, status);
     wrap.append(backupSection);
 
     const diagnostics = document.createElement("details");
@@ -368,6 +372,8 @@ export function createUserDataView(ctx, options = {}) {
     const diagnosticsSlot = document.createElement("div");
     const refreshDiagnostics = () => {
       const sections = [renderTechnicalSummary(getUserDataSummary(ctx.state), profile?.isLab)];
+      const annotations = createAnnotationRecovery(ctx);
+      if (annotations) sections.push(annotations);
       if (profile?.isLab) {
         if (ctx.isFeatureEnabled?.("physical-pack-management") !== false) sections.push(renderPhysicalPackManager(ctx));
         if (ctx.isFeatureEnabled?.("capability-controls") !== false) sections.push(renderCapabilityManager(ctx, refreshDiagnostics));
