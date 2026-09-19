@@ -2542,7 +2542,7 @@ async function runQa(page) {
   );
   pass("verse number tag popup timing");
   await click(page, ".verse-number");
-  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Parallel'");
+  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Translations'");
   await waitFor(page, "document.querySelector('.parallel-verse')?.textContent.includes('BSB - Berean Study Bible')", 15000);
   state = await getQaState(page);
   assert(
@@ -2632,7 +2632,7 @@ async function runQa(page) {
       containedStudyMarksState.ariaHidden === "false" &&
       containedStudyMarksState.title === "Study Marks" &&
       containedStudyMarksState.target &&
-      containedStudyMarksState.detailTitle === "Parallel" &&
+      containedStudyMarksState.detailTitle === "Translations" &&
       containedStudyMarksState.inert &&
       containedStudyMarksState.workAreaHidden === "true" &&
       containedStudyMarksState.focusedInside &&
@@ -2889,7 +2889,7 @@ async function runQa(page) {
   await selectValue(page, "#bookSelect", "proverbs");
   await waitFor(page, "document.querySelector('#chapterTitle')?.textContent.includes('Proverbs 1')");
   await click(page, ".verse-number");
-  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Parallel'");
+  await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Translations'");
   await clickButtonByText(page, "Commentary", { index: 0 });
   await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'Commentary'");
   await waitFor(
@@ -3543,7 +3543,9 @@ async function runQa(page) {
   assert(await evaluate(page, "!document.querySelector('.job-action, .job-payload, .maintenance-section')"), "Job controls must not render");
   pass("Local Jobs UI retirement");
 
-  await click(page, ".manual-json-panel > summary");
+  await page.clickPointer(".advanced-backup-options > summary");
+  await waitFor(page, "document.querySelector('.advanced-backup-options')?.open === true");
+  await page.clickPointer(".manual-json-panel:not(.paste-json-panel) > summary");
   await waitFor(page, "Boolean(document.querySelector('.export-textarea')?.value)");
   const userDataExport = await evaluate(
     page,
@@ -3632,7 +3634,9 @@ async function runQa(page) {
 
   await click(page, "#showMyData");
   await waitFor(page, "document.querySelector('#detailTitle')?.textContent === 'My Data'");
-  await click(page, ".manual-json-panel > summary");
+  await page.clickPointer(".advanced-backup-options > summary");
+  await waitFor(page, "document.querySelector('.advanced-backup-options')?.open === true");
+  await page.clickPointer(".manual-json-panel:not(.paste-json-panel) > summary");
   await click(page, ".paste-json-panel > summary");
   await evaluate(
     page,

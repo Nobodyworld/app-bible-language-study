@@ -1415,7 +1415,7 @@ async function runScenario(browser, baseUrl, mode, theme) {
     await page.locator(
       "#detailContext [data-panel-scope='verse'] .verse-context-tab[data-visible-label='Translations']",
     ).click();
-    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Parallel");
+    await waitFor(page, () => document.querySelector("#detailTitle")?.textContent === "Translations");
     const inheritedState = await contextState(page);
     assert.equal(inheritedState.scopeOrder, "word verse", `${mode}: Verse view must retain containing Word context`);
     assert.deepEqual(inheritedState.groupScopes, ["word", "verse"], `${mode}: inherited Word and Verse groups are out of order`);
